@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content, viewport-fit=cover">
+    <title>ARES / Terminal</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
+    <meta name="theme-color" content="#04070d">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* Tokens lifted verbatim from the ARES dashboard so this page is pixel-identical chrome. */
+        :root {
+            --bg-0:#04070d; --bg-1:#070c16; --bg-2:#0a121f;
+            --nav-ares:#ef4444; --nav-blue:#6495ed;
+            --nav-line:rgba(239,68,68,0.08); --nav-line-2:rgba(239,68,68,0.18);
+            --nav-text-2:#8ba3c0; --nav-text-3:#4a5d78;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        html, body { height:100%; width:100%; background:var(--bg-0); overflow:hidden; }
+
+        /* The whole UI is a flex column sized to the dynamic viewport. The viewport
+           meta sets interactive-widget=resizes-content, so when the soft keyboard
+           opens the *layout* viewport (and 100dvh) shrinks to the area above it — the
+           terminal + accessory bar stay visible, the keybar rides just above the
+           keyboard. This is done purely by the browser: NO JS touches the layout, so
+           focus inside the (cross-origin) ttyd iframe is never disturbed while typing. */
+        #app {
+            height:100vh;       /* fallback for engines without dvh */
+            height:100dvh;
+            display:flex; flex-direction:column;
+            overflow:hidden;
+        }
+
+        /* === Unified Navbar (matches index/drives/journals) === */
+        .navbar {
+            flex:0 0 auto;
+            background:rgba(4,7,13,0.92);
+            border-bottom:1px solid var(--nav-line);
+            padding:14px 24px;
+            padding-top:calc(14px + env(safe-area-inset-top, 0px));
+            padding-left:calc(24px + env(safe-area-inset-left, 0px));
+            padding-right:calc(24px + env(safe-area-inset-right, 0px));
+            display:flex; align-items:center; justify-content:space-between; gap:20px;
+            font-family:'Bricolage Grotesque', sans-serif;
+        }
+        .navbar-left { display:flex; align-items:center; gap:16px; min-width:0; }
+        .nbr { display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; transition:opacity 0.18s ease; min-width:0; }
+        .nbr-other { opacity:0.7; }
+        .nbr-other:hover { opacity:1; }
+        .nbr-mark {
+            width:26px; height:26px; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center;
+            border:1px solid; font-weight:800; font-size:14px; line-height:1;
+        }
+        .nbr-mark.m-a { border-color:var(--nav-ares); color:var(--nav-ares); }
+        .nbr-mark.m-n { border-color:var(--nav-blue); color:var(--nav-blue); }
+        .nbr-id { display:flex; align-items:baseline; gap:8px; min-width:0; }
+        .nbr-name { font-weight:700; font-size:14px; letter-spacing:0.02em; white-space:nowrap; }
+        .nbr-name.n-a { color:var(--nav-ares); }
+        .nbr-name.n-n { color:var(--nav-blue); }
+        .nbr-sep { color:var(--nav-text-3); font-size:11px; }
+        .nbr-tag { font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--nav-text-2); letter-spacing:0.1em; text-transform:uppercase; white-space:nowrap; }
+        .back-chip {
+            display:inline-flex; align-items:center; gap:6px;
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            color:var(--nav-text-2); text-decoration:none;
+            letter-spacing:0.15em; text-transform:uppercase;
+            padding:5px 11px;
+            border:1px solid var(--nav-line-2);
+            transition:color 0.15s, border-color 0.15s, background 0.15s;
+        }
+        .back-chip svg { transition:transform 0.18s ease; }
+        .back-chip:hover { color:var(--nav-ares); border-color:var(--nav-ares); background:rgba(239,68,68,0.05); }
+        .back-chip:hover svg { transform:translateX(-2px); }
+        @media (max-width:600px) {
+            .navbar { padding:12px 14px; gap:10px; }
+            .nbr-tag { display:none; }
+            .back-chip span { display:none; }
+            .back-chip { padding:5px 8px; }
+        }
+
+        /* === Session tab strip === */
+        .ctl-tabs {
+            flex:0 0 auto;
+            display:flex; align-items:center; gap:6px;
+            padding:7px 10px;
+            padding-left:calc(10px + env(safe-area-inset-left, 0px));
+            padding-right:calc(10px + env(safe-area-inset-right, 0px));
+            background:var(--bg-1); border-bottom:1px solid var(--nav-line-2);
+            overflow-x:auto; overflow-y:hidden;
+            -webkit-overflow-scrolling:touch; scrollbar-width:none;
+            font-family:'JetBrains Mono', monospace;
+        }
+        .ctl-tabs::-webkit-scrollbar { display:none; }
+        .tab {
+            display:inline-flex; align-items:center; gap:7px; flex:0 0 auto;
+            min-height:34px; padding:0 12px;
+            border:1px solid var(--nav-line-2); background:transparent;
+            color:var(--nav-text-2); font-size:12px; font-weight:500;
+            letter-spacing:0.04em; white-space:nowrap; cursor:pointer;
+            touch-action:manipulation; transition:color .12s, border-color .12s, background .12s;
+        }
+        .tab.active { color:var(--nav-ares); border-color:var(--nav-ares); background:rgba(239,68,68,0.07); }
+        .tab .x {
+            display:inline-flex; align-items:center; justify-content:center;
+            width:16px; height:16px; margin-right:-4px;
+            color:var(--nav-text-3); font-size:13px; line-height:1;
+        }
+        .tab.active .x { color:var(--nav-ares); }
+        .tab-add { font-size:12px; font-weight:700; padding:0 12px; letter-spacing:0.06em; }
+        .tab-add .plus { font-size:15px; line-height:1; margin-right:1px; opacity:0.85; }
+        .tab-add.t-ares  { color:var(--nav-ares); border-color:var(--nav-ares); }
+        .tab-add.t-ares:active  { background:rgba(239,68,68,0.12); }
+        .tab-add.t-nexus { color:var(--nav-blue); border-color:rgba(100,149,237,0.5); }
+        .tab-add.t-nexus:active { background:rgba(100,149,237,0.12); }
+
+        /* === Terminal === */
+        #term { flex:1 1 auto; width:100%; border:0; display:block; background:var(--bg-0); min-height:0; }
+
+        /* === Accessory key/scroll bar — pinned at the bottom of #app, i.e. directly
+              above the keyboard when it's open === */
+        .keybar {
+            flex:0 0 auto;
+            display:flex; align-items:center; gap:6px;
+            padding:8px 10px;
+            padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
+            padding-left:calc(10px + env(safe-area-inset-left, 0px));
+            padding-right:calc(10px + env(safe-area-inset-right, 0px));
+            background:var(--bg-1); border-top:1px solid var(--nav-line-2);
+            overflow-x:auto; overflow-y:hidden;
+            -webkit-overflow-scrolling:touch; scrollbar-width:none;
+            font-family:'JetBrains Mono', monospace;
+        }
+        .keybar::-webkit-scrollbar { display:none; }
+        .key {
+            flex:0 0 auto; min-width:44px; min-height:40px; padding:0 12px;
+            display:inline-flex; align-items:center; justify-content:center;
+            border:1px solid var(--nav-line-2); background:var(--bg-2);
+            color:#ecf2fa; font-size:14px; font-weight:600; letter-spacing:0.03em;
+            cursor:pointer; touch-action:manipulation; user-select:none;
+            transition:background .1s, border-color .1s, color .1s;
+        }
+        .key:active { background:rgba(239,68,68,0.18); border-color:var(--nav-ares); color:#fff; }
+        .key.warn:active { background:rgba(239,68,68,0.35); }
+        .key-sep { flex:0 0 auto; width:1px; height:26px; background:var(--nav-line-2); margin:0 3px; }
+        .key-lbl { flex:0 0 auto; color:var(--nav-text-3); font-size:9px; letter-spacing:0.18em; text-transform:uppercase; padding-right:2px; }
+        .key-grow { flex:1 1 auto; }
+        .key-kbd { color:var(--nav-text-2); }
+
+        /* === Native input bar (bottom; rides above the soft keyboard) === */
+        .inputbar {
+            flex:0 0 auto;
+            display:flex; align-items:stretch; gap:8px;
+            padding:9px 10px;
+            padding-bottom:calc(9px + env(safe-area-inset-bottom, 0px));
+            padding-left:calc(10px + env(safe-area-inset-left, 0px));
+            padding-right:calc(10px + env(safe-area-inset-right, 0px));
+            background:var(--bg-0); border-top:1px solid var(--nav-line-2);
+        }
+        #line {
+            flex:1 1 auto; min-width:0; min-height:42px;
+            background:var(--bg-2); border:1px solid var(--nav-line-2);
+            color:#ecf2fa; font-family:'JetBrains Mono', monospace; font-size:16px; /* 16px: stops iOS zoom-on-focus */
+            padding:0 13px; letter-spacing:0.01em; caret-color:var(--nav-ares);
+        }
+        #line::placeholder { color:var(--nav-text-3); }
+        #line:focus { outline:none; border-color:var(--nav-ares); }
+        .send {
+            flex:0 0 auto; min-height:42px; padding:0 18px;
+            background:var(--nav-ares); border:1px solid var(--nav-ares); color:#fff;
+            font-family:'Bricolage Grotesque', sans-serif; font-weight:700; font-size:13px;
+            letter-spacing:0.06em; cursor:pointer; touch-action:manipulation;
+            transition:opacity .12s;
+        }
+        .send:active { opacity:0.7; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header class="navbar">
+            <div class="navbar-left">
+                <a href="/" class="nbr nbr-self">
+                    <div class="nbr-mark m-a">A</div>
+                    <div class="nbr-id">
+                        <span class="nbr-name n-a">ARES</span>
+                        <span class="nbr-sep">/</span>
+                        <span class="nbr-tag">TERMINAL</span>
+                    </div>
+                </a>
+                <a href="/" class="back-chip">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    <span>Home</span>
+                </a>
+            </div>
+            <a href="/jump/nexus" class="nbr nbr-other">
+                <div class="nbr-mark m-n">N</div>
+                <div class="nbr-id">
+                    <span class="nbr-name n-n">NEXUS</span>
+                    <span class="nbr-sep">/</span>
+                    <span class="nbr-tag">MINI-NAS</span>
+                </div>
+            </a>
+        </header>
+
+        <!-- Session tabs (= tmux windows). Hidden while the keyboard is open. -->
+        <div class="ctl-tabs" id="tabs">
+            <button class="tab tab-add t-ares" id="tab-add-ares" title="New ARES shell"><span class="plus">+</span>ARES</button>
+            <button class="tab tab-add t-nexus" id="tab-add-nexus" title="SSH into NEXUS"><span class="plus">+</span>NEXUS</button>
+        </div>
+
+        <!-- Live PTY into the ARES host's persistent tmux session "web" (ttyd). The src is
+             set in JS: direct host IP over HTTP, or the same-origin /shell serve path over
+             HTTPS (avoids mixed-content). -->
+        <iframe id="term" title="ARES shell" allow="clipboard-read; clipboard-write"></iframe>
+
+        <!-- Accessory bar: scroll + the keys a phone keyboard lacks. Sits directly above
+             the soft keyboard (it's the bottom child of the viewport-tracking #app). -->
+        <div class="keybar" id="keys">
+            <button class="key" id="kbd-toggle" title="Show / hide keyboard">⌨</button>
+            <span class="key-sep"></span>
+            <span class="key-lbl">scroll</span>
+            <button class="key" data-scroll="up"     title="Scroll up">▲</button>
+            <button class="key" data-scroll="down"   title="Scroll down">▼</button>
+            <button class="key" data-scroll="bottom" title="Jump to bottom">⤓</button>
+            <span class="key-sep"></span>
+            <button class="key" data-key="Escape">esc</button>
+            <button class="key" data-key="Tab">tab</button>
+            <button class="key warn" data-key="C-c">^C</button>
+            <button class="key" data-key="C-l">^L</button>
+            <button class="key" data-key="C-r">^R</button>
+            <span class="key-sep"></span>
+            <button class="key" data-key="Left">←</button>
+            <button class="key" data-key="Up">↑</button>
+            <button class="key" data-key="Down">↓</button>
+            <button class="key" data-key="Right">→</button>
+            <span class="key-sep"></span>
+            <button class="key" data-key="Enter">⏎</button>
+        </div>
+
+        <!-- Native input box. Typing into a real same-origin <input> is rock-solid on
+             iOS (unlike xterm's hidden textarea inside the iframe), so this is the
+             reliable way to talk to whatever's running in the terminal — e.g. Claude
+             Code. Send injects the text + Enter via the control service. -->
+        <form class="inputbar" id="inputbar" autocomplete="off">
+            <input id="line" type="text" inputmode="text" enterkeyhint="send"
+                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   placeholder="Type here → sends into the terminal…">
+            <button class="send" id="send" type="submit" aria-label="Send">Send</button>
+        </form>
+    </div>
+
+    <script>
+    (function () {
+        // `tailscale serve` already exposes everything under ONE https origin:
+        //   /shell -> ttyd:7681   /ctl -> control:7683   (prefix is stripped)
+        // Use those same-origin paths over HTTPS: no mixed-content, and crucially it
+        // works inside an installed HTTPS PWA on iOS/Android, where the old trick of
+        // bouncing to a plain http://<ip> URL silently fails (that's the "cooked on
+        // mobile" bug). Over plain HTTP (opened at :8080 directly) tailscale serve isn't
+        // in play, so fall back to the host IP ports.
+        var onHttps = location.protocol === 'https:';
+        var CTL  = onHttps ? '/ctl' : 'http://100.77.42.110:7683';
+        var term = document.getElementById('term');
+        term.src = onHttps ? '/shell/' : 'http://100.77.42.110:7681/';
+
+        var tabsEl = document.getElementById('tabs');
+        var addAres = document.getElementById('tab-add-ares');
+        var addNexus = document.getElementById('tab-add-nexus');
+        var busy = false;
+
+        function api(path, body) {
+            var opts = { method: body ? 'POST' : 'GET' };
+            if (body) {
+                opts.headers = { 'Content-Type': 'application/json' };
+                opts.body = JSON.stringify(body);
+            }
+            return fetch(CTL + path, opts).then(function (r) {
+                return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status));
+            });
+        }
+
+        function renderTabs(windows) {
+            Array.prototype.slice.call(tabsEl.querySelectorAll('.tab:not(.tab-add)'))
+                .forEach(function (n) { n.remove(); });
+            (windows || []).forEach(function (w) {
+                var chip = document.createElement('button');
+                chip.className = 'tab' + (w.active ? ' active' : '');
+                var label = document.createElement('span');
+                label.textContent = (w.name && w.name.length ? w.name : 'sh') + ' ' + w.index;
+                chip.appendChild(label);
+                chip.addEventListener('click', function (e) {
+                    if (e.target.classList.contains('x')) return;
+                    select(w.index);
+                });
+                if ((windows || []).length > 1) {
+                    var x = document.createElement('span');
+                    x.className = 'x'; x.textContent = '×';
+                    x.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        if (confirm('Close session ' + w.index + '?')) kill(w.index);
+                    });
+                    chip.appendChild(x);
+                }
+                tabsEl.insertBefore(chip, addAres);
+            });
+        }
+
+        function refresh() {
+            return api('/windows').then(function (d) { renderTabs(d.windows); })
+                                  .catch(function () { /* control service offline — leave "+" only */ });
+        }
+
+        function guard(p) {
+            if (busy) return;
+            busy = true;
+            p.then(function (d) { if (d && d.windows) renderTabs(d.windows); else refresh(); })
+             .catch(function () {})
+             .finally(function () { busy = false; });
+        }
+
+        function select(i) { guard(api('/select', { index: String(i) })); }
+        function kill(i)    { guard(api('/kill',   { index: String(i) })); }
+
+        addAres.addEventListener('click', function () { guard(api('/new', { target: 'ares' })); });
+        addNexus.addEventListener('click', function () { guard(api('/new', { target: 'nexus' })); });
+
+        var form = document.getElementById('inputbar');
+        var line = document.getElementById('line');
+
+        document.getElementById('keys').addEventListener('click', function (e) {
+            var btn = e.target.closest('.key');
+            if (!btn) return;
+            // Show/hide the soft keyboard by toggling focus on the native input. Focusing
+            // must happen synchronously inside this user gesture or iOS won't raise it.
+            if (btn.id === 'kbd-toggle') {
+                if (document.activeElement === line) line.blur();
+                else line.focus();
+                return;
+            }
+            if (btn.dataset.key)    api('/key',    { key: btn.dataset.key }).catch(function () {});
+            if (btn.dataset.scroll) api('/scroll', { dir: btn.dataset.scroll }).catch(function () {});
+        });
+
+        // ── Native input box → inject into the terminal (reliable iOS typing) ──
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var text = line.value;
+            if (!text) return;
+            line.value = '';
+            line.focus();  // keep the keyboard up for the next line
+            api('/text', { text: text, enter: true }).catch(function () {
+                // On failure, restore what was typed so it isn't lost.
+                if (!line.value) line.value = text;
+            });
+        });
+
+        refresh();
+        setInterval(refresh, 3000);
+    })();
+    </script>
+</body>
+</html>

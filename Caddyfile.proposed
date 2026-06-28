@@ -1,0 +1,111 @@
+{
+	auto_https off
+	admin off
+}
+
+# Serve immutable photo media straight from disk instead of streaming ~47GB
+# through Flask/Python. Files are bind-mounted from the ares-app LXC
+# (/mnt/data -> /mnt/nvme here) and are readable by the caddy user.
+(static_media) {
+	# Tiers Flask already serves WITHOUT auth (grid-max WebP, HLS, MP4s) —
+	# browser + external players. Behaviour unchanged, just no longer via Python.
+	@static_public path /static/thumbs_max/* /static/hls/* /static/video_cache/*
+	handle @static_public {
+		root * /mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD
+		header Cache-Control "public, max-age=604800, immutable"
+		file_server
+	}
+	# Auth-gated grid tiers: Flask's _serve_thumb_on_demand 401s logged-out
+	# clients, so gate these with a cheap forward_auth subrequest (204=allow,
+	# 401=deny) to keep the library private. thumbs_preview stays on Flask
+	# (only ~80% backfilled — on-demand gen still needed for the rest).
+	@static_auth path /static/thumbs/* /static/thumbs_hq/*
+	handle @static_auth {
+		forward_auth 192.168.20.213:8080 {
+			uri /_authz
+		}
+		root * /mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD
+		header Cache-Control "public, max-age=604800, immutable"
+		file_server
+	}
+}
+
+# HTTPS + HTTP/2 in front of the ares-app LXC. The browser's 6-conn-per-
+# origin limit on HTTP/1.1 was the real bottleneck for thumbnail loading
+# (a year with 200 thumbs would serialize ~33 batches of 6). HTTP/2
+# multiplexes them all over a single connection, so a year click feels
+# instant even on a slow link.
+:8443 {
+	tls /etc/caddy/pve.crt /etc/caddy/pve.key
+	encode zstd gzip
+
+	# Web shell on the ARES host: ttyd (at root) on 127.0.0.1:7681. handle_path
+	# strips the /shell prefix; reverse_proxy carries the websocket upgrade.
+	# Tailnet-only: only Tailscale source IPs (100.64.0.0/10, fd7a:115c:a1e0::/48)
+	# may reach the passwordless shell; LAN clients get 403.
+	handle_path /shell/* {
+		route {
+			@notts not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
+			respond @notts "Forbidden" 403
+			reverse_proxy 100.77.42.110:7681
+		}
+	}
+
+	# Control service that drives the tmux session behind ttyd (window tabs, key
+	# injection, the native input box). Same handle_path/tailnet-only pattern as
+	# /shell so the terminal page works fully over this origin too, not just ttyd.
+	handle_path /ctl/* {
+		route {
+			@notts not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
+			respond @notts "Forbidden" 403
+			reverse_proxy 100.77.42.110:7683
+		}
+	}
+
+	# Static photo media off disk (must precede the catch-all reverse_proxy).
+	import static_media
+
+	handle {
+		reverse_proxy 192.168.20.213:8080 {
+			transport http {
+				versions 1.1
+			}
+			flush_interval -1
+		}
+	}
+}
+
+:8080 {
+	encode zstd gzip
+
+	handle_path /shell/* {
+		route {
+			@notts not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
+			respond @notts "Forbidden" 403
+			reverse_proxy 100.77.42.110:7681
+		}
+	}
+
+	# Control service that drives the tmux session behind ttyd (window tabs, key
+	# injection, the native input box). Same handle_path/tailnet-only pattern as
+	# /shell so the terminal page works fully over this origin too, not just ttyd.
+	handle_path /ctl/* {
+		route {
+			@notts not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
+			respond @notts "Forbidden" 403
+			reverse_proxy 100.77.42.110:7683
+		}
+	}
+
+	# Static photo media off disk (must precede the catch-all reverse_proxy).
+	import static_media
+
+	handle {
+		reverse_proxy 192.168.20.213:8080 {
+			transport http {
+				versions 1.1
+			}
+			flush_interval -1
+		}
+	}
+}
