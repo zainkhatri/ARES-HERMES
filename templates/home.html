@@ -1,793 +1,975 @@
 <!DOCTYPE html>
-<html lang="en" style="background:#04070d">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>PROMETHEON</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <title>ARES & NEXUS</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="apple-touch-icon" href="/static/icon-180.png">
-    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#04070d">
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg:           #04070d;
-            --panel:        #070c16;
-            --border:       #0c1e30;
-            --accent:       #6495ed;
-            --accent-bright:#9ab5f5;
-            --accent-dim:   #111d40;
-            --white:        #e8f0f8;
-            --gray:         #2d4a60;
-            --dark:         #152030;
-            --green:        #00ff99;
-            --yellow:       #f0c040;
-            --red:          #ff4a6e;
-            --sat: env(safe-area-inset-top, 0px);
-            --sab: env(safe-area-inset-bottom, 0px);
-            --sal: env(safe-area-inset-left, 0px);
-            --sar: env(safe-area-inset-right, 0px);
+            --bg-0:#04070d; --bg-1:#070c16; --bg-2:#0a121f; --bg-3:#0d1726;
+            --line-1:rgba(239,68,68,0.08); --line-2:rgba(239,68,68,0.18);
+            --text-1:#e8f0f8; --text-2:#8ba3c0; --text-3:#4a5d78; --text-4:#2d3a4e;
+            --blue:#6495ed; --blue-bright:#9ab5f5; --cyan:#67e8f9;
+            --green:#10b981; --amber:#f59e0b; --red:#ef4444; --magenta:#c084fc;
+            --ares:#ef4444; --ares-bright:#f87171;
+            --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+            --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
         }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         html, body {
-            height: 100%;
-            background: var(--bg);
-            color: var(--white);
-            font-family: 'JetBrains Mono', monospace;
-            -webkit-text-size-adjust: 100%;
+            min-height:100%;
+            background:var(--bg-0);
+            color:var(--text-1);
+            font-family:'JetBrains Mono', monospace;
+            -webkit-font-smoothing:antialiased;
+            -moz-osx-font-smoothing:grayscale;
+        }
+        ::selection { background:var(--ares); color:var(--bg-0); }
+
+        .app { display:flex; flex-direction:column; min-height:100vh; min-height:100dvh; }
+
+        /* Top bar */
+        .top-bar {
+            position:sticky; top:0; z-index:50;
+            background:rgba(4,7,13,0.85);
+            border-bottom:1px solid var(--line-1);
+            padding:14px 24px;
+            padding-top:calc(14px + var(--sat));
+            padding-left:calc(24px + var(--sal));
+            padding-right:calc(24px + var(--sar));
+            display:flex; align-items:center; justify-content:space-between; gap:16px;
+            flex-shrink:0;
+        }
+        .brand {
+            display:flex; align-items:center; gap:12px;
+            text-decoration:none; color:inherit;
+            transition:opacity 0.18s ease;
+        }
+        .brand-other { opacity:0.7; }
+        .brand-other:hover { opacity:1; }
+        .brand-mark {
+            width:26px; height:26px;
+            display:flex; align-items:center; justify-content:center;
+            border:1px solid var(--ares); color:var(--ares);
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:800; font-size:14px; line-height:1;
+        }
+        .mark-nexus { border-color:var(--blue) !important; color:var(--blue) !important; }
+        .brand-line { display:flex; align-items:baseline; gap:8px; }
+        .brand-text {
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:700; font-size:14px; letter-spacing:0.02em;
+            color:var(--ares);
+        }
+        .brand-sep { color:var(--text-3); font-size:11px; }
+        .brand-tag {
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            color:var(--text-2); letter-spacing:0.1em; text-transform:uppercase;
         }
 
-        #pg-overlay {
-            position: fixed; inset: 0; background: #04070d;
-            z-index: 9999; pointer-events: none;
-            transition: opacity 0.15s ease;
+        main {
+            flex:1; display:flex; flex-direction:column;
+            padding:28px 32px;
+            padding-left:calc(32px + var(--sal));
+            padding-right:calc(32px + var(--sar));
+            max-width:1280px; margin:0 auto; width:100%;
         }
 
-        #terminal {
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-            min-height: 100dvh;
+        /* Hero */
+        .hero {
+            flex:1;
+            display:grid;
+            grid-template-columns:auto 1fr;
+            gap:48px;
+            align-items:center;
+            margin-bottom:18px;
+            padding-bottom:14px;
+            border-bottom:1px solid var(--line-1);
+        }
+        .hero-mark {
+            display:inline-flex; align-items:center;
+            font-family:'JetBrains Mono', monospace;
+            font-weight:700;
+            font-size:clamp(10px, 1.8vw, 22px);
+            line-height:1.1;
+            letter-spacing:0;
+        }
+        .hero-mark pre { font-family:inherit; font-size:inherit; line-height:inherit; margin:0; }
+        .hero-mark .ascii-nex { color:var(--text-1); }
+        .hero-mark .ascii-us { color:var(--ares); }
+        .hero-meta {
+            font-family:'JetBrains Mono', monospace;
+            font-size:14px;
+            color:var(--text-2);
+            border-left:1px solid var(--line-2);
+            padding-left:32px;
+            display:grid; grid-template-columns:repeat(2, 1fr);
+            gap:14px 40px;
+        }
+        .hero-meta .row { display:flex; justify-content:space-between; gap:12px; align-items:baseline; }
+        .hero-meta .key { color:var(--text-3); text-transform:uppercase; letter-spacing:0.12em; font-size:11px; }
+        .hero-meta .val { color:var(--text-1); font-variant-numeric:tabular-nums; font-size:16px; font-family:'Bricolage Grotesque', sans-serif; font-weight:600; }
+
+        /* Section head */
+        .section-head {
+            display:flex; justify-content:space-between; align-items:baseline;
+            margin-bottom:10px;
+            padding-bottom:6px;
+            border-bottom:1px solid var(--line-1);
+        }
+        .section-title {
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:600; font-size:12px;
+            letter-spacing:0.04em;
+            color:var(--text-1);
+            text-transform:uppercase;
+        }
+        .section-meta {
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            color:var(--text-3); letter-spacing:0.12em; text-transform:uppercase;
         }
 
-        /* ── Titlebar ── */
-        #titlebar {
-            background: var(--panel);
-            padding: 8px 16px;
-            padding-top:   calc(8px + var(--sat));
-            padding-left:  calc(16px + var(--sal));
-            padding-right: calc(16px + var(--sar));
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid var(--border);
-            flex-shrink: 0;
+        /* === Vitals — tile grid + drive strip === */
+        .vitals-hero {
+            display:grid; grid-template-columns:repeat(6, 1fr);
+            gap:1px; background:var(--line-2); border:1px solid var(--line-2);
+            margin-bottom:12px;
         }
-        #titlebar .title {
-            font-family: 'Rajdhani', sans-serif;
-            font-weight: 700;
-            font-size: 10px;
-            letter-spacing: 0.2em;
-            text-transform: uppercase;
-            color: var(--white);
+        .v-tile {
+            background:var(--bg-1); padding:10px 16px;
+            display:flex; flex-direction:column; gap:6px;
+            position:relative; overflow:hidden;
         }
-        #titlebar .title-accent {
-            color: var(--accent);
+        /* top accent stripe */
+        .v-tile::before {
+            content:''; position:absolute; left:0; top:0; right:0;
+            height:2px; background:var(--accent-color, var(--ares)); opacity:0.55;
         }
-        #titlebar .status-dot {
-            width: 5px; height: 5px;
-            border-radius: 50%;
-            background: #00ff99;
-            box-shadow: 0 0 5px rgba(0,255,153,0.7);
-            animation: pulse-dot 2.5s ease-in-out infinite;
+        /* subtle per-tile glow tint */
+        .v-tile::after {
+            content:''; position:absolute; inset:0; pointer-events:none;
+            background:radial-gradient(ellipse 100% 50% at 50% 0%,
+                var(--accent-color, var(--ares)) 0%, transparent 100%);
+            opacity:0.03;
         }
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
+        .v-tile.crit::before { background:var(--red); opacity:1; }
+        .v-tile.warn::before { background:var(--amber); opacity:0.9; }
+        .v-tile.crit::after  { opacity:0.05; }
+        .v-tile.warn::after  { opacity:0.04; }
+        .v-tile-key {
+            font-family:'JetBrains Mono', monospace; font-size:9px;
+            color:var(--text-3); letter-spacing:0.22em; text-transform:uppercase;
+            display:flex; justify-content:space-between; align-items:center;
+        }
+        .v-tile-tag { font-size:8px; color:var(--text-4); letter-spacing:0.1em; text-transform:uppercase; }
+        .v-tile-num {
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:700; font-size:26px;
+            color:var(--text-1); letter-spacing:-0.025em;
+            line-height:1; font-variant-numeric:tabular-nums;
+        }
+        .v-tile-num .unit { color:var(--text-3); font-size:13px; font-weight:500; margin-left:2px; }
+        .v-tile.crit .v-tile-num { color:var(--red); }
+        .v-tile.warn .v-tile-num { color:var(--amber); }
+        /* segmented level-meter bar */
+        .v-tile-bar {
+            height:8px; background:var(--bg-3); position:relative; overflow:hidden;
+        }
+        .v-tile-fill {
+            height:100%; background:var(--accent-color, var(--ares));
+            transition:width 0.7s cubic-bezier(0.16,1,0.3,1), background 0.5s ease;
+        }
+        .v-tile.crit .v-tile-fill { background:var(--red); }
+        .v-tile.warn .v-tile-fill { background:var(--amber); }
+        /* segment cuts — thin bg-colored slices across the fill */
+        .v-tile-bar::after {
+            content:''; position:absolute; inset:0; z-index:1; pointer-events:none;
+            background:repeating-linear-gradient(
+                to right,
+                transparent 0px, transparent 9px,
+                var(--bg-1) 9px, var(--bg-1) 10px
+            );
+        }
+        .v-tile-meta {
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            color:var(--text-2); font-variant-numeric:tabular-nums;
+            display:flex; justify-content:space-between;
+        }
+        .v-tile-meta .lo { color:var(--text-3); }
+
+        .v-drives {
+            display:grid; grid-template-columns:repeat(3, 1fr);
+            gap:1px; background:var(--line-1); border:1px solid var(--line-1);
+            min-height:74px;
+        }
+        .v-drive {
+            background:var(--bg-1); padding:13px 18px;
+            position:relative;
+        }
+        .v-drive::before {
+            content:''; position:absolute; left:0; top:0; bottom:0;
+            width:2px; background:var(--drive-color, var(--ares));
+        }
+        .v-drive-row {
+            display:flex; justify-content:space-between; align-items:baseline;
+            margin-bottom:10px;
+        }
+        .v-drive-name {
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:700; font-size:15px;
+            color:var(--drive-color, var(--ares));
+            letter-spacing:-0.01em; line-height:1;
+        }
+        .v-drive-tag {
+            font-family:'JetBrains Mono', monospace; font-size:9px;
+            color:var(--text-3); letter-spacing:0.15em; text-transform:uppercase;
+        }
+        .v-drive-bar { height:6px; background:var(--bg-3); margin-bottom:8px; position:relative; overflow:hidden; }
+        .v-drive-bar::after { content:''; position:absolute; inset:0; z-index:1; pointer-events:none; background:repeating-linear-gradient(to right, transparent 0px, transparent 9px, var(--bg-1) 9px, var(--bg-1) 10px); }
+        .v-drive-bar-fill { height:100%; background:var(--drive-color, var(--ares)); transition:width 0.6s cubic-bezier(0.16,1,0.3,1); }
+        .v-drive-stats { display:flex; justify-content:space-between; font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--text-2); font-variant-numeric:tabular-nums; }
+        .v-drive-stats .pct { color:var(--text-1); font-weight:500; }
+
+        /* Respect reduced-motion: snap bars instead of gliding (JS skips the
+           number count-up too, see prefersReducedMotion()). */
+        @media (prefers-reduced-motion: reduce) {
+            .v-tile-fill, .v-drive-bar-fill { transition:none; }
         }
 
-        /* ── Main ── */
-        #main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 36px 24px 24px;
-            padding-left:  calc(24px + var(--sal));
-            padding-right: calc(24px + var(--sar));
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-            background-image:
-                linear-gradient(rgba(100,149,237,0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(100,149,237,0.02) 1px, transparent 1px);
-            background-size: 40px 40px;
+        @media (max-width:1200px) {
+            .vitals-hero { grid-template-columns:repeat(3, 1fr); }
+            .v-drives { grid-template-columns:1fr; }
+        }
+        @media (max-width:520px) {
+            .vitals-hero { grid-template-columns:1fr 1fr; }
+            .v-tile { padding:12px 14px; }
+            .v-tile-num { font-size:24px; }
         }
 
-        #page-wrap {
-            display: inline-flex;
-            flex-direction: column;
-            align-items: stretch;
-            width: 100%;
-            max-width: 800px;
+        /* Nav grid */
+        .nav-grid {
+            display:grid;
+            grid-template-columns:repeat(4, 1fr);
+            gap:1px;
+            background:var(--line-1);
+            border:1px solid var(--line-1);
         }
-
-        /* ── Banner ── */
-        #banner-wrap {
-            width: 100%;
-            overflow: hidden;
-            margin-bottom: 28px;
-            display: flex;
-            justify-content: center;
-        }
-
-        #banner {
-            color: var(--accent);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 18px;
-            line-height: 1.15;
-            white-space: pre;
-            text-align: center;
-            text-shadow:
-                0 0 6px  rgba(100, 149, 237, 0.9),
-                0 0 18px rgba(100, 149, 237, 0.35),
-                0 0 40px rgba(100, 149, 237, 0.12);
-        }
-        #banner {
-            transition: color 2s ease, text-shadow 2s ease;
-            transform-origin: top center;
-        }
-
-        /* ── Nav Cards ── */
-        .cards {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
-            width: 100%;
-            margin-bottom: 14px;
-        }
-
         .nav-card {
-            background: var(--panel);
-            border: 1px solid var(--border);
-            padding: 24px 16px;
-            cursor: pointer;
-            transition: border-color 0.2s, box-shadow 0.2s;
-            text-align: center;
-            text-decoration: none;
-            display: block;
-            color: inherit;
-            -webkit-touch-callout: none;
+            background:var(--bg-1);
+            padding:20px 22px;
+            display:flex; align-items:center; gap:18px;
+            text-decoration:none; color:inherit;
+            position:relative;
+            transition:background 0.18s ease, border-color 0.18s ease;
+            border-left:2px solid transparent;
         }
-        .nav-card:hover, .nav-card:active {
-            border-color: var(--accent);
-            box-shadow: 0 0 20px rgba(100, 149, 237, 0.08), inset 0 0 20px rgba(100, 149, 237, 0.02);
+        .nav-card:hover { background:var(--bg-2); border-left-color:var(--ares); }
+        .nav-card-num {
+            position:absolute; top:10px; right:14px;
+            font-family:'JetBrains Mono', monospace;
+            font-size:9px; color:var(--text-4); letter-spacing:0.12em;
+        }
+        .nav-card-body { flex:1; min-width:0; }
+        .nav-card-label {
+            font-family:'JetBrains Mono', monospace;
+            font-size:9px; color:var(--text-3);
+            letter-spacing:0.18em; text-transform:uppercase;
+            margin-bottom:6px;
+        }
+        .nav-card-title {
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:700; font-size:22px;
+            letter-spacing:-0.02em; line-height:1;
+            color:var(--text-1);
+            transition:color 0.18s ease;
+        }
+        .nav-card:hover .nav-card-title { color:var(--text-1); }
+        .nav-card-arrow {
+            color:var(--text-4);
+            transition:color 0.2s ease, transform 0.2s ease;
+            flex-shrink:0;
+        }
+        .nav-card:hover .nav-card-arrow { color:var(--ares); transform:translateX(5px); }
+
+        /* Footer */
+        footer {
+            border-top:1px solid var(--line-1);
+            padding:14px 32px;
+            padding-bottom:calc(14px + var(--sab));
+            font-family:'JetBrains Mono', monospace;
+            font-size:10px; color:var(--text-3);
+            letter-spacing:0.12em; text-transform:uppercase;
+            display:flex; justify-content:space-between; flex-shrink:0;
         }
 
-        .card-icon {
-            width: 44px;
-            height: 44px;
-            margin: 0 auto 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid var(--border);
-            background: var(--accent-dim);
+        @media (max-width:900px) {
+            .vitals { grid-template-columns:1fr; }
+            .nav-grid { grid-template-columns:repeat(2, 1fr); }
         }
-        .card-icon svg { width: 22px; height: 22px; }
-
-        .card-title {
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--accent-bright);
-            margin-bottom: 4px;
-            letter-spacing: 0.2em;
-            text-transform: uppercase;
+        @media (max-width:768px) {
+            main { padding:20px 16px; }
+            .hero { grid-template-columns:1fr; gap:18px; align-items:start; }
+            .nav-card-title { font-size:18px; }
         }
-        .card-desc {
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 10px;
-            font-weight: 500;
-            letter-spacing: 0.1em;
-            color: var(--white);
-            margin-bottom: 10px;
-            text-transform: uppercase;
-        }
-        .card-tag {
-            display: inline-block;
-            padding: 2px 10px;
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 9px;
-            font-weight: 700;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            border: 1px solid var(--border);
+        @media (max-width:430px) {
+            .nav-grid { grid-template-columns:1fr; }
         }
 
-        /* ── Vitals ── */
-        .vitals {
-            width: 100%;
-            background: var(--panel);
-            border: 1px solid var(--border);
-            padding: 16px 20px;
+        /* Mobile smoothness: skip the staggered entrance cascade. On a phone the
+           translateY slide-ins make the page feel unresponsive to an early swipe —
+           content paints instantly instead. Momentum scroll + no rubber-band, and
+           snappy taps (no 300ms delay). Desktop keeps the full entrance. */
+        @media (max-width:600px) {
+            .navbar, footer, .hero, .pool-banner, .section-head, .nav-grid, .vitals,
+            .vitals-hero, .v-drives, .drive-strip, .nav-card, .v-tile, .v-drive,
+            .vcol, .vrow, .canvas-wrap, .canvas, .split, .layout, .cal-grid, .detail,
+            .year-nav { animation:none !important; }
+            body { overscroll-behavior-y:none; -webkit-overflow-scrolling:touch; }
+            .nav-card, button, a { touch-action:manipulation; }
         }
 
-        .vitals-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 14px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--border);
+        /* === Unified Navbar === */
+        .navbar {
+            position:sticky; top:0; z-index:1000;
+            background:rgba(4,7,13,0.92);
+            border-bottom:1px solid var(--line-1);
+            padding:14px 24px;
+            padding-top:calc(14px + env(safe-area-inset-top, 0px));
+            padding-left:calc(24px + env(safe-area-inset-left, 0px));
+            padding-right:calc(24px + env(safe-area-inset-right, 0px));
+            display:flex; align-items:center; justify-content:space-between; gap:20px;
         }
-        .vitals-header-left {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .navbar-left { display:flex; align-items:center; gap:16px; min-width:0; }
+        .nbr { display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; transition:opacity 0.18s ease; min-width:0; }
+        .nbr-other { opacity:0.7; }
+        .nbr-other:hover { opacity:1; }
+        .nbr-mark {
+            width:26px; height:26px; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center;
+            border:1px solid; font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:800; font-size:14px; line-height:1;
         }
-
-        .pulse {
-            width: 5px; height: 5px;
-            border-radius: 50%;
-            background: var(--green);
-            animation: pulse-dot 2.5s ease-in-out infinite;
-            box-shadow: 0 0 5px rgba(0, 255, 153, 0.7);
+        .nbr-mark.m-a { border-color:var(--ares, #ef4444); color:var(--ares, #ef4444); }
+        .nbr-mark.m-n { border-color:var(--blue, #6495ed); color:var(--blue, #6495ed); }
+        .nbr-id { display:flex; align-items:baseline; gap:8px; min-width:0; }
+        .nbr-name { font-family:'Bricolage Grotesque', sans-serif; font-weight:700; font-size:14px; letter-spacing:0.02em; white-space:nowrap; }
+        .nbr-name.n-a { color:var(--ares, #ef4444); }
+        .nbr-name.n-n { color:var(--blue, #6495ed); }
+        .nbr-sep { color:var(--text-3, #4a5d78); font-size:11px; }
+        .nbr-tag { font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--text-2, #8ba3c0); letter-spacing:0.1em; text-transform:uppercase; white-space:nowrap; }
+        .back-chip {
+            display:inline-flex; align-items:center; gap:6px;
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            color:var(--text-2, #8ba3c0);
+            text-decoration:none;
+            letter-spacing:0.15em; text-transform:uppercase;
+            padding:5px 11px;
+            border:1px solid var(--line-2, rgba(100,149,237,0.18));
+            transition:color 0.15s, border-color 0.15s, background 0.15s, gap 0.15s;
         }
-
-        .vitals-label {
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 10px;
-            font-weight: 700;
-            color: var(--accent);
-            letter-spacing: 0.2em;
-            text-transform: uppercase;
-        }
-        .vitals-host {
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 9px;
-            font-weight: 600;
-            letter-spacing: 0.12em;
-            color: var(--white);
-            text-transform: uppercase;
-        }
-
-        .vitals-host { transition: opacity 0.3s ease; }
-
-        .vitals-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0;
-        }
-        .vitals-col { display: flex; flex-direction: column; }
-        .vitals-col:first-child { padding-right: 20px; border-right: 1px solid var(--border); }
-        .vitals-col:last-child  { padding-left: 20px; }
-
-        .vitals-section {
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 8px;
-            font-weight: 700;
-            letter-spacing: 0.25em;
-            color: var(--white);
-            text-transform: uppercase;
-            margin-bottom: 10px;
-            padding-bottom: 6px;
-            border-bottom: 1px solid var(--border);
+        .back-chip svg { transition:transform 0.18s ease; }
+        .back-chip:hover { color:var(--nav-accent, #6495ed); border-color:var(--nav-accent, #6495ed); background:rgba(100,149,237,0.05); }
+        .back-chip:hover svg { transform:translateX(-2px); }
+        @media (max-width:600px) {
+            .navbar { padding:12px 14px; gap:10px; }
+            .nbr-tag { display:none; }
+            .back-chip span { display:none; }
+            .back-chip { padding:5px 8px; }
         }
 
-        @keyframes fadeSlideIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
+    
+        /* === Load animations === */
+        @keyframes fade-in {
+            from { opacity:0; transform:translateY(10px); }
+            to { opacity:1; transform:translateY(0); }
         }
-        .vitals-grid { opacity: 0; transform: translateY(8px); transition: opacity 0.4s ease, transform 0.4s ease; }
-        .vitals-grid.loaded { opacity: 1; transform: translateY(0); }
-        .vitals-footer { opacity: 0; transition: opacity 0.4s ease 0.15s; }
-        .vitals-footer.loaded { opacity: 1; }
+        @media (prefers-reduced-motion: no-preference) {
+            .navbar, footer, .hero, .pool-banner, .section-head, .nav-grid, .vitals, .vitals-hero, .v-drives, .drive-strip, .canvas-wrap, .canvas, .split, .layout, .cal-grid, .detail, .year-nav {
+                animation: fade-in 0.55s cubic-bezier(0.16,1,0.3,1) backwards;
+            }
+            .navbar { animation-delay: 0s; }
+            footer { animation-delay: 0.4s; }
+            .hero { animation-delay: 0.03s; }
+            .pool-banner { animation-delay: 0.08s; }
+            .section-head:nth-of-type(1) { animation-delay: 0.12s; }
+            .nav-grid { animation-delay: 0.16s; }
+            .section-head:nth-of-type(2) { animation-delay: 0.22s; }
+            .vitals, .vitals-hero { animation-delay: 0.26s; }
+            .v-drives, .drive-strip { animation-delay: 0.32s; }
+            .canvas-wrap, .canvas, .split, .layout { animation-delay: 0.18s; }
+            .year-nav { animation-delay: 0.1s; }
 
-        .v-item { animation: fadeSlideIn 0.3s ease both; }
+            /* Per-item stagger inside grids */
+            .nav-card { animation: fade-in 0.5s cubic-bezier(0.16,1,0.3,1) backwards; }
+            .nav-card:nth-child(1) { animation-delay: 0.18s; }
+            .nav-card:nth-child(2) { animation-delay: 0.22s; }
+            .nav-card:nth-child(3) { animation-delay: 0.26s; }
+            .nav-card:nth-child(4) { animation-delay: 0.30s; }
 
-        #v-col-left, #v-col-right {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
+            .v-tile { animation: fade-in 0.5s cubic-bezier(0.16,1,0.3,1) backwards; }
+            .v-tile:nth-child(1) { animation-delay: 0s; }
+            .v-tile:nth-child(2) { animation-delay: 0.06s; }
+            .v-tile:nth-child(3) { animation-delay: 0.12s; }
+            .v-tile:nth-child(4) { animation-delay: 0.18s; }
+            .v-tile:nth-child(5) { animation-delay: 0.24s; }
+            .v-tile:nth-child(6) { animation-delay: 0.30s; }
 
-        .v-item {
-            padding-left: 9px;
-            border-left: 2px solid var(--border);
-        }
-        .v-item.ok   { border-left-color: var(--accent); }
-        .v-item.warn { border-left-color: var(--yellow); }
-        .v-item.crit { border-left-color: var(--red); }
-        /* Per-drive colors */
-        .v-item[data-drive] { border-left-color: var(--drive-color); }
-        .v-item[data-drive] .bar-fill { background: var(--drive-color); box-shadow: 0 0 4px var(--drive-color); }
-        .v-item[data-drive] .label { color: var(--drive-color); opacity: 0.85; }
+            .v-drive { animation: fade-in 0.5s cubic-bezier(0.16,1,0.3,1) backwards; }
+            .v-drive:nth-child(1) { animation-delay: 0s; }
+            .v-drive:nth-child(2) { animation-delay: 0.06s; }
+            .v-drive:nth-child(3) { animation-delay: 0.12s; }
 
-        .vitals-row-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-        }
-        .vitals-row-header .label {
-            font-family: 'Rajdhani', sans-serif;
-            font-weight: 600;
-            color: var(--white);
-            font-size: 10px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }
-        .vitals-row-header .value {
-            font-family: 'JetBrains Mono', monospace;
-            color: var(--white);
-            font-size: 10px;
-        }
+            /* When real tiles replace the skeletons (data arrived), they resolve
+               in with a quick opacity fade instead of replaying the sliding
+               entrance the skeletons already played — no jarring second wave. */
+            @keyframes v-resolve { from { opacity:0; } to { opacity:1; } }
+            #vitals-hero.vitals-loaded .v-tile,
+            #v-drives.drives-loaded .v-drive { animation: v-resolve 0.4s ease both; }
 
-        .bar { height: 2px; background: #050810; }
-        .bar-fill { height: 100%; transition: width 1s ease; }
-        .bar-fill.ok   { background: var(--accent); box-shadow: 0 0 4px rgba(100, 149, 237, 0.6); }
-        .bar-fill.warn { background: var(--yellow); box-shadow: 0 0 4px rgba(240, 192, 64, 0.6); }
-        .bar-fill.crit { background: var(--red);    box-shadow: 0 0 4px rgba(255, 74, 110, 0.6); }
+            .vcol { animation: fade-in 0.5s cubic-bezier(0.16,1,0.3,1) backwards; }
+            .vcol:nth-child(1) { animation-delay: 0.30s; }
+            .vcol:nth-child(2) { animation-delay: 0.38s; }
+            .vcol:nth-child(3) { animation-delay: 0.46s; }
 
-        .vitals-footer {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 12px;
-            padding-top: 10px;
-            border-top: 1px solid var(--border);
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 9px;
-            font-weight: 600;
-            letter-spacing: 0.12em;
-            color: var(--white);
-            text-transform: uppercase;
-        }
+            .vrow { animation: fade-in 0.4s cubic-bezier(0.16,1,0.3,1) backwards; }
+            .vrow:nth-child(1) { animation-delay: 0s; }
+            .vrow:nth-child(2) { animation-delay: 0.05s; }
+            .vrow:nth-child(3) { animation-delay: 0.10s; }
+            .vrow:nth-child(4) { animation-delay: 0.15s; }
 
-        /* ── Bottom ── */
-        #bottom {
-            background: var(--panel);
-            border-top: 1px solid var(--border);
-            color: var(--white);
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 9px;
-            font-weight: 600;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            padding: 4px 16px;
-            padding-bottom: calc(4px + var(--sab));
-            padding-left:   calc(16px + var(--sal));
-            padding-right:  calc(16px + var(--sar));
-            display: flex;
-            justify-content: space-between;
-            flex-shrink: 0;
-        }
+            .strip-card { animation: fade-in 0.5s cubic-bezier(0.16,1,0.3,1) backwards; }
+            .strip-card:nth-child(1) { animation-delay: 0.22s; }
+            .strip-card:nth-child(2) { animation-delay: 0.28s; }
+            .strip-card:nth-child(3) { animation-delay: 0.34s; }
 
-        /* ── Responsive ── */
-        @media (max-width: 768px) {
-            #main { padding: 16px 12px; padding-left: calc(12px + var(--sal)); padding-right: calc(12px + var(--sar)); }
-            .cards { gap: 10px; }
-            .nav-card { padding: 18px 12px; }
-            .card-icon { width: 40px; height: 40px; margin-bottom: 10px; }
-            .vitals { padding: 12px 14px; }
-        }
+            .pick-card { animation: fade-in 0.5s cubic-bezier(0.16,1,0.3,1) backwards; }
+            .pick-card:nth-child(1) { animation-delay: 0.22s; }
+            .pick-card:nth-child(2) { animation-delay: 0.28s; }
+            .pick-card:nth-child(3) { animation-delay: 0.34s; }
 
-        @media (max-width: 430px) {
-            #main { padding: 16px 12px; padding-left: calc(12px + var(--sal)); padding-right: calc(12px + var(--sar)); }
-            .vitals-grid { grid-template-columns: 1fr; }
-            .vitals-col:first-child { padding-right: 0; border-right: none; border-bottom: 1px solid var(--border); padding-bottom: 14px; margin-bottom: 14px; }
-            .vitals-col:last-child  { padding-left: 0; }
-            .cards { grid-template-columns: 1fr 1fr; gap: 10px; }
-            .nav-card { padding: 16px 10px; }
-            .card-title { font-size: 11px; }
-            .vitals { padding: 12px; }
+            .month { animation: fade-in 0.4s cubic-bezier(0.16,1,0.3,1) backwards; }
+            .month:nth-child(1) { animation-delay: 0.18s; }
+            .month:nth-child(2) { animation-delay: 0.21s; }
+            .month:nth-child(3) { animation-delay: 0.24s; }
+            .month:nth-child(4) { animation-delay: 0.27s; }
+            .month:nth-child(5) { animation-delay: 0.30s; }
+            .month:nth-child(6) { animation-delay: 0.33s; }
+            .month:nth-child(7) { animation-delay: 0.36s; }
+            .month:nth-child(8) { animation-delay: 0.39s; }
+            .month:nth-child(9) { animation-delay: 0.42s; }
+            .month:nth-child(10) { animation-delay: 0.45s; }
+            .month:nth-child(11) { animation-delay: 0.48s; }
+            .month:nth-child(12) { animation-delay: 0.51s; }
         }
-    </style>
+        /* WIN split tile — status (left) + remote (right) */
+        .v-tile.v-tile-split,
+        .v-tile.v-tile-wide {
+            grid-column: span 2;
+        }
+        .v-tile.v-tile-split {
+            padding:0 !important;
+            cursor:default;
+            display:flex; flex-direction:row;
+            overflow:hidden;
+        }
+        .v-tile.v-tile-split::before,
+        .v-tile.v-tile-split::after { display:none; }
+        .v-tile-half {
+            flex:1; min-width:0;
+            padding:10px 16px;
+            display:flex; flex-direction:column; gap:6px;
+            cursor:pointer;
+            transition:background 0.18s ease;
+            position:relative; overflow:hidden;
+        }
+        .v-tile-half:hover { background:rgba(255,255,255,0.035); }
+        /* top stripe per half */
+        .v-tile-half.status::before {
+            content:''; position:absolute; left:0; top:0; right:0;
+            height:2px; background:#10b981; opacity:0.8;
+        }
+        .v-tile-half.status::after {
+            content:''; position:absolute; inset:0; pointer-events:none;
+            background:radial-gradient(ellipse 100% 50% at 50% 0%, #10b981 0%, transparent 100%);
+            opacity:0.04;
+        }
+        .v-tile-half.remote {
+            border-left:1px solid var(--line-1);
+        }
+        .v-tile-half.remote::before {
+            content:''; position:absolute; left:0; top:0; right:0;
+            height:2px; background:#ef4444; opacity:0.55;
+        }
+        .v-tile-half.remote::after {
+            content:''; position:absolute; inset:0; pointer-events:none;
+            background:radial-gradient(ellipse 100% 50% at 50% 0%, #ef4444 0%, transparent 100%);
+            opacity:0.025;
+        }
+        /* halves use gap:8px, no manual margins needed */
+        @keyframes win-pulse {
+            0%,100% { opacity:1; }
+            50% { opacity:0.45; }
+        }
+    
+        
+        /* ─── Vitals skeleton (load state) ─── */
+        .v-skel {
+            position:relative; overflow:hidden;
+            display:flex; flex-direction:column; gap:9px;
+            /* neutral accent so the loading state shows no red until real
+               tiles (with their colour + numbers) resolve in together */
+            --accent-color:var(--text-4);
+        }
+        .v-skel::before {
+            content:''; position:absolute; left:0; top:0;
+            width:2px; height:100%;
+            background:var(--text-4); opacity:0.4;
+        }
+        .v-skel-key, .v-skel-num, .v-skel-bar, .v-skel-meta {
+            background:var(--bg-3); border-radius:1px;
+            position:relative; overflow:hidden;
+        }
+        .v-skel-key  { height:9px; width:32%; }
+        .v-skel-num  { height:24px; width:54%; margin-top:3px; }
+        .v-skel-bar  { height:8px; width:100%; }
+        .v-skel-meta { height:9px; width:64%; }
+        .v-skel-drive .v-skel-key  { height:11px; width:25%; }
+        .v-skel-drive .v-skel-bar  { height:6px; width:100%; }
+        .v-skel-drive .v-skel-meta { height:9px; width:42%; }
+        /* Shimmer */
+        .v-skel-key::after, .v-skel-num::after, .v-skel-bar::after, .v-skel-meta::after {
+            content:''; position:absolute; inset:0;
+            background:linear-gradient(
+                90deg,
+                transparent 0%,
+                rgba(232,240,248,0.08) 45%,
+                rgba(232,240,248,0.14) 50%,
+                rgba(232,240,248,0.08) 55%,
+                transparent 100%
+            );
+            transform:translateX(-100%);
+            animation:v-skel-shimmer 1.6s cubic-bezier(0.4,0,0.2,1) infinite;
+        }
+        .v-skel-num::after  { animation-delay: 0.06s; }
+        .v-skel-bar::after  { animation-delay: 0.12s; }
+        .v-skel-meta::after { animation-delay: 0.18s; }
+        @keyframes v-skel-shimmer {
+            0%   { transform:translateX(-100%); }
+            60%  { transform:translateX(100%); }
+            100% { transform:translateX(100%); }
+        }
+        /* Soften the red gridlines while skeletons are present */
+        #vitals-hero:has(.v-skel),
+        #v-drives:has(.v-skel-drive) {
+            background:var(--bg-3);
+            border-color:var(--bg-3);
+        }
+    
+        </style>
 </head>
 <body>
-<div id="pg-overlay"></div>
+<div class="app">
+    
 
-<div id="terminal">
-    <div id="titlebar">
-        <div style="display:flex;align-items:center;gap:8px">
-            <div class="status-dot"></div>
-            <span class="title"><span class="title-accent">PROMETHEON</span> &nbsp;/&nbsp; NAS</span>
-        </div>
-        <span class="title" id="titlebar-time"></span>
-    </div>
-
-    <div id="main">
-        <div id="page-wrap">
-
-        <div id="banner-wrap">
-            <div id="banner">
- ██████╗ ██████╗  ██████╗ ███╗   ███╗███████╗████████╗██╗  ██╗███████╗ ██████╗ ███╗   ██╗
- ██╔══██╗██╔══██╗██╔═══██╗████╗ ████║██╔════╝╚══██╔══╝██║  ██║██╔════╝██╔═══██╗████╗  ██║
- ██████╔╝██████╔╝██║   ██║██╔████╔██║█████╗     ██║   ███████║█████╗  ██║   ██║██╔██╗ ██║
- ██╔═══╝ ██╔══██╗██║   ██║██║╚██╔╝██║██╔══╝     ██║   ██╔══██║██╔══╝  ██║   ██║██║╚██╗██║
- ██║     ██║  ██║╚██████╔╝██║ ╚═╝ ██║███████╗   ██║   ██║  ██║███████╗╚██████╔╝██║ ╚████║
- ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝</div>
-        </div>
-
-        <div style="width:100%">
-        <div class="cards">
-            <a href="/terminal" class="nav-card">
-                <div class="card-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5">
-                        <rect x="2" y="3" width="20" height="18" rx="2"/>
-                        <polyline points="7,8 11,12 7,16"/>
-                        <line x1="13" y1="16" x2="17" y2="16"/>
-                    </svg>
+    
+    <header class="navbar">
+        <div class="navbar-left">
+            <a href="/" class="nbr nbr-self">
+                <div class="nbr-mark m-a">A</div>
+                <div class="nbr-id">
+                    <span class="nbr-name n-a">ARES</span>
+                    <span class="nbr-sep">/</span>
+                    <span class="nbr-tag">SUPER-NAS</span>
                 </div>
-                <div class="card-title">Terminal</div>
-                <div class="card-desc">AI Shell</div>
-                <span class="card-tag" style="color:var(--accent);border-color:var(--border)">Claude AI</span>
             </a>
+            
+        </div>
+        <a href="/jump/nexus" class="nbr nbr-other">
+            <div class="nbr-mark m-n">N</div>
+            <div class="nbr-id">
+                <span class="nbr-name n-n">NEXUS</span>
+                <span class="nbr-sep">/</span>
+                <span class="nbr-tag">MINI-NAS</span>
+            </div>
+        </a>
+    </header>
+    <main>
+        <section class="hero">
+            <div class="hero-mark"><pre class="ascii-nex"> █████╗ ██████╗
+██╔══██╗██╔══██╗
+███████║██████╔╝
+██╔══██║██╔══██╗
+██║  ██║██║  ██║
+╚═╝  ╚═╝╚═╝  ╚═╝</pre><pre class="ascii-us">███████╗███████╗
+██╔════╝██╔════╝
+█████╗  ███████╗
+██╔══╝  ╚════██║
+███████╗███████║
+╚══════╝╚══════╝</pre></div>
+            <div class="hero-meta">
+                <div class="row"><span class="key">Host</span><span class="val" id="h-host">—</span></div>
+                <div class="row"><span class="key">CPU</span><span class="val" id="h-cpu">—</span></div>
+                <div class="row"><span class="key">GPU</span><span class="val" id="h-gpu">—</span></div>
+                <div class="row"><span class="key">Pool</span><span class="val" id="h-pool">—</span></div>
+            </div>
+        </section>
+
+        <div class="section-head">
+            <div class="section-title">Operations</div>
+            <div class="section-meta">04 modules</div>
+        </div>
+        <nav class="nav-grid" style="margin-bottom:18px">
             <a href="/photos" class="nav-card">
-                <div class="card-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5">
-                        <rect x="2" y="3" width="20" height="18" rx="2"/>
-                        <circle cx="8.5" cy="9.5" r="2"/>
-                        <path d="M21,21 L15,13 L10,18 L7,15 L3,21"/>
-                    </svg>
+                <span class="nav-card-num">001</span>
+                <div class="nav-card-body">
+                    <div class="nav-card-label">Media · Gallery</div>
+                    <div class="nav-card-title">Photos</div>
                 </div>
-                <div class="card-title">Photos</div>
-                <div class="card-desc" id="photo-count-label">Media Gallery</div>
-                <span class="card-tag" style="color:var(--accent);border-color:var(--border)" id="photo-count-tag">—</span>
+                <svg class="nav-card-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
             </a>
-            <a href="/breakdown" class="nav-card">
-                <div class="card-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5">
-                        <path d="M12 2v20M2 12h20"/>
-                        <rect x="3" y="14" width="4" height="6" rx="0.5"/>
-                        <rect x="10" y="8" width="4" height="12" rx="0.5"/>
-                        <rect x="17" y="4" width="4" height="16" rx="0.5"/>
-                    </svg>
+            <a href="/drives" class="nav-card">
+                <span class="nav-card-num">002</span>
+                <div class="nav-card-body">
+                    <div class="nav-card-label">Storage · <span id="nc-pool">—</span></div>
+                    <div class="nav-card-title">Drives</div>
                 </div>
-                <div class="card-title">Breakdown</div>
-                <div class="card-desc">Budget Allocator</div>
-                <span class="card-tag" style="color:var(--accent);border-color:var(--border)">Finance</span>
+                <svg class="nav-card-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+            </a>
+            <a href="/terminal" class="nav-card">
+                <span class="nav-card-num">003</span>
+                <div class="nav-card-body">
+                    <div class="nav-card-label">Shell · pve</div>
+                    <div class="nav-card-title">Terminal</div>
+                </div>
+                <svg class="nav-card-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
             </a>
             <a href="/journals" class="nav-card">
-                <div class="card-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5">
-                        <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
-                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
-                        <line x1="8" y1="7" x2="16" y2="7"/>
-                        <line x1="8" y1="11" x2="14" y2="11"/>
-                    </svg>
+                <span class="nav-card-num">004</span>
+                <div class="nav-card-body">
+                    <div class="nav-card-label">Notes · Archive</div>
+                    <div class="nav-card-title">Journals</div>
                 </div>
-                <div class="card-title">Journals</div>
-                <div class="card-desc">GoodNotes Archive</div>
-                <span class="card-tag" style="color:var(--accent);border-color:var(--border)">Personal</span>
+                <svg class="nav-card-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
             </a>
+        </nav>
+
+        <div class="section-head">
+            <div class="section-title">Vitals</div>
+            <div class="section-meta"><span id="v-host-tag">—</span> · <span id="v-uptime">—</span></div>
         </div>
+        <div class="vitals-hero" id="vitals-hero"><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div></div>
+        <div class="v-drives" id="v-drives"><div class="v-drive v-skel-drive"><div class="v-skel-key"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-drive v-skel-drive"><div class="v-skel-key"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-drive v-skel-drive"><div class="v-skel-key"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div></div>
+    </main>
 
-        <div class="vitals">
-            <div class="vitals-header">
-                <div class="vitals-header-left">
-                    <div class="pulse"></div>
-                    <span class="vitals-label">System Vitals</span>
-                </div>
-                <span class="vitals-host" id="vitals-host">—</span>
-            </div>
-
-            <div class="vitals-grid">
-                <div class="vitals-col">
-                    <div class="vitals-section">Compute</div>
-                    <div id="v-col-left"></div>
-                </div>
-                <div class="vitals-col">
-                    <div class="vitals-section">Storage</div>
-                    <div id="v-col-right"></div>
-                </div>
-            </div>
-
-            <div class="vitals-footer">
-                <span id="v-uptime">Uptime: —</span>
-                <span id="v-clock"></span>
-            </div>
-        </div>
-        </div>
-
-        </div>
-    </div>
-
-    <div id="bottom">
-        <span>PROMETHEON v1.0</span>
-        <span id="clock"></span>
-    </div>
+    <footer>
+        <span>ARES · v1.0</span>
+        <span id="f-time">—</span>
+    </footer>
 </div>
 
 <script>
-// ─── Page transitions ───
-(function() {
-    const ov = document.getElementById('pg-overlay');
-    // Entrance: wait for fonts so ASCII art scales before reveal
-    document.fonts.ready.then(() => {
-        requestAnimationFrame(() => { ov.style.opacity = '0'; });
-    });
-    // Exit: fade overlay in, then navigate
-    document.addEventListener('click', function(e) {
-        const a = e.target.closest('a[href]');
-        if (!a || !a.href) return;
-        let url; try { url = new URL(a.href); } catch { return; }
-        if (url.origin !== location.origin) return;
-        if (a.target || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-        e.preventDefault();
-        const dest = a.href;
-        ov.style.opacity = '1';
-        setTimeout(() => { location.href = dest; }, 160);
-    });
-    // Back button (bfcache)
-    window.addEventListener('pageshow', function(e) {
-        if (e.persisted) {
-            ov.style.transition = 'none';
-            ov.style.opacity = '1';
-            requestAnimationFrame(() => {
-                ov.style.transition = 'opacity 0.15s ease';
-                ov.style.opacity = '0';
-            });
-        }
-    });
-})();
-
-(function scaleBanner() {
-    const wrap   = document.getElementById('banner-wrap');
-    const banner = document.getElementById('banner');
-    if (!wrap || !banner) return;
-    function fit() {
-        banner.style.transform    = 'none';
-        banner.style.marginBottom = '0';
-        const bw = banner.scrollWidth;
-        const ww = wrap.clientWidth;
-        if (bw > ww && bw > 0) {
-            const s = ww / bw;
-            banner.style.transform       = 'scale(' + s + ')';
-            banner.style.transformOrigin = 'top center';
-            banner.style.marginBottom    = '-' + (banner.offsetHeight * (1 - s)) + 'px';
-        }
-    }
-    fit();
-    if (document.fonts && document.fonts.ready) { document.fonts.ready.then(fit); }
-    window.addEventListener('resize', fit);
-})();
-
-// ─── Banner color breathe ───
-(function() {
-    const banner = document.getElementById('banner');
-    if (!banner) return;
-    const bases = [
-        [100,149,237],[90,140,240],[80,130,245],[70,120,250],
-        [65,110,255],[60,130,255],[55,150,255],[70,170,255],
-        [85,180,250],[100,190,245],[85,180,250],[70,170,255],
-        [55,150,255],[65,110,255],[80,130,245],[90,140,240],
-    ];
-    let i = 0;
-    setInterval(() => {
-        i = (i + 1) % bases.length;
-        const b = bases[i];
-        banner.style.color = `rgb(${b[0]},${b[1]},${b[2]})`;
-        banner.style.textShadow = `0 0 6px rgba(${b[0]},${b[1]},${b[2]},0.9), 0 0 18px rgba(${b[0]},${b[1]},${b[2]},0.35), 0 0 40px rgba(${b[0]},${b[1]},${b[2]},0.12)`;
-    }, 2000);
-})();
-
 function tick() {
-    const t = new Date().toLocaleTimeString('en-US', {hour12: false});
-    document.getElementById('clock').textContent        = t;
-    document.getElementById('v-clock').textContent      = t;
-    document.getElementById('titlebar-time').textContent = t;
+    var t = new Date().toLocaleTimeString('en-US', {hour12:false});
+    var f = document.getElementById('f-time'); if (f) f.textContent = t;
 }
-tick(); setInterval(tick, 1000);
+tick(); setInterval(tick, 30000);
 
-function barClass(pct) { return pct > 90 ? 'crit' : pct > 70 ? 'warn' : 'ok'; }
+function tileClass(p) { return p > 90 ? 'crit' : p > 75 ? 'warn' : ''; }
 
-const itemColors = {
-    // Compute — different blues
-    'CPU Temp':   '#5b9bf5',  // soft blue
-    'CPU':        '#4a8af0',  // medium blue
-    'Memory':     '#7baaf7',  // periwinkle
-    'PROMETHEUS': '#3d7be0',  // deep blue
-    // Drives — fun colors
-    'AirDisk':    '#c084fc',  // purple
-    'T7':         '#00ff99',  // green
-    'T9':         '#f59e0b',  // amber
-    'BACKUP':     '#f472b6',  // pink
-};
-function vItem(label, value, pct) {
-    const cls = barClass(pct);
-    const color = itemColors[label];
-    if (color) {
-        return `<div class="v-item ${cls}" data-drive="${label}" style="--drive-color:${color}">
-            <div class="vitals-row-header">
-                <span class="label">${label}</span>
-                <span class="value">${value}</span>
-            </div>
-            <div class="bar"><div class="bar-fill" style="width:${pct}%;background:${color};box-shadow:0 0 4px ${color}"></div></div>
-        </div>`;
+// === Vitals render: build once, then patch in place ===
+// Tiles are created a single time (stable data-k per tile). Every later refresh
+// only mutates values on the existing nodes — bars glide via CSS width
+// transition, numbers count up via a small rAF tween. Nodes are never
+// recreated, so the fade-in entrance animation plays exactly once.
+var _vitalsBuilt = false;   // have the tile nodes been built yet?
+var _vitalsKeys = '';       // key-set fingerprint; a change forces a rebuild
+var _vitalsNum = {};        // last numeric value per tile key, for count-up tweens
+
+function isNum(v) { return v !== '' && v !== null && v !== undefined && isFinite(parseFloat(v)); }
+function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+// Initial markup for a tile: rendered COMPLETE (final number + final bar
+// width) so it resolves in already-correct — no empty-red shell, no count-up
+// from zero. Live refreshes (patchTile) animate value changes afterwards.
+function buildTileHtml(t) {
+    var cls = tileClass(t.pct);
+    var unit = t.unit ? '<span class="unit">' + t.unit + '</span>' : '';
+    var numStr = isNum(t.num) ? String(t.num) : t.num;
+    return '<div class="v-tile ' + cls + '" data-k="' + t.k + '" style="--accent-color:' + (t.color || 'var(--ares)') + '">' +
+        '<div class="v-tile-key"><span>' + t.key + '</span><span class="v-tile-tag">' + (t.tag || '') + '</span></div>' +
+        '<div class="v-tile-num"><span class="nv">' + numStr + '</span>' + unit + '</div>' +
+        '<div class="v-tile-bar"><div class="v-tile-fill" style="width:' + (t.pct || 0) + '%"></div></div>' +
+        '<div class="v-tile-meta">' + t.meta + '</div>' +
+    '</div>';
+}
+
+// Count a number element from `from` to `to` over ~600ms (easeOutCubic).
+function tweenNum(el, from, to, finalStr) {
+    if (from === to || prefersReducedMotion()) { el.textContent = finalStr; return; }
+    var dec = (finalStr.split('.')[1] || '').length;
+    var dur = 600;
+    var tok = (el._tw || 0) + 1; el._tw = tok;  // cancels any in-flight tween on this el
+    var start = null;
+    function frame(ts) {
+        if (el._tw !== tok) return;
+        if (start === null) start = ts;
+        var p = (ts - start) / dur; if (p > 1) p = 1;
+        var e = 1 - Math.pow(1 - p, 3);
+        el.textContent = (from + (to - from) * e).toFixed(dec);
+        if (p < 1) requestAnimationFrame(frame);
+        else el.textContent = finalStr;
     }
-    return `<div class="v-item ${cls}">
-        <div class="vitals-row-header">
-            <span class="label">${label}</span>
-            <span class="value">${value}</span>
-        </div>
-        <div class="bar"><div class="bar-fill ${cls}" style="width:${pct}%"></div></div>
-    </div>`;
+    requestAnimationFrame(frame);
 }
 
-function _updateItem(container, label, value, pct) {
-    let el = container.querySelector(`[data-drive="${label}"]`);
-    if (!el) {
-        // First render — create the element
-        el = document.createElement('div');
-        el.className = 'v-item ' + barClass(pct);
-        el.setAttribute('data-drive', label);
-        const color = itemColors[label];
-        if (color) el.style.setProperty('--drive-color', color);
-        el.innerHTML = `<div class="vitals-row-header">
-            <span class="label">${label}</span>
-            <span class="value"></span>
-        </div>
-        <div class="bar"><div class="bar-fill" style="width:0%"></div></div>`;
-        container.appendChild(el);
-    }
-    // Update only the changing parts
-    el.querySelector('.value').textContent = value;
-    const fill = el.querySelector('.bar-fill');
-    const color = itemColors[label];
-    fill.style.width = pct + '%';
-    if (color) { fill.style.background = color; fill.style.boxShadow = '0 0 4px ' + color; }
-    el.className = 'v-item ' + barClass(pct);
-    if (color) el.setAttribute('data-drive', label);
-}
-
-function _updateMordor(container, info) {
-    const on = info.mordor.online;
-    window._mordorOnline = on;
-    let statusText, color, btnLabel, btnColor, action, cursor, anim;
-    if (mordorPending === 'starting') {
-        statusText = 'STARTING...'; color = 'var(--yellow)'; btnLabel = ''; btnColor = 'var(--yellow)'; action = ''; cursor = 'default'; anim = 'animation:pulse-dot 1s ease-in-out infinite';
-    } else if (mordorPending === 'stopping') {
-        statusText = 'STOPPING...'; color = 'var(--yellow)'; btnLabel = ''; btnColor = 'var(--yellow)'; action = ''; cursor = 'default'; anim = 'animation:pulse-dot 1s ease-in-out infinite';
-    } else if (on) {
-        statusText = 'ONLINE'; color = 'var(--green)'; btnLabel = 'STOP'; btnColor = 'var(--red)'; action = 'stop'; cursor = 'pointer'; anim = '';
+// Update one existing tile in place — width, number, unit, meta, crit/warn.
+function patchTile(vh, t) {
+    var el = vh.querySelector('.v-tile[data-k="' + t.k + '"]');
+    if (!el) return;
+    el.classList.remove('crit', 'warn');
+    var c = tileClass(t.pct); if (c) el.classList.add(c);
+    var fill = el.querySelector('.v-tile-fill');
+    if (fill) fill.style.width = (t.pct || 0) + '%';           // CSS transition glides it
+    var unitEl = el.querySelector('.v-tile-num .unit');
+    if (unitEl && t.unit != null) unitEl.innerHTML = t.unit;
+    var meta = el.querySelector('.v-tile-meta');
+    if (meta) meta.innerHTML = t.meta;
+    var nv = el.querySelector('.v-tile-num .nv');
+    if (!nv) return;
+    if (isNum(t.num)) {
+        var from = (_vitalsNum[t.k] != null) ? _vitalsNum[t.k] : 0;
+        var to = parseFloat(t.num);
+        _vitalsNum[t.k] = to;
+        tweenNum(nv, from, to, String(t.num));
     } else {
-        statusText = 'OFFLINE'; color = 'var(--gray)'; btnLabel = 'START'; btnColor = 'var(--green)'; action = 'start'; cursor = 'pointer'; anim = '';
+        nv.textContent = t.num;
+        delete _vitalsNum[t.k];
     }
-    let el = container.querySelector('[data-drive="MORDOR"]');
-    if (!el) {
-        el = document.createElement('div');
-        el.className = 'v-item';
-        el.setAttribute('data-drive', 'MORDOR');
-        el.innerHTML = `<div class="vitals-row-header">
-            <span class="label">MORDOR</span>
-            <span class="value" style="font-size:9px;letter-spacing:0.1em"></span>
-        </div>
-        <div class="mordor-status" style="font-family:'Rajdhani',sans-serif;font-size:9px;margin-top:1px;letter-spacing:0.08em"></div>`;
-        container.appendChild(el);
+}
+
+// Replace the WIN tile in place (its structure changes between
+// running/stopped/busy, so it is re-rendered rather than value-patched).
+function updateWin(vh, winHtml) {
+    var el = vh.querySelector('.v-win');
+    if (el) el.outerHTML = winHtml;
+    else vh.insertAdjacentHTML('beforeend', winHtml);
+}
+
+// tiles: array of {k,key,tag,num,unit,meta,pct,color}. winHtml: WIN tile markup.
+function renderVitals(tiles, winHtml) {
+    var vh = document.getElementById('vitals-hero');
+    var keys = tiles.map(function(t){ return t.k; }).join(',');
+    var rebuild = !_vitalsBuilt || keys !== _vitalsKeys;  // key-set change (e.g. GPU on/off)
+    if (rebuild) {
+        _vitalsNum = {};
+        // Tiles are built complete (final values). `.vitals-loaded` swaps the
+        // sliding skeleton entrance for a quick opacity resolve so the real
+        // tiles don't replay the page-entrance slide.
+        vh.innerHTML = tiles.map(buildTileHtml).join('') + winHtml;
+        vh.classList.add('vitals-loaded');
+        _vitalsBuilt = true;
+        _vitalsKeys = keys;
+        // Seed last-values so subsequent refreshes tween from the right place.
+        tiles.forEach(function(t){ if (isNum(t.num)) _vitalsNum[t.k] = parseFloat(t.num); });
+    } else {
+        tiles.forEach(function(t){ patchTile(vh, t); });
+        updateWin(vh, winHtml);
     }
-    el.style.borderLeftColor = color;
-    el.style.cursor = cursor;
-    el.onclick = action ? () => toggleMordor(action) : null;
-    const lbl = el.querySelector('.label');
-    lbl.style.color = color; lbl.style.animation = anim ? 'pulse-dot 1s ease-in-out infinite' : '';
-    const val = el.querySelector('.value');
-    val.textContent = btnLabel; val.style.color = btnColor;
-    const st = el.querySelector('.mordor-status');
-    st.textContent = statusText; st.style.color = color; st.style.animation = anim ? 'pulse-dot 1s ease-in-out infinite' : '';
+}
+
+var DRIVE_DISPLAY = { 'PROMETHEUS':'POOL', 'EVO-970':'EVO-970', 'AIRDISK':'AIRDISK' };
+var DRIVE_TAG = { 'PROMETHEUS':'MergerFS', 'EVO-970':'Samsung 970', 'AIRDISK':'LVM' };
+var DRIVE_COLOR = { 'PROMETHEUS':'#ef4444', 'EVO-970':'#fb923c', 'AIRDISK':'#f59e0b' };
+
+// Drives use the same build-once / patch-in-place strategy as the vitals
+// tiles: created a single time (stable data-dk), then values patched so the
+// bar glides via its CSS width transition rather than re-rendering each cycle.
+var _drivesBuilt = false;
+var _drivesKeys = '';
+
+function buildDriveHtml(d) {
+    var name = DRIVE_DISPLAY[d.name] || d.name;
+    var tag = DRIVE_TAG[d.name] || '';
+    var color = DRIVE_COLOR[d.name] || 'var(--ares)';
+    return '<div class="v-drive" data-dk="' + d.name + '" style="--drive-color:' + color + '">' +
+        '<div class="v-drive-row">' +
+            '<span class="v-drive-name">' + name + '</span>' +
+            '<span class="v-drive-tag">' + tag + '</span>' +
+        '</div>' +
+        '<div class="v-drive-bar"><div class="v-drive-bar-fill" style="width:' + (d.percent != null ? d.percent : 0) + '%"></div></div>' +
+        '<div class="v-drive-stats"><span class="du">' + (d.used || '—') + ' / ' + (d.total || '—') + '</span><span class="pct">' + (d.percent != null ? d.percent : 0) + '%</span></div>' +
+    '</div>';
+}
+
+function patchDrive(vd, d) {
+    var el = vd.querySelector('.v-drive[data-dk="' + d.name + '"]');
+    if (!el) return;
+    var fill = el.querySelector('.v-drive-bar-fill');
+    if (fill) fill.style.width = (d.percent || 0) + '%';
+    var du = el.querySelector('.v-drive-stats .du');
+    if (du) du.textContent = (d.used || '—') + ' / ' + (d.total || '—');
+    var pct = el.querySelector('.v-drive-stats .pct');
+    if (pct) pct.textContent = (d.percent != null ? d.percent : 0) + '%';
+}
+
+function renderDrives(drives) {
+    var vd = document.getElementById('v-drives');
+    if (!vd) return;
+    var keys = drives.map(function(d){ return d.name; }).join(',');
+    if (!_drivesBuilt || keys !== _drivesKeys) {
+        vd.innerHTML = drives.map(buildDriveHtml).join('');  // built complete
+        vd.classList.add('drives-loaded');
+        _drivesBuilt = true;
+        _drivesKeys = keys;
+    } else {
+        drives.forEach(function(d){ patchDrive(vd, d); });
+    }
+}
+
+var DRIVE_ORDER = ['PROMETHEUS', 'EVO-970', 'AIRDISK'];
+
+// === Windows VM Control ===
+var winRunning = false;
+var winBusy = false;
+
+function winTile() {
+    return '';  // Windows VM tile removed from vitals per request; /windows route still exists.
+    if (winBusy) {
+        var label = winRunning ? 'Stopping' : 'Starting';
+        var bwide = (window.gpuOnline === false) ? ' v-tile-wide' : '';
+        return '<div class="v-tile v-win' + bwide + '" style="--accent-color:#f59e0b">' +
+            '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">VM 200</span></div>' +
+            '<div class="v-tile-num" style="color:#f59e0b">' + label + '</div>' +
+            '<div class="v-tile-bar"><div class="v-tile-fill" style="width:50%;background:#f59e0b;animation:win-pulse 1.2s ease-in-out infinite"></div></div>' +
+            '<div class="v-tile-meta"><span class="lo">working\u2026</span><span style="color:#f59e0b">\u25cf</span></div>' +
+        '</div>';
+    }
+    if (winRunning) {
+        // Split: left = Status (tap to stop), right = Remote (tap to open desktop)
+        return '<div class="v-tile v-win v-tile-split" style="--accent-color:#10b981">' +
+            '<div class="v-tile-half status" onclick="toggleWindows()" title="Stop Windows">' +
+                '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">stop</span></div>' +
+                '<div class="v-tile-num" style="color:#10b981">Running</div>' +
+                '<div class="v-tile-meta"><span class="lo">vm 200</span><span style="color:#10b981">\u25cf</span></div>' +
+            '</div>' +
+            '<div class="v-tile-half remote" onclick="location.href=\'/windows\'" title="Open Windows desktop">' +
+                '<div class="v-tile-key"><span>VIEW</span><span class="v-tile-tag">live</span></div>' +
+                '<div class="v-tile-num" style="color:#e8f0f8">Desktop</div>' +
+                '<div class="v-tile-meta"><span class="lo">open</span><span style="color:#ef4444;font-size:14px">\u2192</span></div>' +
+            '</div>' +
+        '</div>';
+    }
+    // Stopped
+    var wide = (window.gpuOnline === false) ? ' v-tile-wide' : '';
+    return '<div class="v-tile v-win' + wide + '" style="--accent-color:#2d3a4e;cursor:pointer" onclick="toggleWindows()" title="Start Windows VM">' +
+        '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">VM 200</span></div>' +
+        '<div class="v-tile-num" style="font-size:22px;line-height:1.1;color:#2d3a4e">Stopped</div>' +
+        '<div class="v-tile-bar"><div class="v-tile-fill" style="width:0%;background:#2d3a4e"></div></div>' +
+        '<div class="v-tile-meta"><span class="lo">click to start</span><span style="color:#2d3a4e">\u25cb</span></div>' +
+    '</div>';
 }
 
 async function loadVitals() {
     try {
-        const resp = await fetch('/api/system-info');
-        if (resp.status === 401) { window.location.href = '/login'; return; }
-        const info = await resp.json();
+        var r = await fetch('/api/system-info');
+        if (r.status === 401) { location.href = '/login'; return; }
+        var i = await r.json();
 
-        document.getElementById('vitals-host').textContent = info.hostname;
-        document.getElementById('v-uptime').textContent    = 'Uptime · ' + info.uptime;
-
-        const left = document.getElementById('v-col-left');
-        const cpuPct = parseFloat(info.cpu_percent);
-        if (info.cpu_temp !== null && info.cpu_temp !== undefined) {
-            _updateItem(left, 'CPU Temp', info.cpu_temp + '°C', Math.min(100, (info.cpu_temp / 100) * 100));
+        document.getElementById('h-host').textContent = i.hostname || 'ARES';
+        document.getElementById('h-cpu').textContent = i.cpu_percent + '%';
+        var pool = (i.disks || []).find(function(d){return d.name==='PROMETHEUS';});
+        if (pool) {
+            document.getElementById('h-pool').textContent = pool.percent + '%';
+            document.getElementById('nc-pool').textContent = pool.used + ' / ' + pool.total;
         }
-        _updateItem(left, 'CPU', cpuPct + '%', cpuPct);
-        const memPct = parseFloat(info.memory_percent);
-        _updateItem(left, 'Memory', info.memory_used + ' / ' + info.memory_total, memPct);
-        const pool = info.disks.find(d => d.name === 'PROMETHEUS');
-        if (pool) _updateItem(left, 'PROMETHEUS', pool.used + ' / ' + pool.total, pool.percent);
-        if (info.mordor) _updateMordor(left, info);
+        var g = i.gpu || {};
+        window.gpuOnline = !!g.online;
+        if (g.online) {
+            document.getElementById('h-gpu').textContent = g.temp_c + '\u00b0C \u00b7 ' + g.util_pct + '%';
+        } else {
+            document.getElementById('h-gpu').textContent = '\u2014';
+        }
 
-        const right = document.getElementById('v-col-right');
-        const driveOrder = ['AirDisk', 'T7', 'T9'];
-        const shown = new Set(['PROMETHEUS']);
-        driveOrder.forEach(name => {
-            const d = info.disks.find(x => x.name === name);
-            if (d) { _updateItem(right, name, d.used + ' / ' + d.total, d.percent); shown.add(name); }
-        });
-        const t5 = info.disks.find(x => x.name === 'T5');
-        if (t5) { _updateItem(right, 'BACKUP', t5.used + ' / ' + t5.total, t5.percent); shown.add('T5'); }
-        info.disks.forEach(d => {
-            if (!shown.has(d.name)) _updateItem(right, d.name, d.used + ' / ' + d.total, d.percent);
-        });
+        document.getElementById('v-uptime').textContent = i.uptime || '\u2014';
+        document.getElementById('v-host-tag').textContent = i.hostname || 'ARES';
 
-        // Fade in vitals (first load only)
-        requestAnimationFrame(() => {
-            document.querySelector('.vitals-grid').classList.add('loaded');
-            document.querySelector('.vitals-footer').classList.add('loaded');
-        });
+        // (Windows VM status poll removed with the WIN tile — it was a ~700ms
+        // subprocess hit every 15s for a tile that no longer exists.)
 
-    } catch (e) {}
+        // Hero tiles: TEMP, CPU, MEM, GPU, POOL (+ WIN, rendered separately).
+        // Built once then patched in place by renderVitals().
+        var tiles = [];
+        if (i.cpu_temp != null) {
+            tiles.push({k:'temp', key:'TEMP', tag:'CPU', num:i.cpu_temp.toFixed(0), unit:'\u00b0C', meta:'<span class="lo">cool</span><span>90\u00b0</span>', pct:Math.min(100,(i.cpu_temp/90)*100), color:'#67e8f9'});
+        }
+        tiles.push({k:'cpu', key:'CPU', tag:'load', num:i.cpu_percent, unit:'%', meta:'<span class="lo">idle</span><span>peak</span>', pct:i.cpu_percent, color:'#ef4444'});
+        tiles.push({k:'mem', key:'MEM', tag:'usage', num:i.memory_percent, unit:'%', meta:'<span>' + i.memory_used + '</span><span class="lo">/ ' + i.memory_total + '</span>', pct:i.memory_percent, color:'#f87171'});
+        if (g.online) {
+            tiles.push({k:'gpu', key:'GPU', tag:(g.name ? g.name.replace('NVIDIA GeForce ','') : 'GPU'), num:g.temp_c, unit:'\u00b0C ' + g.util_pct + '%', meta:'<span>' + g.power_w.toFixed(0) + 'W</span><span class="lo">VRAM ' + (g.vram_used_mib/1024).toFixed(1) + '/' + (g.vram_total_mib/1024).toFixed(0) + 'G</span>', pct:g.util_pct, color:'#ef4444'});
+        }
+        if (pool) {
+            tiles.push({k:'pool', key:'POOL', tag:DRIVE_TAG['PROMETHEUS'], num:pool.percent, unit:'%', meta:'<span>' + pool.used + '</span><span class="lo">/ ' + pool.total + '</span>', pct:pool.percent, color:'#ef4444'});
+        }
+        renderVitals(tiles, winTile());
+
+        // Drive strip — patched in place (built once, see renderDrives).
+        var drives = [];
+        DRIVE_ORDER.forEach(function(n) {
+            var d = (i.disks || []).find(function(x){return x.name===n;});
+            if (d) drives.push(d);
+        });
+        renderDrives(drives);
+    } catch(e) { console.error(e); }
 }
 
-async function loadPhotoCount() {
-    try {
-        const resp = await fetch('/api/photos/summary');
-        const data = await resp.json();
-        if (data.total) {
-            document.getElementById('photo-count-label').textContent = data.total.toLocaleString() + ' items';
-            const parts = [];
-            if (data.photos) parts.push(data.photos.toLocaleString() + ' photos');
-            if (data.videos) parts.push(data.videos.toLocaleString() + ' videos');
-            document.getElementById('photo-count-tag').textContent = parts.join(' · ') || data.total.toLocaleString();
-        }
-    } catch (e) {}
-}
 
-let mordorPending = null; // 'starting' or 'stopping'
 
-async function toggleMordor(action) {
-    if (mordorPending) return; // already in progress
-    mordorPending = action === 'start' ? 'starting' : 'stopping';
-    // Immediately re-render with pending state
-    loadVitals();
+async function toggleWindows() {
+    if (winBusy) return;
+    var action = winRunning ? 'stop' : 'start';
+    winBusy = true;
+    // Optimistically re-render the WIN tile
+    var hero = document.getElementById('vitals-hero');
+    var winEl = hero ? hero.querySelector('.v-win') : null;
+    if (winEl) winEl.outerHTML = winTile();
     try {
-        await fetch('/api/mordor', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({action})
-        });
-    } catch (e) {}
-    // Poll fast until state changes
-    let checks = 0;
-    const poll = setInterval(async () => {
+        await fetch('/api/vm/' + action, { method: 'POST' });
+    } catch(e) {}
+    // Poll until state changes, then re-render via loadVitals
+    var checks = 0;
+    var poll = setInterval(async function() {
         checks++;
-        await loadVitals();
-        const confirmed = (mordorPending === 'starting' && window._mordorOnline)
-                       || (mordorPending === 'stopping' && !window._mordorOnline);
-        if (confirmed || checks > 30) {
-            mordorPending = null;
-            clearInterval(poll);
-            loadVitals();
-        }
-    }, 2000);
-}
-
-loadVitals(); setInterval(loadVitals, 5000);
-loadPhotoCount();
-
-
-async function prefetchPhotoThumbs() {
-    try {
-        const resp = await fetch('/api/photos/all');
-        if (!resp.ok) return;
-        const data = await resp.json();
-        let count = 0;
-        for (const group of (data.groups || [])) {
-            for (const item of group.items) {
-                if (count++ >= 150) return;
-                const img = new Image();
-                img.src = item.thumb;
+        try {
+            var r = await fetch('/api/vm/status', { method: 'POST' });
+            var d = await r.json();
+            if (d.running !== winRunning || checks > 30) {
+                winRunning = d.running;
+                winBusy = false;
+                clearInterval(poll);
+                loadVitals();
             }
+        } catch(e) {
+            if (checks > 30) { winBusy = false; clearInterval(poll); loadVitals(); }
         }
-    } catch (_) {}
+    }, 3000);
 }
-setTimeout(prefetchPhotoThumbs, 1500);
+
+// Page chrome + neutral skeletons paint immediately (no gate). When data
+// arrives, the skeletons resolve into complete tiles (final numbers, filled
+// bars) with a quick opacity fade. Live values refresh every 15s in place.
+loadVitals();
+setInterval(loadVitals, 15000);
 </script>
-<script>if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js');</script>
 </body>
 </html>
