@@ -335,6 +335,7 @@
             .year-nav { animation:none !important; }
             body { overscroll-behavior-y:none; -webkit-overflow-scrolling:touch; }
             .nav-card, button, a { touch-action:manipulation; }
+            .v-win { display:none !important; }  /* Windows VM tile: desktop only */
         }
 
         /* === Unified Navbar === */
@@ -844,7 +845,7 @@ var winRunning = false;
 var winBusy = false;
 
 function winTile() {
-    return '';  // Windows VM tile removed from vitals per request; /windows route still exists.
+    // Hidden on phones (CSS hides .v-win at <=600px); rendered on desktop.
     if (winBusy) {
         var label = winRunning ? 'Stopping' : 'Starting';
         var bwide = (window.gpuOnline === false) ? ' v-tile-wide' : '';
@@ -904,8 +905,20 @@ async function loadVitals() {
         document.getElementById('v-uptime').textContent = i.uptime || '\u2014';
         document.getElementById('v-host-tag').textContent = i.hostname || 'ARES';
 
-        // (Windows VM status poll removed with the WIN tile — it was a ~700ms
-        // subprocess hit every 15s for a tile that no longer exists.)
+        // Windows VM status — only polled on desktop (the WIN tile is hidden on
+        // phones, so skip the ~700ms subprocess hit there). Non-blocking either way.
+        if (window.innerWidth > 600) {
+            fetch('/api/vm/status', { method: 'POST' })
+                .then(function(wr){ return wr.json(); })
+                .then(function(wd){
+                    if (wd.running !== winRunning) {
+                        winRunning = wd.running;
+                        var vh2 = document.getElementById('vitals-hero');
+                        if (vh2) updateWin(vh2, winTile());
+                    }
+                })
+                .catch(function(){});
+        }
 
         // Hero tiles: TEMP, CPU, MEM, GPU, POOL (+ WIN, rendered separately).
         // Built once then patched in place by renderVitals().
