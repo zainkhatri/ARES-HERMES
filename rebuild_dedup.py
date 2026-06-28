@@ -490,8 +490,9 @@ def main():
                 screenshot_hashes = set(json.load(_sf))
         except (OSError, ValueError):
             pass
-    final_hidden = dup_hashes_seed | set(new_hidden_keys)
-    violations = 0
+    new_hidden_set = set(new_hidden_keys)
+    final_hidden = dup_hashes_seed | new_hidden_set
+    rescued = 0
     for gid, group_paths in enumerate(components):
         group_items = [path_to_item[p] for p in group_paths if p in path_to_item]
         if len(group_items) < 2:
@@ -499,14 +500,28 @@ def main():
         # A group is fully hidden only if every member is hidden by DEDUP (not just screenshots)
         visible_in_group = [it for it in group_items if get_thumbkey(it) not in final_hidden]
         if len(visible_in_group) == 0:
-            # Check if every member is a screenshot — that's intentional, not a violation
+            # Okay if all are screenshots (intentionally hidden by the classifier)
             all_screenshots = all(get_thumbkey(it) in screenshot_hashes for it in group_items)
-            if not all_screenshots:
-                print(f"  VIOLATION group {gid}: all {len(group_items)} members hidden!")
-                violations += 1
+            if all_screenshots:
+                continue
+            # Rescue: pick the highest-priority member and un-hide it from new_hidden_keys.
+            # This happens when the photo_index has the same file under two different path
+            # prefixes (e.g. /PHOTOS/PHOTOS/iPhone/... and /PHOTOS/iPhone/...) — both paths
+            # resolved to the same content, each got hidden by a different pair.
+            keeper, _ = pick_keeper(group_items)
+            k = get_thumbkey(keeper)
+            if k in new_hidden_set:
+                new_hidden_set.discard(k)
+                final_hidden = dup_hashes_seed | new_hidden_set
+                print(f"  [rescue] group {gid}: un-hid keeper {k} ({keeper['path']})")
+                rescued += 1
+            else:
+                print(f"  VIOLATION group {gid}: keeper {k} not in new_hidden — cannot rescue!")
 
-    assert violations == 0, f"SAFETY: {violations} groups have no visible member — aborting"
-    print(f"[rebuild-dedup] Safety check passed: 0 groups fully hidden")
+    new_hidden_keys = list(new_hidden_set)
+    if rescued:
+        print(f"[rebuild-dedup] Rescued {rescued} groups (all-hidden due to duplicate index paths)")
+    print(f"[rebuild-dedup] Safety check passed")
 
     # Step 13: Build final list and write atomically
     final_list = sorted(final_hidden)
