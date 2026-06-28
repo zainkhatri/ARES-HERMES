@@ -200,8 +200,8 @@ def scan_faces(photos, rescan=False):
         cluster_faces()
         return
 
-    print("[faces] Loading InsightFace buffalo_l model…")
-    app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+    print("[faces] Loading InsightFace antelopev2 model…")
+    app = FaceAnalysis(name="antelopev2", providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
     app.prepare(ctx_id=0, det_size=(960, 960))
 
     print(f"[faces] Scanning {len(todo)} images")
@@ -721,8 +721,8 @@ def scan_video_faces(videos):
         print(f"[video-faces] All {len(videos)} videos already scanned.")
         return
 
-    print("[video-faces] Loading InsightFace buffalo_l model…")
-    app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+    print("[video-faces] Loading InsightFace antelopev2 model…")
+    app = FaceAnalysis(name="antelopev2", providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
     app.prepare(ctx_id=0, det_size=(960, 960))
     print(f"[video-faces] {len(videos)} videos total, {len(todo)} to process\n")
 
@@ -1081,8 +1081,11 @@ def classify_screenshots(photos):
     hash_to_idx = {h: i for i, h in enumerate(clip_hashes)}
 
     # High-confidence CLIP: screenshot score alone is high enough
+    # ponytail: cap at len(clip_emb) — hashes list may be longer than embedding rows if
+    # scan was interrupted mid-run; extra hashes have no embedding row, skip them.
+    n_emb = len(clip_emb)
     clip_flagged = set()
-    for i, h in enumerate(clip_hashes):
+    for i, h in enumerate(clip_hashes[:n_emb]):
         if ss_scores[i] >= CLIP_HIGH_THRESH:
             clip_flagged.add(h)
     print(f"[screenshots] CLIP high-confidence: {len(clip_flagged)} (ss_score >= {CLIP_HIGH_THRESH})")
@@ -1096,7 +1099,7 @@ def classify_screenshots(photos):
             png_hashes.add(h)
 
     diff_flagged = set()
-    for i, h in enumerate(clip_hashes):
+    for i, h in enumerate(clip_hashes[:n_emb]):
         if h in png_hashes and diff_scores[i] > CLIP_DIFF_THRESH and h not in clip_flagged:
             diff_flagged.add(h)
     print(f"[screenshots] CLIP differential (PNGs only): +{len(diff_flagged)} (ss > real)")
@@ -1122,7 +1125,10 @@ def classify_screenshots(photos):
     print(f"[screenshots] Filename heuristics: +{len(name_flagged)}")
 
     # ── Combine and exclude photos with faces or people ──
-    all_flagged = clip_flagged | diff_flagged | name_flagged
+    # Build set of image hashes only — CLIP embeddings include videos whose
+    # thumbnails happen to look like screenshots; don't hide videos.
+    image_hashes = {thumb_hash(p) for p in photos if thumb_hash(p)}
+    all_flagged = (clip_flagged | diff_flagged | name_flagged) & image_hashes
     before_exclude = len(all_flagged)
     all_flagged -= faces_with_people
     face_excluded = before_exclude - len(all_flagged)
