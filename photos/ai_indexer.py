@@ -994,6 +994,14 @@ SCREENSHOT_QUERIES = [
     "text on a screen or display",
     "screenshot of a website or app",
     "meme with text overlay on image",
+    # Physical "waffle" clutter — photos OF documents/papers/cards/notes, not real
+    # photos of people or scenes. Sieved into the Screenshots bucket per user request.
+    "photo of a printed document or paper page",
+    "photo of a business card or contact card",
+    "photo of a handwritten note or piece of paper",
+    "photo of a whiteboard or sticky notes",
+    "photo of a form, table, or spreadsheet",
+    "photo of an ID card or membership card",
 ]
 
 REAL_PHOTO_QUERIES = [
