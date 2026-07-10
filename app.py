@@ -2654,6 +2654,13 @@ def _load_ai_index():
     with open(hashes_path) as f:
         hashes = json.load(f)
     emb = np.load(emb_path)
+    if len(hashes) != len(emb):
+        # Interrupted indexer run can leave hashes/embeddings out of sync on
+        # disk; truncate both to the common prefix so every idx is in bounds.
+        n = min(len(hashes), len(emb))
+        print(f"[ai] WARNING: {len(hashes)} clip hashes vs {len(emb)} embeddings; truncating to {n}.")
+        hashes = hashes[:n]
+        emb = emb[:n]
     _ai["clip_hashes"] = hashes
     _ai["clip_emb"] = emb
     _ai["hash_to_idx"] = {h: i for i, h in enumerate(hashes)}

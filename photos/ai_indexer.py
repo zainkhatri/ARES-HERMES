@@ -94,9 +94,11 @@ def load_clip_index():
 
 def save_clip_index(hashes, embeddings):
     AI_DIR.mkdir(parents=True, exist_ok=True)
+    # Embeddings first: if we die between the two writes, hashes stays the
+    # shorter file and every hash still has a valid embedding row.
+    np.save(CLIP_EMB_FILE, embeddings)
     with open(CLIP_HASHES_FILE, "w") as f:
         json.dump(hashes, f)
-    np.save(CLIP_EMB_FILE, embeddings)
 
 
 def scan_clip(photos):
