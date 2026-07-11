@@ -19,3 +19,14 @@ Root causes found the hard way:
 **Fix / current known-good config (sunshine.conf):** only `global_prep_cmd = [{...desk-guard...}]` on a SINGLE line. NO `output_name` pin, NO `dd_configuration_option`. Sunshine captures the PRIMARY display. Resting topology = OLED (Odyssey G60SD) primary @ native 2560x1440, VDD present as ignored 800x600 secondary. Streaming = OLED mirror @ 1440p; desk never blacks out; Sunshine starts reliably.
 **Tradeoff accepted:** lost pixel-perfect Mac-native (3024x1964) streaming. To restore later WITH Zain watching the screen: set a clean EXTEND topology, re-pin output_name to the VDD, and verify Sunshine starts — never disable the VDD while output_name points at it.
 Recovery that unwedged it: reinstall Sunshine /S over the top (pairing in sunshine_state.json survives), then single-line guard conf.
+
+**2026-07-11 — BULLETPROOF FINAL: mirror-the-OLED model (VDD auto-juggle abandoned).**
+Decision (Zain): stop auto-switching OLED↔VDD — it broke every attempt because it drives an unseen physical monitor. Final architecture:
+- **VDD disabled at device level** (`Disable-PnpDevice ROOT\DISPLAY\0001`). It kept stealing primary at 3024x1964 on non-deterministic boots, blacking the OLED. Disabled = OLED is always sole primary.
+- **sunshine.conf** = ONLY `global_prep_cmd = [{desk-guard}]` (single line). Empty output_name → captures primary = OLED @ native 2560x1440. Stream is 1440p (not Mac-native 3024x1964 — accepted tradeoff for zero fragility).
+- **Deleted `config\display_device.state`** — Sunshine persisted the old VDD topology here and replayed it on every connect ("Failed to change topology to {VDD-guid}", ~2s delay). Gone → clean instant capture, no topology errors.
+- **Self-heal:** `GameModeDisplayRest` scheduled task (AtLogOn, wscript-hidden, runs display-rest.ps1) re-disables the VDD + pins OLED native every boot — kills the boot-race where VDD grabbed primary.
+- **Service recovery:** SunshineService set to auto-restart on failure (sc failure restart/5s x2 then 10s).
+- Verified end-to-end via Mac SSH: guard blocks when desk-hot (status -1), stream succeeds with force-flag, log shows clean `Desktop resolution [2560x1440]` + NvEnc, no topology errors, OLED never blacks (nothing switches).
+- **No-restore-needed win:** with zero display switching, the "dirty disconnect leaves desk black" failure mode is structurally impossible now.
+Display IDs: OLED=SAM75CB (Odyssey G60SD), VDD=MTT1337. Tool: MultiMonitorTool in C:\gamemode\mmt. To revive pixel-perfect later, that's a MANUAL desk-mode/stream-mode toggle done with Zain watching — never an auto prep-cmd.
