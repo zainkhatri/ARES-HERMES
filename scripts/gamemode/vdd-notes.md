@@ -7,3 +7,5 @@
 - **Why the physical monitor mattered:** with the desk monitor asleep the 3080 had ZERO outputs (`WmiMonitorID` count 0, Windows on 1024x768 WinDisc fallback) → Sunshine streamed black. The VDD fixes headless streaming permanently.
 - **Found in the VM:** a leftover **Parsec Virtual Display Adapter** (Parsec previously installed). Harmless but consider uninstalling Parsec to reduce the adapter zoo (4 display adapters currently: 3080, VDD, Parsec-VDA, Microsoft Basic/vga-std).
 - PC-monitor native mode not yet added to vdd_settings.xml — add a `<resolution>` block when the second client's mode is known (Sunshine dd_resolution auto still needs the mode to exist in the VDD list, or it falls back to nearest).
+
+**2026-07-10 late:** post-reboot the VDD came up at 800x600@30 (first XML entry) → "zoomed in" stream. Removed all sub-1920 modes from vdd_settings.xml (now: 1920x1080, 2560x1440, 3840x2160, 3024x1964). Note: display mode changes via guest-exec run in session 0 and do nothing — use the interactive scheduled-task trampoline (C:\gamemode\cursor-trace.ps1 + Start-ScheduledTask CursorTrace).
