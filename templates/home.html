@@ -860,6 +860,8 @@ var DRIVE_ORDER = ['PROMETHEUS', 'EVO-970', 'AIRDISK'];
 // === Windows VM Control ===
 var winRunning = false;
 var winBusy = false;
+var winReady = false;
+var winGpuHome = true;
 
 function winTile() {
     // Hidden on phones (CSS hides .v-win at <=600px); rendered on desktop.
@@ -873,12 +875,29 @@ function winTile() {
             '<div class="v-tile-meta"><span class="lo">working\u2026</span><span style="color:#f59e0b">\u25cf</span></div>' +
         '</div>';
     }
+    if (!winRunning && !winGpuHome) {
+        // GPU reclaim failed — flag still present or nvidia-smi dead in CT 101.
+        return '<div class="v-tile v-win" style="--accent-color:#ef4444;cursor:pointer" onclick="loadVitals()" title="GPU did not return to the gallery — check /var/log/gpu-swap.log">' +
+            '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">VM 200</span></div>' +
+            '<div class="v-tile-num" style="font-size:20px;color:#ef4444">GPU MISSING</div>' +
+            '<div class="v-tile-meta"><span class="lo">reclaim failed — gpu-swap.log</span><span style="color:#ef4444">●</span></div>' +
+        '</div>';
+    }
+    if (winRunning && !winReady) {
+        // Windows is booting; Sunshine not accepting connections yet.
+        return '<div class="v-tile v-win" style="--accent-color:#f59e0b">' +
+            '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">VM 200</span></div>' +
+            '<div class="v-tile-num" style="font-size:20px;color:#f59e0b">Booting Windows</div>' +
+            '<div class="v-tile-bar"><div class="v-tile-fill" style="width:75%;background:#f59e0b;animation:win-pulse 1.2s ease-in-out infinite"></div></div>' +
+            '<div class="v-tile-meta"><span class="lo">waiting for Sunshine…</span><span style="color:#f59e0b">●</span></div>' +
+        '</div>';
+    }
     if (winRunning) {
         // Split: left = Status (tap to stop), right = Remote (tap to open desktop)
         return '<div class="v-tile v-win v-tile-split" style="--accent-color:#10b981">' +
             '<div class="v-tile-half status" onclick="toggleWindows()" title="Stop Windows">' +
                 '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">stop</span></div>' +
-                '<div class="v-tile-num" style="color:#10b981">Running</div>' +
+                '<div class="v-tile-num" style="font-size:18px;color:#10b981">Ready to stream</div>' +
                 '<div class="v-tile-meta"><span class="lo">vm 200</span><span style="color:#10b981">\u25cf</span></div>' +
             '</div>' +
             '<div class="v-tile-half remote" onclick="location.href=\'/windows\'" title="Open Windows desktop">' +
@@ -894,7 +913,7 @@ function winTile() {
         '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">VM 200</span></div>' +
         '<div class="v-tile-num" style="font-size:22px;line-height:1.1;color:#2d3a4e">Stopped</div>' +
         '<div class="v-tile-bar"><div class="v-tile-fill" style="width:0%;background:#2d3a4e"></div></div>' +
-        '<div class="v-tile-meta"><span class="lo">click to start</span><span style="color:#2d3a4e">\u25cb</span></div>' +
+        '<div class="v-tile-meta"><span class="lo">click to start \u00b7 GPU home</span><span style="color:#2d3a4e">\u25cb</span></div>' +
     '</div>';
 }
 
@@ -929,8 +948,14 @@ async function loadVitals() {
             fetch('/api/vm/status', { method: 'POST' })
                 .then(function(wr){ return wr.json(); })
                 .then(function(wd){
-                    if (wd.running !== winRunning) {
-                        winRunning = wd.running;
+                    var gpuHome = (wd.gpu_home !== false);  // null (running) counts as fine
+                    var changed = (wd.running !== winRunning) ||
+                                  (!!wd.streaming_ready !== winReady) ||
+                                  (gpuHome !== winGpuHome);
+                    winRunning = wd.running;
+                    winReady = !!wd.streaming_ready;
+                    winGpuHome = gpuHome;
+                    if (changed) {
                         var vh2 = document.getElementById('vitals-hero');
                         if (vh2) updateWin(vh2, winTile());
                     }
