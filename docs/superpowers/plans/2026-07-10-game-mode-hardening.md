@@ -50,3 +50,17 @@
 - [ ] **Step 2:** Zain's call on Parsec: if GO, uninstall via `winget uninstall Parsec` (or its uninstaller) + `pnputil` remove the Parsec VDA; verify display adapters shrink to 3.
 - [ ] **Step 3:** Remind Zain: Tailscale admin → `supernas` → disable key expiry.
 - [ ] **Step 4:** Update `scripts/gamemode/vdd-notes.md` (guard + launcher wiring), update memory files (`vm200-input-stutter` if anything new; add hardening outcome), commit all.
+
+---
+
+## Execution status (2026-07-10 ~23:00, autonomous overnight run)
+
+- **Task 1 desk guard: DONE.** Deployed + wired as global_prep_cmd (Sunshine log confirms invocation, PID visible). Branch tests in session 1 via trampoline: fresh injected input → exit 1 (blocks); force-stream.flag → exit 0 (passes). Note: the earlier "failed" block test was invalid — no one was actually at the desk (interactive idle was 617 s); the guard had passed correctly. End-to-end block with a real Moonlight attempt while desk-hot: optional morning confirmation.
+- **Task 2 invisible watchdog: DONE.** Re-registered via wscript launcher, enabled, manual fire exit 0. No window-flash complaint after re-enable (was instant complaints before).
+- **Task 3 verification debt: 3 of 4 DONE.**
+  - Idle chain ✓: watchdog fired ~35 min after last input → clean shutdown → hookscript post-stop 22:46:49 → flag removed → `nvidia-smi -L` OK in CT 101. Fully autonomous, zero human input.
+  - Stopped-state curl ✓: `running:false, streaming_ready:false, gpu_home:true`.
+  - GPU MISSING sim ✓: flag touch → `gpu_home:false`; rm → recovers.
+  - OLED clone-restore after stream end: **pending Zain's eyes** (morning).
+- **Task 4 second PC: pending** (needs the PC + PIN).
+- **Task 5 cleanup: partial.** CursorTrace task + test debris deleted. Parsec uninstall awaiting Zain's confirmation. Tailscale key-expiry disable still on Zain.
