@@ -482,4 +482,4 @@ Leave the VM truly idle 35+ min → `shutdown /s /t 300` fires → VM stops → 
 
 ## Gate test result
 
-_(recorded by Task 1)_
+**PASS** (2026-07-10 16:58). `shutdown /s` from inside Windows (via `qm guest exec`) fired the hookscript post-stop through qmeventd: log shows the full release→rebind sequence at 16:58:07-14, `.gpu-on-loan` removed, `nvidia-smi -L` in CT 101 lists the 3080. Task 9 is GO.
