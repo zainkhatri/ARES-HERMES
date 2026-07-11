@@ -1,0 +1,9 @@
+# VDD install record — VM 200 (2026-07-10)
+
+- **Driver:** VirtualDrivers/Virtual-Display-Driver 25.7.23, x86 driver-only zip → `C:\VirtualDisplayDriver\`
+- **Install method:** signer cert (Valid, extracted from MttVDD.dll) added to Root + TrustedPublisher; devnode created with nefcon (`nefconc --create-device-node --hardware-id Root\MttVDD --class-name Display --class-guid 4d36e968-…`); `pnputil /add-driver MttVDD.inf /install` → ROOT\DISPLAY\0001. Tools kept in `C:\gamemode\`.
+- **vdd_settings.xml:** gpu friendlyname = `NVIDIA GeForce RTX 3080`; added 3024x1964 (Mac 14" XDR native) to resolutions; global refresh rates incl. 120 already present. Monitor shows as **"VDD by MTT"**, Sunshine sees `\\.\DISPLAY21`, device_id `{5eb52002-659f-5729-bdd8-9cdc4efd1bf5}`.
+- **Display switching: NO MultiMonitorTool / prep-cmd scripts.** Sunshine's built-in display-device management replaced the planned script stack (`sunshine.conf`): `output_name = {5eb52002…}`, `dd_configuration_option = ensure_only_display`, `dd_resolution_option = auto`, `dd_refresh_rate_option = auto`. Sunshine switches to the VDD at the client's exact mode on stream start, restores the previous display topology on end, and persists state to recover after crashes.
+- **Why the physical monitor mattered:** with the desk monitor asleep the 3080 had ZERO outputs (`WmiMonitorID` count 0, Windows on 1024x768 WinDisc fallback) → Sunshine streamed black. The VDD fixes headless streaming permanently.
+- **Found in the VM:** a leftover **Parsec Virtual Display Adapter** (Parsec previously installed). Harmless but consider uninstalling Parsec to reduce the adapter zoo (4 display adapters currently: 3080, VDD, Parsec-VDA, Microsoft Basic/vga-std).
+- PC-monitor native mode not yet added to vdd_settings.xml — add a `<resolution>` block when the second client's mode is known (Sunshine dd_resolution auto still needs the mode to exist in the VDD list, or it falls back to nearest).
