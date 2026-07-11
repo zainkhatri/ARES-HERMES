@@ -2570,7 +2570,29 @@ def vm_control(action):
                 timeout=10, stderr=_sp.DEVNULL
             ).decode().strip()
             running = "running" in out
-            return jsonify({"vm": "win11-gaming", "running": running, "raw": out})
+            streaming_ready = False
+            gpu_home = None
+            if running:
+                # Sunshine answers 47984 only once Windows + the service are up.
+                import socket as _socket
+                try:
+                    with _socket.create_connection(("192.168.20.215", 47984), timeout=1):
+                        streaming_ready = True
+                except OSError:
+                    streaming_ready = False
+            else:
+                # Post-reclaim health: flag gone AND the 3080 visible in this CT.
+                if os.path.exists(GPU_LOAN_FLAG):
+                    gpu_home = False
+                else:
+                    try:
+                        rc = _sp.run(["nvidia-smi", "-L"], capture_output=True,
+                                     timeout=5).returncode
+                        gpu_home = (rc == 0)
+                    except Exception:
+                        gpu_home = False
+            return jsonify({"vm": "win11-gaming", "running": running, "raw": out,
+                            "streaming_ready": streaming_ready, "gpu_home": gpu_home})
         else:
             # The GPU-swap hookscript restarts THIS service during both
             # pre-start and post-stop (flag+restart protocol), which kills a
