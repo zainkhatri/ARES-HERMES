@@ -63,4 +63,4 @@
   - GPU MISSING sim ✓: flag touch → `gpu_home:false`; rm → recovers.
   - OLED clone-restore after stream end: **pending Zain's eyes** (morning).
 - **Task 4 second PC: pending** (needs the PC + PIN).
-- **Task 5 cleanup: partial.** CursorTrace task + test debris deleted. Parsec uninstall awaiting Zain's confirmation. Tailscale key-expiry disable still on Zain.
+- **Task 5 cleanup: DONE except one user item.** CursorTrace + debris deleted. Parsec FULLY removed 2026-07-11: app, service, Virtual Display Adapter, and Virtual USB Adapter driver all uninstalled + dirs deleted; display adapters now 3 (3080, MTT VDD, Basic/vga-std). Remaining: Zain disables Tailscale key expiry for supernas.
