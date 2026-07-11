@@ -127,7 +127,7 @@ qm guest exec 200 --timeout 600 -- powershell -NoProfile -Command "\
   & 'C:\\Program Files\\Tailscale\\tailscale.exe' up --authkey=<PASTED_KEY> --unattended; \
   & 'C:\\Program Files\\Tailscale\\tailscale.exe' ip -4"
 ```
-Expected: `exitcode: 0` and a `100.x.y.z` address. `--unattended` keeps Tailscale up when no user is logged in. Record the IP in this plan file.
+Expected: `exitcode: 0` and a `100.x.y.z` address. `--unattended` keeps Tailscale up when no user is logged in. Record the IP in this plan file. → **Joined 2026-07-10: 100.105.159.98** (hostname `supernas`). User reminded to disable key expiry.
 
 - [ ] **Step 3: Verify from the host's tailnet**
 

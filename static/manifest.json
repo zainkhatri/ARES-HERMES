@@ -1,11 +1,11 @@
 {
-  "name": "PROMETHEON",
-  "short_name": "PROMETHEON",
-  "description": "NAS Terminal AI Interface",
+  "name": "ARES & NEXUS",
+  "short_name": "ARES & NEXUS",
+  "description": "Super-NAS · Photos · Terminal · Storage",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#060a12",
-  "theme_color": "#060a12",
+  "background_color": "#04070d",
+  "theme_color": "#04070d",
   "orientation": "any",
   "icons": [
     {
@@ -16,6 +16,11 @@
     {
       "src": "/static/icon-512.png",
       "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-180.png",
+      "sizes": "180x180",
       "type": "image/png"
     }
   ]

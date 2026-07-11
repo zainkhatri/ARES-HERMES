@@ -1,6 +1,6 @@
 // ARES Service Worker — offline-capable with layered caching
 const THUMB_CACHE = 'ares-thumbs-v14';  // v14: thumbs no longer SW-cached (native HTTP cache); v13 purged on activate
-const PAGE_CACHE = 'ares-pages-v10';  // v10: bust stale /terminal (old HTTP-bounce shell.html)
+const PAGE_CACHE = 'ares-pages-v12';  // v12: /breakdown is now the Finance net-worth view
 
 // App shell — precached on install so the app works offline immediately
 const APP_SHELL = [

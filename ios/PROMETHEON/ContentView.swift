@@ -16,12 +16,17 @@ struct ContentView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
-            if serverURL.isEmpty { tryConnect() }
+            // Always re-pick the best server each launch so a stale pin to an
+            // old/wrong box (e.g. a LAN copy) can't survive a relaunch once the
+            // preferred ARES origin is reachable again.
+            tryConnect()
         }
     }
 
     func tryConnect() {
         let candidates = [
+            "https://ares.tail3045df.ts.net",  // ARES dashboard — canonical HTTPS (valid cert, no http->https upgrade trap)
+            "http://100.77.42.110:8080",       // ARES dashboard raw IP fallback
             "http://100.100.29.36:8080",
             "http://10.0.1.90:8080"
         ]
@@ -55,9 +60,7 @@ struct SetupView: View {
         ZStack {
             Color(red: 0.024, green: 0.039, blue: 0.071).ignoresSafeArea()
             VStack(spacing: 24) {
-                Text("P")
-                    .font(.system(size: 80, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color(red: 0.494, green: 0.722, blue: 0.941))
+                BlockP(size: 80)
                 Text("PROMETHEON")
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
                     .tracking(6)

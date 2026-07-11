@@ -1,10 +1,11 @@
-"""System info gathering for PROMETHEON — runs locally on the NAS or Mac."""
+"""System info gathering for ARES — runs locally on the NAS or Mac."""
 
 import json
 import os
 import platform
 import subprocess
 import sys
+import threading
 import time
 import psutil
 from datetime import timedelta
@@ -19,20 +20,17 @@ DISK_CACHE_TTL = 60  # seconds
 IS_MAC = sys.platform == "darwin"
 
 # ─── Pool root ───
-# On the NAS (Linux): /srv/mergerfs/PROMETHEUS
-# On Mac (dev/SMB):   /Volumes/PROMETHEUS
+# ARES (Linux LXC): /mnt/data/PROMETHEUS (bind-mounted from /mnt/nvme on Proxmox host)
+# Mac (dev/SMB):    /Volumes/PROMETHEUS
 if IS_MAC:
     POOL_ROOT = "/Volumes/PROMETHEUS"
 else:
-    POOL_ROOT = "/srv/mergerfs/PROMETHEUS"
+    POOL_ROOT = os.getenv("POOL_ROOT", "/mnt/data/PROMETHEUS")
 
 # ─── Drive detection ───
-# Linux NAS: match by device path fragment
+# ARES: single NVMe. (The LXC sees the NVMe via bind mount; device-level stats are on the Proxmox host.)
 LINUX_DRIVE_MAP = {
-    "sda": "AirDisk",
-    "sdb": "T7",
-    "sdc": "T9",
-    "sdd": "T5",
+    "nvme0n1": "EVO-970",
 }
 
 # macOS: match by volume name
@@ -211,19 +209,37 @@ def _du_single(path):
             if result.returncode == 0:
                 return int(result.stdout.split("\t")[0]) * 1024
         else:
+            # Non-zero return is common & benign when vanishing tmp files trip
+            # du's stat() (e.g. PROMETHEON's thumb generator). We still get a
+            # correct total on stdout, so parse it regardless of exit code.
             result = subprocess.run(
                 ["du", "-s", "--block-size=1", path],
                 capture_output=True, text=True, timeout=120
             )
-            if result.returncode == 0:
-                return int(result.stdout.split("\t")[0])
+            line = (result.stdout or "").strip().splitlines()[-1] if result.stdout else ""
+            if line and "\t" in line:
+                try:
+                    return int(line.split("\t")[0])
+                except ValueError:
+                    pass
     except Exception:
         pass
     return None
 
 
+_foldersizes_holder = {}
+
+
 def _get_folder_sizes():
-    """Get sizes of top 3 largest folders. Only re-measures folders whose mtime changed."""
+    """Folder sizes, stale-while-revalidate cached (30s). The underlying du can
+    take minutes on a big changed tree — keep it off the request path entirely."""
+    return _swr(_foldersizes_holder, _compute_folder_sizes, lambda v: 30, cold=[])
+
+
+def _compute_folder_sizes():
+    """Return every top-level folder under POOL_ROOT with its du-size, sorted
+    largest-first. Callers (home vitals, storage breakdown) slice as needed.
+    Only re-measures folders whose mtime changed."""
     # Skip on Mac — du over SMB is painfully slow
     if IS_MAC:
         return _folder_cache.get("data") or []
@@ -247,7 +263,6 @@ def _get_folder_sizes():
         cached = disk_cache.get(name)
         if cached and cached.get("mtime") == mtime:
             continue
-
         size = _du_single(path)
         if size is not None:
             disk_cache[name] = {"size": size, "mtime": mtime}
@@ -265,18 +280,17 @@ def _get_folder_sizes():
     for name, info in disk_cache.items():
         folders.append({"name": name, "size": info["size"], "display": _format_bytes(info["size"])})
     folders.sort(key=lambda x: x["size"], reverse=True)
-    top3 = folders[:3]
 
     try:
         usage = psutil.disk_usage(POOL_ROOT)
-        for f in top3:
+        for f in folders:
             f["percent"] = round(f["size"] / usage.total * 100, 1)
     except Exception:
-        for f in top3:
+        for f in folders:
             f["percent"] = 0
 
-    _folder_cache["data"] = top3
-    return top3
+    _folder_cache["data"] = folders
+    return folders
 
 
 def _get_cpu_temp():
@@ -321,6 +335,241 @@ def _get_cpu_temp():
 
 
 MORDOR_STATE_FILE = os.path.join(POOL_ROOT, "MORDOR", "server_schedule.log")
+
+
+def _swr(holder, compute, ttl_for, cold=None):
+    """Stale-while-revalidate cache. Returns the cached value INSTANTLY (even if
+    slightly stale) and refreshes it on a background thread when older than
+    ttl_for(value) seconds. `holder` is a dict; `ttl_for` is callable(value)->s.
+
+    NEVER blocks the caller: a cold cache (first call per process, e.g. a
+    request racing the startup prewarm) returns `cold` immediately and warms in
+    the background — the frontend polls every 15s and renders missing values
+    gracefully, so a one-poll placeholder beats a 3s hang.
+
+    This keeps slow SSH probes (Proxmox host CPU sampling, offline-GPU connect
+    timeouts) entirely off the request path, so /api/system-info stays fast."""
+    now = time.time()
+    ts = holder.get("ts")
+    val = holder.get("val", cold)
+    if (ts is None or now - ts >= ttl_for(val)) and not holder.get("refreshing"):
+        holder["refreshing"] = True
+        def _bg():
+            try:
+                v = compute()
+                holder["val"] = v
+                holder["ts"] = time.time()
+            except Exception:
+                pass
+            finally:
+                holder["refreshing"] = False
+        threading.Thread(target=_bg, daemon=True).start()
+    return val
+
+
+def _compute_host_compute() -> dict:
+    """SSH to the Proxmox host to read the REAL hardware stats (CPU %, memory,
+    temp, model). The LXC only sees its 8GB cgroup slice — that's not the story
+    the ARES dashboard wants to tell. (No caching here — wrapped by
+    _get_host_compute in a stale-while-revalidate cache.)
+    """
+    host = os.getenv("PVE_SSH_HOST", "root@192.168.20.51")
+    result = {}
+    try:
+        # Single SSH round-trip: take two /proc/stat samples (0.4s apart) for a
+        # real CPU%, plus meminfo, plus Tctl from lm-sensors if available.
+        script = r"""
+A=$(awk '/^cpu / {print $2+$4":"$2+$4+$5}' /proc/stat)
+sleep 0.4
+B=$(awk '/^cpu / {print $2+$4":"$2+$4+$5}' /proc/stat)
+echo "CPUSAMPLE $A $B"
+grep -E '^(MemTotal|MemAvailable|MemFree|Buffers|Cached):' /proc/meminfo
+grep -m1 '^model name' /proc/cpuinfo | sed 's/^model name[^:]*: //'
+echo nproc=$(nproc)
+sensors -u 2>/dev/null | awk '/(Tctl|Tccd1|temp1_input):/ {print $1, $2; exit}'
+echo HOSTNAME=$(hostname)
+        """
+        proc = subprocess.run(
+            ["ssh", "-o", "ConnectTimeout=2", "-o", "StrictHostKeyChecking=no",
+             "-o", "BatchMode=yes", "-o", "LogLevel=ERROR",
+             host, script],
+            capture_output=True, text=True, timeout=5,
+        )
+        out = proc.stdout if proc.returncode == 0 else ""
+        mem = {}
+        cpu_model = None
+        nproc = None
+        cpu_temp = None
+        for line in out.splitlines():
+            if line.startswith("CPUSAMPLE"):
+                try:
+                    _, a, b = line.split()
+                    a1, a2 = a.split(":"); b1, b2 = b.split(":")
+                    busy = int(b1) - int(a1); total = int(b2) - int(a2)
+                    if total > 0:
+                        result["cpu_percent"] = round(busy * 100 / total, 1)
+                except Exception:
+                    pass
+            elif ":" in line and line.split(":",1)[0] in ("MemTotal", "MemAvailable", "MemFree", "Buffers", "Cached"):
+                k, v = line.split(":", 1)
+                try:
+                    mem[k] = int(v.strip().split()[0]) * 1024  # kB → bytes
+                except Exception:
+                    pass
+            elif line.startswith("nproc="):
+                try: nproc = int(line.split("=",1)[1])
+                except: pass
+            elif "Tctl" in line or "Tccd1" in line or "temp1_input" in line:
+                # "Tctl: 36.125"
+                try:
+                    cpu_temp = float(line.split()[-1])
+                except Exception:
+                    pass
+            elif line.startswith("HOSTNAME="):
+                pass
+            elif line.strip() and "model name" not in line and not cpu_model and not line.startswith(("CPUSAMPLE","Mem","nproc","HOSTNAME","Tctl","Tccd","temp")):
+                # First non-tagged line is the CPU model.
+                cpu_model = line.strip()
+
+        if mem.get("MemTotal") and mem.get("MemAvailable"):
+            total = mem["MemTotal"]
+            used = total - mem["MemAvailable"]
+            result["memory_total_bytes"] = total
+            result["memory_used_bytes"] = used
+            result["memory_total"] = _format_bytes(total)
+            result["memory_used"] = _format_bytes(used)
+            result["memory_percent"] = round(used * 100 / total, 1)
+        if cpu_model:
+            result["cpu"] = cpu_model
+            if nproc:
+                result["cpu"] = f"{cpu_model} · {nproc} threads"
+        if cpu_temp is not None:
+            result["cpu_temp"] = round(cpu_temp, 1)
+    except Exception:
+        pass
+
+    return result
+
+
+_hostcompute_holder = {}
+def _get_host_compute() -> dict:
+    """Real Proxmox-host stats, stale-while-revalidate cached (5s). Returns
+    instantly from cache; the ~0.5s SSH (it samples CPU over 0.4s) refreshes in
+    the background."""
+    return _swr(_hostcompute_holder, _compute_host_compute, lambda v: 5, cold={})
+
+
+_hostdisks_holder = {}
+
+
+def _get_host_disks() -> list:
+    """Proxmox-host physical drives (AIRDISK), stale-while-revalidate cached
+    (30s). Returns instantly from cache; the SSH probe refreshes in the
+    background so it never blocks /api/system-info."""
+    return _swr(_hostdisks_holder, _compute_host_disks, lambda v: 30, cold=[])
+
+
+def _compute_host_disks() -> list:
+    """SSH to the Proxmox host for the AIRDISK boot-SSD stats (pve-root +
+    LVM-thin VM storage). NVMe is already visible inside the LXC via
+    bind-mount so we skip it. (No caching here — wrapped by _get_host_disks.)
+    """
+    host = os.getenv("PVE_SSH_HOST", "root@192.168.20.51")
+    drives = []
+    try:
+        cmd = (
+            # Thin-pool utilization of the 'data' LV on VG 'pve' — this is what
+            # actually matters for AIRDISK (VM disks + container rootfs are thin-provisioned).
+            "lvs --noheadings --units b --nosuffix -o lv_size,data_percent pve/data 2>/dev/null; "
+            "echo '---'; "
+            # Physical size of the underlying block device.
+            "lsblk -b -d -n -o SIZE /dev/sda 2>/dev/null"
+        )
+        proc = subprocess.run(
+            ["ssh", "-o", "ConnectTimeout=2", "-o", "StrictHostKeyChecking=no",
+             "-o", "BatchMode=yes", "-o", "LogLevel=ERROR",
+             host, cmd],
+            capture_output=True, text=True, timeout=4,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            parts = proc.stdout.split("---")
+            pool_line = parts[0].strip().split()
+            pool_size = int(pool_line[0]) if pool_line and pool_line[0].isdigit() else 0
+            pool_pct = float(pool_line[1]) if len(pool_line) > 1 else 0.0
+            phys_size = int(parts[1].strip()) if len(parts) > 1 and parts[1].strip().isdigit() else 0
+
+            if phys_size > 0:
+                used = int(pool_size * pool_pct / 100)
+                # Percent shown is usage against the physical device, so overall
+                # "disk is X% full" answer matches what you'd expect.
+                percent = round(used / phys_size * 100, 1) if phys_size else 0
+                drives.append({
+                    "name": "AIRDISK",
+                    "mount": "pve · LVM-thin",
+                    "total": _format_bytes(phys_size),
+                    "used": _format_bytes(used),
+                    "free": _format_bytes(phys_size - used),
+                    "percent": percent,
+                })
+    except Exception:
+        pass
+
+    return drives
+
+
+def _compute_gpu_info() -> dict:
+    """SSH to VM 300 (192.168.20.212) and query nvidia-smi.
+    Returns {'online': bool, 'name', 'temp_c', 'util_pct', 'vram_used_mib', 'vram_total_mib', 'power_w'}
+    or {'online': False, 'reason': '...'} if unreachable. (No caching here —
+    wrapped by _get_gpu_info in a stale-while-revalidate cache.)
+    """
+    host = os.getenv("GPU_HOST", "zain@192.168.20.212")
+    result = {"online": False}
+    try:
+        proc = subprocess.run(
+            [
+                "ssh", "-o", "ConnectTimeout=2", "-o", "StrictHostKeyChecking=no",
+                "-o", "BatchMode=yes", "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "LogLevel=ERROR",
+                host,
+                "nvidia-smi --query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw --format=csv,noheader,nounits"
+            ],
+            capture_output=True, text=True, timeout=4,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            # Take first line (single GPU in VM 300).
+            parts = [p.strip() for p in proc.stdout.strip().splitlines()[0].split(",")]
+            if len(parts) >= 6:
+                def _to_float(v):
+                    try: return float(v)
+                    except ValueError: return 0.0
+                name, temp, util, vmu, vmt, pwr = parts[:6]
+                result = {
+                    "online": True,
+                    "name": name,
+                    "temp_c": _to_float(temp),
+                    "util_pct": _to_float(util),
+                    "vram_used_mib": int(_to_float(vmu)),
+                    "vram_total_mib": int(_to_float(vmt)),
+                    "power_w": _to_float(pwr),
+                }
+        else:
+            result = {"online": False, "reason": proc.stderr.strip()[:120] or "nvidia-smi failed"}
+    except subprocess.TimeoutExpired:
+        result = {"online": False, "reason": "timeout"}
+    except Exception as e:
+        result = {"online": False, "reason": str(e)[:120]}
+
+    return result
+
+
+_gpu_holder = {}
+def _get_gpu_info() -> dict:
+    """nvidia-smi on VM 300 over SSH, stale-while-revalidate cached: 5s while
+    online (fresh metrics), 20s while offline so a down VM isn't re-probed every
+    few seconds — the connect timeout is the costly part. Returns instantly from
+    cache; refresh happens on a background thread."""
+    return _swr(_gpu_holder, _compute_gpu_info, lambda v: 5 if v.get("online") else 20, cold={"online": False})
 
 
 def _get_mordor_status() -> dict:
@@ -443,26 +692,31 @@ def get_system_info() -> dict:
     # Memory
     mem = psutil.virtual_memory()
 
-    # Disks (cached)
-    disks = _get_disks()
+    # Disks (cached) — local LXC mounts + Proxmox host disks (AIRDISK via SSH)
+    disks = _get_disks() + _get_host_disks()
 
     # Top-level folder sizes
     folders = _get_folder_sizes()
 
-    return {
-        "hostname": "PROMETHEUS",
+    # Prefer real host numbers over the LXC cgroup view. ARES is the whole box,
+    # not the 8 GB container slice it runs inside.
+    host_compute = _get_host_compute()
+    out = {
+        "hostname": os.getenv("HOST_BRAND", "ARES"),
         "folders": folders,
         "os": os_name,
         "kernel": platform.release(),
         "architecture": platform.machine(),
-        "cpu": cpu_desc,
-        "cpu_percent": cpu_percent,
-        "cpu_temp": _get_cpu_temp(),
-        "memory_total": _format_bytes(mem.total),
-        "memory_used": _format_bytes(mem.used),
-        "memory_percent": round(mem.percent, 1),
+        "cpu": host_compute.get("cpu") or cpu_desc,
+        "cpu_percent": host_compute.get("cpu_percent", cpu_percent),
+        "cpu_temp": host_compute.get("cpu_temp", _get_cpu_temp()),
+        "memory_total": host_compute.get("memory_total", _format_bytes(mem.total)),
+        "memory_used": host_compute.get("memory_used", _format_bytes(mem.used)),
+        "memory_percent": host_compute.get("memory_percent", round(mem.percent, 1)),
         "uptime": uptime_str,
         "disks": disks,
         "python": platform.python_version(),
         "mordor": _get_mordor_status(),
+        "gpu": _get_gpu_info(),
     }
+    return out

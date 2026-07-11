@@ -1,4 +1,4 @@
-"""Recycling bin for PROMETHEON. Moves files to trash instead of deleting them."""
+"""Recycling bin for ARES. Moves files to trash instead of deleting them."""
 
 import json
 import os
@@ -9,9 +9,9 @@ from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _SCRIPT_DIR.parent
-# On NAS: /srv/mergerfs/PROMETHEUS/PROMETHEON → trash lives at /srv/mergerfs/PROMETHEUS/.prometheon-trash
-# On Mac: /Volumes/PROMETHEUS/PROMETHEON → trash lives at /Volumes/PROMETHEUS/.prometheon-trash
-TRASH_DIR = _PROJECT_ROOT.parent / ".prometheon-trash"
+# On NAS: /srv/mergerfs/PROMETHEUS/ARES → trash lives at /srv/mergerfs/PROMETHEUS/.ares-trash
+# On Mac: /Volumes/PROMETHEUS/ARES → trash lives at /Volumes/PROMETHEUS/.ares-trash
+TRASH_DIR = _PROJECT_ROOT.parent / ".ares-trash"
 TRASH_DIR.mkdir(parents=True, exist_ok=True)
 
 

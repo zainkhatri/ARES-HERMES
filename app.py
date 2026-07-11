@@ -1,4 +1,4 @@
-"""Flask server for PROMETHEON NAS Terminal AI Interface."""
+"""Flask server for ARES NAS Terminal AI Interface."""
 
 import json
 import os
@@ -12,6 +12,7 @@ import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, redirect, url_for, send_file, abort, make_response
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
@@ -27,13 +28,51 @@ from system.recycling_bin import trash_file, list_trash, restore as restore_tras
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET", secrets.token_hex(32))
 app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.jinja_env.auto_reload = True
 
-LOGIN_PASSWORD = os.getenv("PROMETHEON_PASSWORD", "prometheus")
-LOGIN_USER = os.getenv("PROMETHEON_USER", "zainkhatri")
-API_TOKEN = os.getenv("PROMETHEON_API_TOKEN", "")
+_GALLERY_TZ = ZoneInfo("America/Los_Angeles")
+
+
+@app.after_request
+def _gzip_json(resp):
+    """Compress JSON/HTML responses. The photos endpoints ship 70-160KB of
+    JSON per request, all of it text — gzip drops that to <15% of the
+    original wire size. Skip already-encoded responses, streamed responses
+    (where Content-Length is unknown), and binary payloads (thumbs, video)
+    where compression is wasted CPU."""
+    accept = request.headers.get("Accept-Encoding", "")
+    if "gzip" not in accept.lower():
+        return resp
+    if resp.direct_passthrough or resp.is_streamed:
+        return resp
+    if resp.headers.get("Content-Encoding"):
+        return resp
+    ctype = (resp.content_type or "").split(";", 1)[0].strip().lower()
+    compressible = (
+        ctype in ("application/json", "text/html", "text/css",
+                  "application/javascript", "text/javascript",
+                  "image/svg+xml", "text/plain")
+    )
+    if not compressible:
+        return resp
+    body = resp.get_data()
+    if len(body) < 512:
+        return resp
+    import gzip as _gzip
+    compressed = _gzip.compress(body, compresslevel=6)
+    resp.set_data(compressed)
+    resp.headers["Content-Encoding"] = "gzip"
+    resp.headers["Content-Length"] = str(len(compressed))
+    vary = resp.headers.get("Vary")
+    resp.headers["Vary"] = "Accept-Encoding" if not vary else (vary + ", Accept-Encoding")
+    return resp
+
+LOGIN_PASSWORD = os.getenv("ARES_PASSWORD", "prometheus")
+LOGIN_USER = os.getenv("ARES_USER", "zainkhatri")
+API_TOKEN = os.getenv("ARES_API_TOKEN", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
-app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 MB
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024 * 1024  # 8 GB (journal PDFs stream to disk)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400 * 7
 
 # Store conversation history per session (simple in-memory store)
@@ -47,14 +86,33 @@ session_display = {}
 # to disk. Subsequent requests are served from RAM. No pre-generation needed.
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ─── GPU loan flag ───
+# Written by the host's gpu-swap.sh hookscript before VM 200/300 borrows the
+# RTX 3080, removed when the VM stops (the hook restarts this service on both
+# edges). Hiding CUDA *before* torch / ffmpeg ever initialise means this
+# process runs CPU-only and never opens /dev/nvidia*, so the host can unbind
+# the nvidia driver without racing a systemd-respawned GPU consumer.
+# CLIP search and video transcode degrade to their CPU paths automatically.
+GPU_LOAN_FLAG = os.path.join(_APP_DIR, ".gpu-on-loan")
+if os.path.exists(GPU_LOAN_FLAG):
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    print("[gpu] .gpu-on-loan present — CPU-only mode (RTX 3080 lent to a VM)")
+
 _THUMB_DIR = os.path.join(_APP_DIR, "static", "thumbs")
 _THUMB_HQ_DIR = os.path.join(_APP_DIR, "static", "thumbs_hq")
 _THUMB_PREVIEW_DIR = os.path.join(_APP_DIR, "static", "thumbs_preview")
+# 2560px WebP @ q85 — peak-quality lightbox tier. Typically 200-500 KB vs
+# the 2-5 MB JPEG original, decodes pixel-for-pixel on retina displays.
+# Files at static/thumbs_max/<hash>.webp are served directly by Caddy
+# (the @thumbs path matcher in the Caddyfile globs `thumbs*`).
+_THUMB_MAX_DIR = os.path.join(_APP_DIR, "static", "thumbs_max")
 SESSIONS_DIR = os.path.join(_APP_DIR, ".sessions")
 os.makedirs(SESSIONS_DIR, exist_ok=True)
 os.makedirs(_THUMB_DIR, exist_ok=True)
 os.makedirs(_THUMB_HQ_DIR, exist_ok=True)
 os.makedirs(_THUMB_PREVIEW_DIR, exist_ok=True)
+os.makedirs(_THUMB_MAX_DIR, exist_ok=True)
 _thumb_cache = {}
 _thumb_cache_lock = threading.Lock()
 
@@ -186,11 +244,15 @@ def _serve_thumb_on_demand():
             return send_file(disk_path, mimetype="image/jpeg",
                              max_age=604800, conditional=True)
 
-    # 3. Generate from original photo
+    # 3. Generate from original photo — SKIP for videos (ffmpeg blocks request).
+    # Videos get their thumbs via the background backfill; missing = 404,
+    # frontend shows a dark placeholder with play icon.
     orig_path = _hash_to_path.get(name)
     if orig_path and os.path.isfile(orig_path):
         ext = os.path.splitext(orig_path)[1].lower()
         is_video = ext in VIDEO_EXTS
+        if is_video:
+            abort(404)
         if tier == "preview":
             size, quality = 2048, 1
         elif tier == "hq":
@@ -347,16 +409,115 @@ def logout():
     return jsonify({"success": True})
 
 
+@app.route("/_authz")
+def _authz():
+    """Auth gate for Caddy forward_auth on static media tiers it serves from
+    disk. 204 = allow, 401 = deny. No body — the only cost is the cookie check,
+    so Caddy can serve the bytes itself without streaming them through Python.
+    Mirrors the auth in _serve_thumb_on_demand for thumbs/thumbs_hq."""
+    if session.get("authenticated") or check_bearer_token():
+        return ("", 204)
+    return ("", 401)
+
+
+# ─── Cross-node SSO handoff ─────────────────────────────────────────────────
+# ARES and NEXUS are twin apps with a shared SSO_SECRET. Clicking the other
+# node's tab issues a short-lived signed token, which the target node validates
+# and uses to bootstrap its own session. No second login prompt.
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from urllib.parse import urlparse
+
+SSO_SECRET = os.getenv("SSO_SECRET", "").strip()
+SSO_MAX_AGE = 60  # seconds — the handoff token is one-shot, tight window
+
+# Hostnames we're willing to redirect to after consuming a token. Anything else
+# gets rejected — prevents open-redirect abuse of the SSO endpoint.
+SSO_ALLOWED_HOSTS = {
+    "pve.tail3045df.ts.net",
+    "192.168.20.213",
+    "ares.local",
+    "100.100.29.36",
+    "prometheon.tail3045df.ts.net",
+}
+
+
+def _sso_serializer():
+    if not SSO_SECRET:
+        return None
+    return URLSafeTimedSerializer(SSO_SECRET, salt="cross-node-sso")
+
+
+@app.route("/api/sso/issue")
+@require_auth
+def sso_issue():
+    """Issue a signed handoff URL for the other node."""
+    target = request.args.get("for", "").strip()
+    if not target:
+        return jsonify({"error": "missing `for` parameter"}), 400
+    parsed = urlparse(target)
+    if parsed.hostname not in SSO_ALLOWED_HOSTS:
+        return jsonify({"error": "target host not allowed"}), 400
+    s = _sso_serializer()
+    if s is None:
+        # No shared secret configured — fall back to a plain link.
+        return jsonify({"redirect": target})
+    token = s.dumps({"u": session.get("username", "zain")})
+    base = target.rstrip("/")
+    return jsonify({"redirect": f"{base}/api/sso/consume?t={token}"})
+
+
+@app.route("/api/sso/consume")
+def sso_consume():
+    """Validate an incoming handoff token and start a local session."""
+    token = request.args.get("t", "")
+    s = _sso_serializer()
+    if not token or s is None:
+        return redirect(url_for("login_page"))
+    try:
+        data = s.loads(token, max_age=SSO_MAX_AGE)
+    except SignatureExpired:
+        return redirect(url_for("login_page") + "?err=expired")
+    except BadSignature:
+        return redirect(url_for("login_page") + "?err=badsig")
+    session["authenticated"] = True
+    session["username"] = data.get("u", "zain")
+    session.permanent = False
+    return redirect(url_for("home"))
+
+
+@app.route("/jump/nexus")
+@require_auth
+def jump_nexus():
+    """Hand off to NEXUS with a one-shot SSO token, skipping its login."""
+    target_base = "http://100.100.29.36:8888"
+    s = _sso_serializer()
+    if s is None:
+        return redirect(target_base)
+    token = s.dumps({"u": session.get("username", "zain")})
+    return redirect(f"{target_base}/api/sso/consume?t={token}")
+
+
 @app.route("/")
 @require_auth
 def home():
     return render_template("home.html")
 
 
+
+@app.route("/drives")
+@require_auth
+def drives_page():
+    return render_template("drives.html")
+
 @app.route("/terminal")
 @require_auth
 def terminal():
-    return render_template("index.html", username=session.get("username", LOGIN_USER))
+    # Terminal tab = a real shell on the ARES host (pve), persistent tmux,
+    # served tailnet-only via ttyd (iframe -> http://100.77.42.110:7681/).
+    # no-store so the mobile control panel is never served stale from cache.
+    resp = make_response(render_template("shell.html", username=session.get("username", LOGIN_USER)))
+    resp.headers["Cache-Control"] = "no-store, must-revalidate"
+    return resp
 
 
 @app.route("/breakdown")
@@ -365,47 +526,421 @@ def breakdown_page():
     return render_template("breakdown.html")
 
 
-@app.route("/api/breakdown", methods=["GET"])
+# ───────────────────────────────────────────────────────────────────────
+# BUSINESS / VENTURES DASHBOARD
+# Aggregates the JSON dumps the various FAI tooling already writes:
+#   • icp_workflow_victims.json   — HubSpot snapshot
+#   • linkedout/data/*.json       — LinkedIn outreach daemon state
+#   • bdr/data/activity_log.json  — Gmail BDR sender activity
+#   • business/<venture>/         — folder of ventures
+# Reads on every request — files are tiny (<1MB) and the daemon writes
+# them continuously, so we want fresh-on-every-paint, no cron.
+# ───────────────────────────────────────────────────────────────────────
+
+# Candidate roots where the FAI/business data tree might live. Each box
+# has it in a slightly different place — ARES sees /mnt/data/PROMETHEUS/WORK,
+# NEXUS sees the mergerfs union plus a backup dir. We probe these in order
+# and use the first path that exists per-file, so the same module works
+# on every box without environment-specific config.
+_WORK_CANDIDATES = [
+    os.environ.get("WORK_ROOT"),
+    "/mnt/data/PROMETHEUS/WORK",
+    "/srv/mergerfs/PROMETHEUS",
+    "/srv/dev-disk-by-uuid-de676cab-cff5-4143-a3fa-174e88f13b4a/PROMETHEUS_BACKUP/ares/WORK",
+    "/Volumes/PROMETHEUS/WORK",
+]
+
+
+def _find(*parts):
+    """First existing path across _WORK_CANDIDATES for the given suffix."""
+    for r in _WORK_CANDIDATES:
+        if not r:
+            continue
+        p = os.path.join(r, *parts)
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def _safe_load_json(path, default):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default
+
+
+def _file_mtime(path):
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
+
+
+# ── Time-window helpers ─────────────────────────────────────────────────
+# All linkedout/bdr logs use ISO-8601 with trailing Z. Parse once, bucket
+# by today / week / month / total. Windows are UTC-anchored — the daemon
+# writes UTC timestamps so this matches the underlying truth.
+import datetime as _dt
+
+def _parse_ts(s):
+    if not s or not isinstance(s, str):
+        return None
+    try:
+        # Strip 'Z' and parse, treat as UTC-naive
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        return _dt.datetime.fromisoformat(s)
+    except (ValueError, TypeError):
+        return None
+
+
+def _window_bounds():
+    """Return dict of {label: cutoff_datetime_utc}. Events newer than the
+    cutoff count for that window. None means no cutoff (total)."""
+    now = _dt.datetime.now(_dt.timezone.utc)
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return {
+        "today": midnight,
+        "week": now - _dt.timedelta(days=7),
+        "month": now - _dt.timedelta(days=30),
+        "total": None,
+    }
+
+
+def _bucket_events(events, ts_field):
+    """Count events per window. `events` is a list of dicts; each must
+    have a parseable timestamp under ts_field."""
+    bounds = _window_bounds()
+    counts = {k: 0 for k in bounds}
+    for ev in events:
+        t = _parse_ts(ev.get(ts_field) if isinstance(ev, dict) else None)
+        if not t:
+            continue
+        for k, cutoff in bounds.items():
+            if cutoff is None or t >= cutoff:
+                counts[k] += 1
+    return counts
+
+
+def _fai_summary():
+    p = _find("FAI", "icp_workflow_victims.json")
+    raw = _safe_load_json(p, {}) if p else {}
+    if not raw:
+        return {"available": False, "reason": "No icp_workflow_victims.json yet"}
+    summary = raw.get("summary", {})
+    sources = summary.get("by_source", {}) or {}
+    top_sources = sorted(sources.items(), key=lambda kv: -kv[1])[:8]
+    statuses = summary.get("by_status", {}) or {}
+    status_total = sum(statuses.values()) or 1
+    status_rows = sorted(
+        [{"label": k, "count": v, "pct": round(100 * v / status_total, 1)}
+         for k, v in statuses.items()],
+        key=lambda r: -r["count"],
+    )
+    return {
+        "available": True,
+        "run_at": raw.get("run_at"),
+        "total": raw.get("total", 0),
+        "by_stage": summary.get("by_stage", {}),
+        "by_tier": summary.get("by_tier", {}),
+        "has_deal": summary.get("has_deal", 0),
+        "no_deal": summary.get("no_deal", 0),
+        "status_rows": status_rows,
+        "top_sources": [{"name": k or "(blank)", "count": v} for k, v in top_sources],
+    }
+
+
+def _linkedout_summary():
+    tracker_p = _find("FAI", "linkedout", "data", "outreach-tracker.json")
+    actions_p = _find("FAI", "linkedout", "data", "action-log.json")
+    daemon_p = _find("FAI", "linkedout", "data", "daemon-state.json")
+    tracker = _safe_load_json(tracker_p, {}) if tracker_p else {}
+    actions = _safe_load_json(actions_p, []) if actions_p else []
+    daemon = _safe_load_json(daemon_p, {}) if daemon_p else {}
+    if not tracker and not actions:
+        return {"available": False, "reason": "No outreach data yet"}
+
+    contacts = list(tracker.values()) if isinstance(tracker, dict) else []
+    by_status = {}
+    for c in contacts:
+        s = c.get("status", "unknown")
+        by_status[s] = by_status.get(s, 0) + 1
+    li_msgs = sum(c.get("li_msgs", 0) for c in contacts)
+    li_followups = sum(c.get("li_followups", 0) for c in contacts)
+
+    # Most-engaged contacts (by li_msgs sent)
+    top_contacts = sorted(
+        [c for c in contacts if c.get("li_msgs", 0) > 0],
+        key=lambda c: -c.get("li_msgs", 0),
+    )[:6]
+    top_contacts = [{
+        "name": c.get("name", "Unknown"),
+        "li_msgs": c.get("li_msgs", 0),
+        "status": c.get("status", "unknown"),
+        "last_ts": c.get("last_li_msg_ts") or c.get("first_contact_ts"),
+    } for c in top_contacts]
+
+    # Action-log: connection requests over time
+    action_types = {}
+    for a in actions:
+        t = a.get("type", "unknown")
+        action_types[t] = action_types.get(t, 0) + 1
+
+    return {
+        "available": True,
+        "contacts": len(contacts),
+        "by_status": by_status,
+        "li_msgs": li_msgs,
+        "li_followups": li_followups,
+        "top_contacts": top_contacts,
+        "action_count": len(actions),
+        "action_types": action_types,
+        "daemon": {
+            "date": daemon.get("date"),
+            "actions": daemon.get("actions", 0),
+            "messaged_today": daemon.get("messagedToday", []),
+            "connected_today": daemon.get("connectedToday", []),
+        },
+        "last_updated": _file_mtime(tracker_p) if tracker_p else None,
+    }
+
+
+def _bdr_summary():
+    p = _find("FAI", "bdr", "data", "activity_log.json")
+    if not p:
+        return {"available": False, "reason": "BDR engine has not been authorized yet."}
+    log = _safe_load_json(p, [])
+    if not isinstance(log, list) or not log:
+        return {"available": False, "reason": "BDR engine authorized — no sends yet."}
+    sent = [e for e in log if e.get("type") == "send" or e.get("action") == "send"]
+    drafts = [e for e in log if e.get("type") == "draft" or e.get("action") == "draft"]
+    return {
+        "available": True,
+        "total_events": len(log),
+        "sent": len(sent),
+        "drafts": len(drafts),
+        "last_event": log[-1] if log else None,
+    }
+
+
+def _ventures_list():
+    root = _find("business")
+    if not root or not os.path.isdir(root):
+        return []
+    out = []
+    for name in sorted(os.listdir(root)):
+        d = os.path.join(root, name)
+        if not os.path.isdir(d):
+            continue
+        try:
+            files = [f for f in os.listdir(d) if not f.startswith(".")]
+        except OSError:
+            files = []
+        out.append({
+            "id": name.lower(),
+            "name": name,
+            "file_count": len(files),
+            "mtime": _file_mtime(d),
+        })
+    return out
+
+
+def _business_payload():
+    return {
+        "fai": _fai_summary(),
+        "linkedout": _linkedout_summary(),
+        "bdr": _bdr_summary(),
+        "ventures": _ventures_list(),
+    }
+
+
+# ── Per-venture detail (Finder-style sidebar pattern) ──────────────────
+
+def _fai_venture():
+    """Aggregate FAI metrics across LinkedIn outreach, BDR email, and the
+    HubSpot ICP snapshot. Returns: status, four time-window metric sets,
+    and a chronological activity log."""
+    connect_log = _safe_load_json(_find("FAI", "linkedout", "data", "connect-log.json") or "", []) or []
+    message_log = _safe_load_json(_find("FAI", "linkedout", "data", "message-log.json") or "", []) or []
+    followup_log = _safe_load_json(_find("FAI", "linkedout", "data", "followup-log.json") or "", []) or []
+    tracker = _safe_load_json(_find("FAI", "linkedout", "data", "outreach-tracker.json") or "", {}) or {}
+    bdr_log = _safe_load_json(_find("FAI", "bdr", "data", "activity_log.json") or "", []) or []
+    icp = _safe_load_json(_find("FAI", "icp_workflow_victims.json") or "", {}) or {}
+
+    # Per-window event counts
+    connects = _bucket_events(connect_log, "sent_at")
+    messages = _bucket_events(message_log, "sent_at") if isinstance(message_log, list) else {"today":0,"week":0,"month":0,"total":0}
+    followups = _bucket_events(followup_log, "time")
+    bdr_sends = _bucket_events([e for e in bdr_log if (e.get("type") == "send" or e.get("action") == "send")], "timestamp") if bdr_log else {"today":0,"week":0,"month":0,"total":0}
+
+    # Email sequences set up: count tracker contacts where email_sequenced
+    # is true AND first_contact_ts falls in window.
+    bounds = _window_bounds()
+    seq_counts = {k: 0 for k in bounds}
+    contacts = list(tracker.values()) if isinstance(tracker, dict) else []
+    for c in contacts:
+        if not c.get("email_sequenced"):
+            continue
+        t = _parse_ts(c.get("first_contact_ts"))
+        if not t:
+            continue
+        for k, cutoff in bounds.items():
+            if cutoff is None or t >= cutoff:
+                seq_counts[k] += 1
+
+    # Reply rate. Without explicit reply events we approximate: contacts
+    # whose status is "messaged" and have li_msgs > 1 (a reply usually
+    # produces a back-and-forth) divided by total messaged. Mark as
+    # estimate so the UI can label it.
+    messaged = [c for c in contacts if c.get("status") == "messaged"]
+    replied = [c for c in messaged if c.get("li_msgs", 0) > 1]
+    reply_rate = round(100 * len(replied) / len(messaged), 1) if messaged else None
+
+    metrics = {}
+    for k in bounds:
+        metrics[k] = {
+            "connects": connects[k],
+            "messages": messages[k],
+            "followups": followups[k],
+            "email_sequences": seq_counts[k],
+            "emails_sent": bdr_sends[k],
+            "reply_rate": reply_rate if k == "total" else None,  # only meaningful overall
+            "meetings": 0,  # not yet wired
+        }
+
+    # Build a unified activity log: connects + followups + bdr sends.
+    activity = []
+    for e in connect_log:
+        if e.get("sent_at"):
+            activity.append({
+                "ts": e["sent_at"],
+                "kind": "connect",
+                "name": e.get("name", "—"),
+                "detail": e.get("search_query", ""),
+            })
+    for e in followup_log:
+        if e.get("time"):
+            activity.append({
+                "ts": e["time"],
+                "kind": "followup",
+                "name": e.get("name", "—"),
+                "detail": "followup #" + str(e.get("followup_num", "?")),
+            })
+    for e in bdr_log:
+        ts = e.get("timestamp") or e.get("sent_at") or e.get("ts")
+        if ts:
+            activity.append({
+                "ts": ts,
+                "kind": "email",
+                "name": e.get("to") or e.get("recipient") or "—",
+                "detail": e.get("subject") or e.get("type", ""),
+            })
+    activity.sort(key=lambda x: x["ts"], reverse=True)
+    activity = activity[:30]
+
+    return {
+        "id": "fai",
+        "name": "FAI",
+        "subtitle": "Insurance · FurtherAI",
+        "status": "active",
+        "available": True,
+        "metrics": metrics,
+        "activity": activity,
+        "icp": {
+            "total": icp.get("total", 0),
+            "run_at": icp.get("run_at"),
+            "by_stage": (icp.get("summary") or {}).get("by_stage", {}),
+            "by_tier": (icp.get("summary") or {}).get("by_tier", {}),
+            "has_deal": (icp.get("summary") or {}).get("has_deal", 0),
+            "no_deal": (icp.get("summary") or {}).get("no_deal", 0),
+        },
+        "totals": {
+            "contacts": len(contacts),
+            "li_msgs_lifetime": sum(c.get("li_msgs", 0) for c in contacts),
+            "connected": sum(1 for c in contacts if c.get("status") == "connected"),
+            "messaged": sum(1 for c in contacts if c.get("status") == "messaged"),
+            "email_sequenced": sum(1 for c in contacts if c.get("email_sequenced")),
+        },
+    }
+
+
+def _placeholder_venture(name, subtitle, status="setup", reason=None, file_count=0):
+    """Used for ventures we have a folder for but no instrumented data."""
+    blank = {"connects": 0, "messages": 0, "followups": 0, "email_sequences": 0,
+             "emails_sent": 0, "reply_rate": None, "meetings": 0}
+    return {
+        "id": name.lower().replace(" ", "-"),
+        "name": name,
+        "subtitle": subtitle,
+        "status": status,
+        "available": False,
+        "reason": reason or "No instrumented data yet — drop a daemon + activity log into the venture folder and this card lights up.",
+        "metrics": {"today": dict(blank), "week": dict(blank), "month": dict(blank), "total": dict(blank)},
+        "activity": [],
+        "file_count": file_count,
+    }
+
+
+def _all_ventures_payload():
+    """Returns sidebar + per-venture detail for everything we know about."""
+    ventures = []
+
+    # Active: FAI is the main one
+    ventures.append(_fai_venture())
+
+    # FAMILYCARESF — has folder, no daemon
+    fcsf_root = _find("business", "FAMILYCARESF")
+    fc_files = 0
+    if fcsf_root and os.path.isdir(fcsf_root):
+        try:
+            fc_files = len([f for f in os.listdir(fcsf_root) if not f.startswith(".")])
+        except OSError:
+            pass
+    ventures.append(_placeholder_venture(
+        "Family Care SF", "Home Care · San Francisco",
+        status="setup", file_count=fc_files,
+        reason="Contract on file. Wire a daemon at WORK/business/FAMILYCARESF/ to start metrics.",
+    ))
+
+    # Other portfolio dirs become inactive ventures
+    portfolio_root = _find("business")
+    if portfolio_root and os.path.isdir(portfolio_root):
+        for name in sorted(os.listdir(portfolio_root)):
+            if name.upper() == "FAMILYCARESF":
+                continue
+            d = os.path.join(portfolio_root, name)
+            if not os.path.isdir(d):
+                continue
+            try:
+                files = [f for f in os.listdir(d) if not f.startswith(".")]
+            except OSError:
+                files = []
+            ventures.append(_placeholder_venture(
+                name.replace("-", " ").title(),
+                "Portfolio",
+                status="idle", file_count=len(files),
+            ))
+
+    return {"ventures": ventures, "generated_at": _dt.datetime.now(_dt.timezone.utc).isoformat()}
+
+
+@app.route("/business")
 @require_auth
-def get_breakdown_data():
-    path = os.path.join(_APP_DIR, "breakdown_data.json")
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            return jsonify(json.load(f))
-    return jsonify({"entries": []})
+def business_page():
+    return render_template("business.html", data=_all_ventures_payload())
 
 
-@app.route("/api/breakdown", methods=["POST"])
+@app.route("/api/business/summary")
 @require_auth
-def save_breakdown_entry():
-    """Save a half-month entry. Key is monthKey + half (e.g. 2026-03-H1)."""
-    path = os.path.join(_APP_DIR, "breakdown_data.json")
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            data = json.load(f)
-    else:
-        data = {"entries": []}
-    entry = request.json
-    entry_key = entry.get("id")  # e.g. "2026-03-H1"
-    data["entries"] = [e for e in data["entries"] if e.get("id") != entry_key]
-    data["entries"].append(entry)
-    data["entries"].sort(key=lambda e: e.get("id", ""))
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
-    return jsonify({"success": True})
+def api_business_summary():
+    return jsonify(_business_payload())
 
 
-@app.route("/api/breakdown/<entry_id>", methods=["DELETE"])
+@app.route("/api/business/all")
 @require_auth
-def delete_breakdown_entry(entry_id):
-    path = os.path.join(_APP_DIR, "breakdown_data.json")
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            data = json.load(f)
-        data["entries"] = [e for e in data["entries"] if e.get("id") != entry_id]
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2)
-    return jsonify({"success": True})
+def api_business_all():
+    return jsonify(_all_ventures_payload())
 
 
 # ── Portfolio / Investments ──
@@ -455,23 +990,21 @@ def stock_quote(symbol):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    # Stocks — Google Finance (scrape, no API key needed)
+    # Stocks — Yahoo chart API (free, no key). Google Finance scrape died (302s).
     _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-    _EXCHANGES = ["NASDAQ", "NYSE", "NYSEARCA"]
-    for exch in _EXCHANGES:
+    for host in ("query1.finance.yahoo.com", "query2.finance.yahoo.com"):
         try:
             r = req.get(
-                f"https://www.google.com/finance/quote/{sym}:{exch}",
+                f"https://{host}/v8/finance/chart/{sym}",
+                params={"interval": "1d", "range": "1d"},
                 headers={"User-Agent": _UA},
                 timeout=5,
             )
             assert r.status_code == 200
-            html = r.text
-            m = re.search(r'data-last-price="([0-9.]+)"', html)
-            assert m is not None
-            price = float(m.group(1))
-            prices = re.findall(r'\$([0-9,]+\.[0-9]+)', html[html.find("Previous close"):html.find("Previous close") + 500]) if "Previous close" in html else []
-            prev = float(prices[0].replace(",", "")) if len(prices) > 0 else 0
+            meta = r.json()["chart"]["result"][0]["meta"]
+            price = meta.get("regularMarketPrice")
+            assert price is not None
+            prev = meta.get("chartPreviousClose") or meta.get("previousClose") or 0
             change = round(price - prev, 2) if prev else 0
             change_pct = round((change / prev * 100), 2) if prev else 0
             return jsonify({"c": price, "d": change, "dp": change_pct})
@@ -482,7 +1015,13 @@ def stock_quote(symbol):
 
 # ── Journals ──
 
-JOURNALS_DIR = os.path.join(os.path.dirname(_APP_DIR), "PERSONAL", "journals")
+# Prefer POOL_ROOT (PROMETHEUS storage root) so journals resolve to the real
+# PERSONAL/journals regardless of where the app dir lives. dirname(_APP_DIR)
+# only worked when the app sat directly under the storage root — on ARES it
+# lives under PROJECTS/, which pointed JOURNALS_DIR at an empty folder.
+JOURNALS_DIR = os.path.join(
+    os.getenv("POOL_ROOT") or os.path.dirname(_APP_DIR), "PERSONAL", "journals"
+)
 GOODNOTES_DB = os.path.expanduser(
     "~/Library/Containers/com.goodnotesapp.x/Data/Library/Databases/projection.sqlite"
 )
@@ -740,6 +1279,183 @@ def journals_page():
     return render_template("journals.html")
 
 
+_journal_index_lock = threading.Lock()
+
+
+def _rebuild_timeline():
+    """Rebuild timeline.json (powers 'On this day') from the journal text index.
+    Parses the date header on each entry's first page. Idempotent; runs after
+    every reindex and once at watcher startup so the feature never goes stale."""
+    import re
+    import datetime as _dt
+    try:
+        idx_path = os.path.join(JOURNALS_DIR, "journal_text_index.json")
+        with open(idx_path) as f:
+            pages = json.load(f).get("pages", {})
+        months = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY",
+                  "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]
+        mi = {m: i + 1 for i, m in enumerate(months)}
+        pat = re.compile(r"(" + "|".join(months) + r")\s+(\d{1,2})\s*(?:ST|ND|RD|TH)?\s*,?\s*(\d{4})", re.I)
+        this_year = _dt.date.today().year
+        entries = []
+        for k, v in pages.items():
+            text = (v.get("text") or "")
+            m = pat.search(text[:140])
+            if not m:
+                continue
+            mon = mi[m.group(1).upper()]
+            day = int(m.group(2))
+            year = int(m.group(3))
+            if not (1 <= day <= 31 and 2010 <= year <= this_year):
+                continue
+            snippet = re.sub(r"\s+", " ", text[m.end():]).strip()[:240]
+            header = re.sub(r"\s+", " ", text[:m.end()]).strip()
+            entries.append({
+                "year": year, "month": mon, "day": day,
+                "header": header, "snippet": snippet,
+                "pdf": v.get("pdf"), "page": v.get("page", 0), "offset": 0,
+            })
+        entries.sort(key=lambda e: (e["year"], e["month"], e["day"], e["pdf"] or "", e["page"]))
+        tp = os.path.join(JOURNALS_DIR, "timeline.json")
+        tmp = tp + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(entries, f, ensure_ascii=False)
+        os.replace(tmp, tp)
+        print(f"[journals] rebuilt timeline: {len(entries)} entries")
+    except Exception as e:
+        print(f"[journals] timeline rebuild failed: {e}")
+
+
+def _reindex_journal_pdf(name):
+    """Refresh the full-text search index for one notebook PDF from its text
+    layer. Runs in a background thread after an upload so search stays current."""
+    try:
+        import fitz
+        idx = os.path.join(JOURNALS_DIR, "journal_text_index.json")
+        path = os.path.join(JOURNALS_DIR, name)
+        if not os.path.isfile(path):
+            return
+        doc = fitz.open(path)
+        mt = os.path.getmtime(path)
+        new_pages = {}
+        for i in range(doc.page_count):
+            new_pages[f"{name}:{i}"] = {
+                "pdf": name, "page": i, "mtime": mt,
+                "text": doc.load_page(i).get_text().strip(),
+            }
+        doc.close()
+        with _journal_index_lock:
+            try:
+                with open(idx) as f:
+                    data = json.load(f)
+            except (OSError, ValueError):
+                data = {"version": 3, "engine": "pdf-textlayer", "pages": {}}
+            pages = data.setdefault("pages", {})
+            for k in [k for k, v in pages.items() if v.get("pdf") == name]:
+                pages.pop(k)
+            pages.update(new_pages)
+            data["built"] = time.time()
+            tmp = idx + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(data, f)
+            os.replace(tmp, idx)
+        print(f"[journals] reindexed {name}: {len(new_pages)} pages")
+        _rebuild_timeline()
+    except Exception as e:
+        print(f"[journals] reindex failed for {name}: {e}")
+
+
+_journal_watch_seen = {}
+
+
+def _journal_watch_loop():
+    """Auto-reindex notebooks that arrive/change via ANY path (Auto-Backup,
+    rclone, SMB, scp) — not just the upload endpoint — so search stays current.
+    Skips files that are still being written (size not yet stable)."""
+    import time as _t
+    # seed from the existing index so we don't reindex everything on boot
+    try:
+        with open(os.path.join(JOURNALS_DIR, "journal_text_index.json")) as f:
+            for v in json.load(f).get("pages", {}).values():
+                _journal_watch_seen[v["pdf"]] = v.get("mtime", 0)
+    except Exception:
+        pass
+    _rebuild_timeline()
+    print("[journals] watcher started (60s poll)")
+    while True:
+        try:
+            for fn in os.listdir(JOURNALS_DIR):
+                if not fn.lower().endswith(".pdf") or fn.startswith("._"):
+                    continue
+                p = os.path.join(JOURNALS_DIR, fn)
+                try:
+                    mt = os.path.getmtime(p)
+                except OSError:
+                    continue
+                if abs(_journal_watch_seen.get(fn, 0) - mt) < 1:
+                    continue
+                # stability gate: skip if still copying (size changing)
+                try:
+                    sz1 = os.path.getsize(p)
+                    _t.sleep(2)
+                    if os.path.getsize(p) != sz1:
+                        continue
+                except OSError:
+                    continue
+                _reindex_journal_pdf(fn)
+                _journal_watch_seen[fn] = mt
+        except Exception as e:
+            print(f"[journals] watch error: {e}")
+        _t.sleep(60)
+
+
+threading.Thread(target=_journal_watch_loop, daemon=True).start()
+
+
+@app.route("/api/journals/upload", methods=["POST"])
+@require_auth
+def upload_journal():
+    """Receive a notebook PDF (from the GoodNotes iOS Shortcut) onto the shelf.
+    Accepts multipart 'file', or a raw PDF body with ?name=<notebook>.pdf.
+    Auth: session cookie OR `Authorization: Bearer <ARES_API_TOKEN>`."""
+    raw_name = request.args.get("name", "")
+    fobj = request.files.get("file")
+    if not raw_name and fobj:
+        raw_name = fobj.filename
+    name = secure_filename(raw_name) or "journal.pdf"
+    if not name.lower().endswith(".pdf"):
+        name += ".pdf"
+    os.makedirs(JOURNALS_DIR, exist_ok=True)
+    dest = os.path.join(JOURNALS_DIR, name)
+    tmp = dest + ".part"
+    # Stream to disk in 1 MB chunks so multi-GB notebooks never buffer in RAM.
+    src = fobj.stream if fobj else request.stream
+    total = 0
+    head = src.read(8192)
+    if not head:
+        return jsonify({"error": "empty upload"}), 400
+    if not head[:5].startswith(b"%PDF"):
+        return jsonify({"error": "not a PDF"}), 400
+    try:
+        with open(tmp, "wb") as fh:
+            fh.write(head)
+            total += len(head)
+            while True:
+                chunk = src.read(1024 * 1024)
+                if not chunk:
+                    break
+                fh.write(chunk)
+                total += len(chunk)
+        os.replace(tmp, dest)
+    except Exception as e:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        return jsonify({"error": str(e)}), 500
+    # Keep full-text search current without blocking the response.
+    threading.Thread(target=_reindex_journal_pdf, args=(name,), daemon=True).start()
+    return jsonify({"ok": True, "name": name, "bytes": total})
+
+
 @app.route("/api/journals/sync", methods=["POST"])
 @require_auth
 def sync_journals():
@@ -952,7 +1668,8 @@ def list_journals():
             except Exception:
                 pages = 0
             key = f.lower().replace(".pdf", "").replace("-pdf", "")
-            pdf_info[key] = {"name": f, "pages": pages, "size": os.path.getsize(path)}
+            pdf_info[key] = {"name": f, "pages": pages, "size": os.path.getsize(path),
+                             "mtime": os.path.getmtime(path)}
 
     # Merge: Goodnotes metadata + PDF availability
     journals = []
@@ -970,6 +1687,7 @@ def list_journals():
         }
         if pdf:
             entry["size"] = pdf["size"]
+        entry["mtime"] = pdf["mtime"] if pdf else 0
         journals.append(entry)
         seen.add(key)
         if pdf:
@@ -985,8 +1703,11 @@ def list_journals():
                 "gn_pages": 0,
                 "has_pdf": True,
                 "size": pdf["size"],
+                "mtime": pdf["mtime"],
             })
 
+    # Newest-updated journal first (by PDF modified time)
+    journals.sort(key=lambda j: j.get("mtime", 0), reverse=True)
     return jsonify({"journals": journals, "synced_at": gn_synced_at})
 
 
@@ -1005,6 +1726,45 @@ def journal_page_dates(name):
     return jsonify({"dates": []})
 
 
+def _parse_journal_date(text):
+    """First date header on a page -> (year, month, day), or None. Tolerant of
+    OCR noise; rejects impossible/future dates."""
+    import re
+    import datetime as _dt
+    months = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY",
+              "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]
+    mi = {m: i + 1 for i, m in enumerate(months)}
+    m = re.search(r"(" + "|".join(months) + r")\s+(\d{1,2})\s*(?:ST|ND|RD|TH)?\s*,?\s*(\d{4})",
+                  (text or "")[:140], re.I)
+    if not m:
+        return None
+    mon = mi[m.group(1).upper()]
+    day = int(m.group(2))
+    year = int(m.group(3))
+    if not (1 <= day <= 31 and 2010 <= year <= _dt.date.today().year):
+        return None
+    return (year, mon, day)
+
+
+def _journal_page_dates(index):
+    """Map every (pdf, page) to its chronological date by carrying the last seen
+    date header forward across each notebook's pages."""
+    from collections import defaultdict
+    pages = index.get("pages", {})
+    by_pdf = defaultdict(list)
+    for v in pages.values():
+        by_pdf[v["pdf"]].append(v["page"])
+    out = {}
+    for pdf, plist in by_pdf.items():
+        last = None
+        for p in sorted(plist):
+            d = _parse_journal_date(pages.get(f"{pdf}:{p}", {}).get("text", ""))
+            if d:
+                last = d
+            out[(pdf, p)] = last
+    return out
+
+
 @app.route("/api/journals/search")
 @require_auth
 def search_journals():
@@ -1020,11 +1780,15 @@ def search_journals():
     with open(index_path) as f:
         index = json.load(f)
 
+    pages_idx = index.get("pages", {})
+    date_map = _journal_page_dates(index)
+    month_abbr = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     results = []
     terms = q.split()
-    for key, entry in index.get("pages", {}).items():
+    for key, entry in pages_idx.items():
         text = (entry.get("text") or "").lower()
-        if all(t in text for t in terms):
+        if terms and all(t in text for t in terms):
             # Find a snippet around the first match
             pos = text.find(terms[0])
             start = max(0, pos - 60)
@@ -1034,14 +1798,116 @@ def search_journals():
                 snippet = "..." + snippet
             if end < len(text):
                 snippet = snippet + "..."
+            d = date_map.get((entry["pdf"], entry["page"]))
             results.append({
                 "pdf": entry["pdf"],
                 "page": entry["page"],
                 "snippet": snippet,
+                "date": d,
+                "date_label": (f"{month_abbr[d[1]]} {d[2]}, {d[0]}" if d else ""),
+                "year": (d[0] if d else None),
             })
-    # Sort by pdf name then page number
-    results.sort(key=lambda r: (r["pdf"], r["page"]))
-    return jsonify({"results": results[:100], "total": len(results), "query": q})
+
+    def _chrono(r):
+        d = r.get("date")
+        if d:
+            return (0, d[0], d[1], d[2], r["pdf"], r["page"])
+        return (1, 9999, 99, 99, r["pdf"], r["page"])
+    results.sort(key=_chrono)  # oldest first; undated tail last
+    return jsonify({"results": results[:120], "total": len(results), "query": q})
+
+
+@app.route("/api/journals/highlight")
+@require_auth
+def journal_highlight():
+    """Normalized term boxes (0-1, top-left origin) on a page, read straight from
+    the GoodNotes text layer via PyMuPDF search_for. Fast and matches search."""
+    pdf_name = request.args.get("pdf", "")
+    page_num = request.args.get("page", "")
+    q = request.args.get("q", "").strip()
+    if not pdf_name or page_num == "" or not q:
+        return jsonify({"rects": []})
+    path = os.path.join(JOURNALS_DIR, pdf_name)
+    if not os.path.isfile(path):
+        return jsonify({"rects": []})
+    try:
+        page_num = int(page_num)
+    except ValueError:
+        return jsonify({"rects": []})
+    doc = _get_pdf(path)
+    if page_num < 0 or page_num >= doc.page_count:
+        return jsonify({"rects": []})
+    pg = doc[page_num]
+    rect = pg.rect
+    W = rect.width or 1.0
+    H = rect.height or 1.0
+    needles = [q]
+    parts = q.split()
+    if len(parts) > 1:
+        needles += parts
+    rects = []
+    seen = set()
+    for needle in needles:
+        if len(needle) < 2:
+            continue
+        try:
+            for rc in pg.search_for(needle):
+                k = (round(rc.x0, 1), round(rc.y0, 1), round(rc.x1, 1), round(rc.y1, 1))
+                if k in seen:
+                    continue
+                seen.add(k)
+                rects.append({
+                    "x": round(rc.x0 / W, 4),
+                    "y": round(rc.y0 / H, 4),
+                    "w": round((rc.x1 - rc.x0) / W, 4),
+                    "h": round((rc.y1 - rc.y0) / H, 4),
+                })
+        except Exception:
+            pass
+    return jsonify({"rects": rects[:200]})
+
+
+@app.route("/api/journals/on-this-day")
+@require_auth
+def journals_on_this_day():
+    """Entries written on today's month/day in past years, from timeline.json."""
+    import datetime as _dt
+
+    month_names = {
+        1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
+        7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December",
+    }
+    date_str = request.args.get("date", "")
+    try:
+        today = _dt.date.fromisoformat(date_str) if date_str else _dt.date.today()
+    except ValueError:
+        today = _dt.date.today()
+
+    timeline_path = os.path.join(JOURNALS_DIR, "timeline.json")
+    if not os.path.isfile(timeline_path):
+        return jsonify({"entries": [], "month_day": "", "error": "timeline.json not built yet"})
+
+    with open(timeline_path) as f:
+        timeline = json.load(f)
+
+    matches = [e for e in timeline if e.get("month") == today.month and e.get("day") == today.day]
+    matches.sort(key=lambda e: e["year"])
+
+    entries = []
+    for e in matches:
+        ago = today.year - e["year"]
+        entries.append({
+            "year": e["year"],
+            "ago": "this year" if ago == 0 else f"{ago} year{'s' if ago != 1 else ''} ago",
+            "snippet": e.get("snippet") or "",
+            "pdf": e.get("pdf"),
+            "page": e.get("page", 0),
+        })
+
+    return jsonify({
+        "entries": entries,
+        "month_day": f"{month_names[today.month]} {today.day}",
+    })
 
 
 @app.route("/api/journals/ocr/page-text")
@@ -1217,12 +2083,537 @@ def journal_page_image(name, page):
     return resp
 
 
+@app.route("/api/alerts")
+@require_auth
+def nexus_alerts():
+    """NEXUS health, pulled by the nexus-watchdog cron on the PVE host
+    (/usr/local/bin/nexus-watchdog.sh) every 2 min. A stale file means the
+    watchdog/ARES side is dead, which is itself critical."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_data", "nexus_health.json")
+    try:
+        with open(path) as f:
+            d = json.load(f)
+    except Exception:
+        return jsonify({"level": "red", "reasons": ["watchdog has never written health data"], "age_s": None})
+    age = time.time() - d.get("ts", 0)
+    level = ["ok"]
+    reasons = []
+    def worse(l):
+        order = {"ok": 0, "amber": 1, "red": 2}
+        if order[l] > order[level[0]]:
+            level[0] = l
+    if age > 300:
+        worse("red"); reasons.append("watchdog stale (%ds old) — ARES probe not running" % int(age))
+    if not d.get("ssh_ok"):
+        worse("red"); reasons.append("NEXUS unreachable over SSH")
+    else:
+        l1 = d.get("load1") or 0
+        if l1 > 20: worse("red"); reasons.append("load %s" % l1)
+        elif l1 > 8: worse("amber"); reasons.append("load %s" % l1)
+        ren = d.get("renderers") or 0
+        if ren > 400: worse("red"); reasons.append("%d chrome renderers (leak)" % ren)
+        down = [n for n, s in (d.get("containers") or {}).items() if s != "running"]
+        if down: worse("red"); reasons.append("containers down: " + ", ".join(down))
+        lo = d.get("linkedout") or {}
+        if lo.get("oom_killed"): worse("red"); reasons.append("linkedout OOM-killed")
+        elif (lo.get("restart_count") or 0) > 0: worse("amber"); reasons.append("linkedout restarts: %d" % lo["restart_count"])
+    return jsonify({"level": level[0], "reasons": reasons, "age_s": int(age), "data": d})
+
+
 @app.route("/api/system-info")
 @require_auth
 def system_info():
     info = get_system_info()
     info["api_usage"] = get_usage_stats()
     return jsonify(info)
+
+
+@app.route("/api/drives/browse")
+@require_auth
+def drives_browse():
+    """List contents of a folder on a drive."""
+    import os as _os
+    req_path = request.args.get("path", "")
+    allowed_roots = [
+        "/srv/dev-disk-by-uuid-27b8f17b-bc24-456f-852c-212358ed968e",
+        "/srv/dev-disk-by-uuid-de676cab-cff5-4143-a3fa-174e88f13b4a",
+    ]
+    real = _os.path.realpath(req_path)
+    ok = any(real.startswith(r) for r in allowed_roots)
+    if not ok or not _os.path.isdir(real):
+        return jsonify({"error": "Invalid path"}), 400
+    items = []
+    try:
+        for name in sorted(_os.listdir(real)):
+            full = _os.path.join(real, name)
+            if name.startswith('.'):
+                continue
+            is_dir = _os.path.isdir(full)
+            size = ""
+            if not is_dir:
+                try:
+                    b = _os.path.getsize(full)
+                    if b >= 1024**3:
+                        size = f"{b/1024**3:.1f} GB"
+                    elif b >= 1024**2:
+                        size = f"{b/1024**2:.1f} MB"
+                    elif b >= 1024:
+                        size = f"{b/1024:.0f} KB"
+                    else:
+                        size = f"{b} B"
+                except Exception:
+                    pass
+            items.append({"name": name, "is_dir": is_dir, "size": size})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify(items)
+
+
+@app.route("/api/drives")
+@require_auth
+def drives_api():
+    """Return SMART data for all physical drives."""
+    import subprocess as _sp
+    info = get_system_info()
+    disks = info.get("disks", [])
+
+    scan_map = {
+        "sdb": ("sntasmedia", "T9"),
+        "sdc": ("sat", "BACKUP"),
+    }
+
+    results = []
+    for dev, (dtype, name) in scan_map.items():
+        entry = {"name": name, "device": "/dev/" + dev, "interface": "USB"}
+        disk_info = next((d for d in disks if d["name"] == name or (name == "BACKUP" and d["name"] == "BACKUP")), None)
+        if disk_info:
+            entry["used"] = disk_info.get("used", "")
+            entry["total"] = disk_info.get("total", "")
+            entry["percent"] = disk_info.get("percent", 0)
+        elif name == "BACKUP":
+            import psutil as _psutil
+            try:
+                u = _psutil.disk_usage("/srv/dev-disk-by-uuid-de676cab-cff5-4143-a3fa-174e88f13b4a")
+                entry["used"] = f"{u.used / (1024**3):.1f} GiB"
+                entry["total"] = f"{u.total / (1024**3):.1f} GiB"
+                entry["percent"] = round(u.percent, 1)
+            except Exception:
+                pass
+
+        try:
+            raw = _sp.check_output(["smartctl", "-a", "/dev/" + dev, "-d", dtype], stderr=_sp.DEVNULL, timeout=10).decode()
+        except Exception:
+            raw = ""
+
+        entry["health"] = "PASSED" if "PASSED" in raw else "UNKNOWN"
+
+        m = re.search(r"Model (?:Number|Family):\s*(.+)", raw)
+        entry["model"] = m.group(1).strip() if m else ""
+        if not entry["model"]:
+            m = re.search(r"Device Model:\s*(.+)", raw)
+            entry["model"] = m.group(1).strip() if m else name
+
+        m = re.search(r"Serial Number:\s*(.+)", raw)
+        entry["serial"] = m.group(1).strip() if m else ""
+
+        m = re.search(r"Temperature:\s+(\d+)", raw)
+        if not m:
+            m = re.search(r"Airflow_Temperature_Cel.*?(\d+)\s*$", raw, re.MULTILINE)
+        entry["temp"] = int(m.group(1)) if m else None
+
+        m = re.search(r"Power On Hours:\s+([\d,]+)", raw)
+        if not m:
+            m = re.search(r"Power_On_Hours.*\s(\d+)\s*$", raw, re.MULTILINE)
+        entry["power_on_hours"] = int(m.group(1).replace(",", "")) if m else None
+
+        m = re.search(r"Percentage Used:\s+(\d+)", raw)
+        entry["percentage_used"] = int(m.group(1)) if m else None
+
+        m = re.search(r"Data Units Written:\s+([\d,]+)\s+\[([^\]]+)\]", raw)
+        entry["data_written"] = m.group(2) if m else None
+        if not entry["data_written"]:
+            m = re.search(r"Total_LBAs_Written.*?(\d[\d,]*)\s*$", raw, re.MULTILINE)
+            if m:
+                lbas = int(m.group(1).replace(",", ""))
+                tb = lbas * 512 / (1024**4)
+                entry["data_written"] = f"{tb:.2f} TB"
+
+        m = re.search(r"Data Units Read:\s+([\d,]+)\s+\[([^\]]+)\]", raw)
+        entry["data_read"] = m.group(2) if m else None
+
+        m = re.search(r"Unsafe Shutdowns:\s+([\d,]+)", raw)
+        entry["unsafe_shutdowns"] = int(m.group(1).replace(",", "")) if m else None
+
+        m = re.search(r"Reallocated_Sector_Ct.*?(\d+)\s*$", raw, re.MULTILINE)
+        entry["reallocated"] = int(m.group(1)) if m else None
+
+        # List folders on this drive
+        mount_map = {
+            "sdb": "/srv/dev-disk-by-uuid-27b8f17b-bc24-456f-852c-212358ed968e",
+            "sdc": "/srv/dev-disk-by-uuid-de676cab-cff5-4143-a3fa-174e88f13b4a",
+        }
+        mount = mount_map.get(dev, "")
+        folders = []
+        if mount:
+            import os as _os
+            try:
+                for fname in sorted(_os.listdir(mount)):
+                    fpath = _os.path.join(mount, fname)
+                    if _os.path.isdir(fpath) and not fname.startswith('.') and fname != 'lost+found':
+                        folders.append({"name": fname, "size": ""})
+            except Exception:
+                pass
+        entry["folders"] = folders
+        results.append(entry)
+
+    pool = next((d for d in disks if d["name"] == "PROMETHEUS"), None)
+    if pool:
+        pool_folders = []
+        results.insert(0, {
+            "name": "PROMETHEUS",
+            "device": "mergerfs pool",
+            "interface": "MergerFS",
+            "model": "Virtual Pool (T9)",
+            "used": pool.get("used", ""),
+            "total": pool.get("total", ""),
+            "percent": pool.get("percent", 0),
+            "health": "PASSED",
+            "serial": "—",
+            "temp": None,
+            "power_on_hours": None,
+            "percentage_used": None,
+            "data_written": None,
+            "data_read": None,
+            "unsafe_shutdowns": None,
+            "reallocated": None,
+            "folders": pool_folders,
+        })
+
+    return jsonify(results)
+
+
+@app.route("/api/pve-stats")
+@require_auth
+def pve_stats_proxy():
+    """Proxy PVE stats from the Proxmox host so browser doesn't need direct LAN access."""
+    import requests as _req
+    try:
+        r = _req.get("http://192.168.20.51:9100/api/pve-stats", timeout=5)
+        return r.json(), r.status_code
+    except Exception:
+        return jsonify({"error": "PVE unreachable"}), 502
+
+
+# ─── Storage breakdown ──────────────────────────────────────────────────────
+# What's eating space on each physical drive. For AIRDISK (Proxmox boot SSD)
+# we SSH to the host and parse LVM thin-pool usage per-LV, then name each LV
+# by the VM/LXC it belongs to. For EVO-970 (the data NVMe) we use the folder
+# sizes that system_info already computes.
+
+_storage_cache = {"ts": 0.0, "data": None}
+
+@app.route("/api/storage-breakdown")
+@require_auth
+def storage_breakdown():
+    import subprocess, time as _t, re
+
+    now = _t.time()
+    if _storage_cache["data"] and now - _storage_cache["ts"] < 30:
+        return jsonify(_storage_cache["data"])
+
+    # LV inventory from Proxmox host
+    lvs_out = ""
+    vms_out = ""
+    cts_out = ""
+    try:
+        proc = subprocess.run(
+            ["ssh", "-o", "ConnectTimeout=2", "-o", "StrictHostKeyChecking=no",
+             "-o", "BatchMode=yes", "-o", "LogLevel=ERROR",
+             "root@192.168.20.51",
+             "lvs --noheadings --units b --nosuffix -o lv_name,lv_size,data_percent pve 2>/dev/null; echo '===VMS==='; "
+             "qm list 2>/dev/null | awk 'NR>1 {print $1\"|\"$2\"|\"$3}'; echo '===CTS==='; "
+             "pct list 2>/dev/null | awk 'NR>1 {print $1\"|\"$3\"|\"$2}'; echo '===SDA==='; "
+             "lsblk -b -d -n -o SIZE /dev/sda 2>/dev/null"],
+            capture_output=True, text=True, timeout=4,
+        )
+        out = proc.stdout
+        sections = re.split(r"===(?:VMS|CTS|SDA)===", out)
+        lvs_out = sections[0] if len(sections) > 0 else ""
+        vms_out = sections[1] if len(sections) > 1 else ""
+        cts_out = sections[2] if len(sections) > 2 else ""
+        sda_size = int(sections[3].strip()) if len(sections) > 3 and sections[3].strip().isdigit() else 0
+    except Exception as _e:
+        sda_size = 512110190592  # fallback: 512GB
+
+    # Map vmid → name
+    name_map = {}
+    for line in vms_out.splitlines():
+        parts = line.strip().split("|")
+        if len(parts) >= 2 and parts[0].isdigit():
+            name_map[parts[0]] = parts[1]
+    for line in cts_out.splitlines():
+        parts = line.strip().split("|")
+        if len(parts) >= 2 and parts[0].isdigit():
+            name_map[parts[0]] = parts[1]
+
+    # Parse LVs
+    consumers = []
+    pool_used_bytes = 0
+    pool_size_bytes = 0
+    root_size = 0
+    swap_size = 0
+    for line in lvs_out.splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        name = parts[0]
+        try:
+            size_b = int(parts[1])
+        except ValueError:
+            continue
+        data_pct = 0.0
+        if len(parts) >= 3 and parts[2] and parts[2] != "-":
+            try: data_pct = float(parts[2])
+            except ValueError: data_pct = 0.0
+
+        if name == "data":
+            pool_size_bytes = size_b
+            pool_used_bytes = int(size_b * data_pct / 100)
+        elif name == "root":
+            root_size = size_b
+        elif name == "swap":
+            swap_size = size_b
+        elif name.startswith("vm-") and "-disk-" in name:
+            # vm-200-disk-2 → vmid 200
+            m = re.match(r"vm-(\d+)-disk-\d+", name)
+            if not m: continue
+            vmid = m.group(1)
+            actual = int(size_b * data_pct / 100)
+            if actual < 4 * 1024 * 1024:
+                continue  # ignore EFI/swap/cloudinit stubs
+            consumers.append({
+                "id": name,
+                "vmid": vmid,
+                "label": name_map.get(vmid, f"VM {vmid}"),
+                "kind": "lxc" if vmid in cts_out else "vm",
+                "used_bytes": actual,
+                "allocated_bytes": size_b,
+                "data_percent": data_pct,
+            })
+
+    # Aggregate consumers by vmid (sum disks) so vm-200-disk-2 and vm-200-disk-1 become one bar
+    by_vmid = {}
+    for c in consumers:
+        k = c["vmid"]
+        if k not in by_vmid:
+            by_vmid[k] = {
+                "name": c["label"],
+                "kind": c["kind"],
+                "used_bytes": 0,
+                "allocated_bytes": 0,
+            }
+        by_vmid[k]["used_bytes"] += c["used_bytes"]
+        by_vmid[k]["allocated_bytes"] += c["allocated_bytes"]
+
+    # Try to measure pve-root actual usage (df /) via SSH
+    root_used_bytes = 0
+    try:
+        proc = subprocess.run(
+            ["ssh", "-o", "ConnectTimeout=2", "-o", "StrictHostKeyChecking=no",
+             "-o", "BatchMode=yes", "-o", "LogLevel=ERROR",
+             "root@192.168.20.51",
+             "df -B1 --output=used / | tail -1"],
+            capture_output=True, text=True, timeout=3,
+        )
+        if proc.returncode == 0:
+            root_used_bytes = int(proc.stdout.strip() or "0")
+    except Exception:
+        pass
+
+    # Build the AIRDISK segments
+    airdisk_segments = []
+    total_accounted = 0
+    # Order: big → small is nicer in the bar
+    sorted_vms = sorted(by_vmid.items(), key=lambda x: -x[1]["used_bytes"])
+    # ARES heat-map palette: yellow → orange → red → deep red.
+    # Biggest/hottest at the top of the spectrum, smaller/quieter at the bottom.
+    palette_vm = {
+        "win11-gaming": "#fbbf24",   # amber 400 — brightest (biggest consumer)
+        "ollama-llm":   "#f97316",   # orange 500 — active LLM work
+        "ares":         "#ef4444",   # red 400 — the ARES container itself
+    }
+    for vmid, v in sorted_vms:
+        airdisk_segments.append({
+            "name": v["name"],
+            "category": v["kind"].upper(),
+            "bytes": v["used_bytes"],
+            "allocated": v["allocated_bytes"],
+            "color": palette_vm.get(v["name"], "#f59e0b"),
+            "detail": f"{v['kind']} {vmid} · {int(v['used_bytes']/1024/1024/1024)} GiB of {int(v['allocated_bytes']/1024/1024/1024)} GiB allocated",
+        })
+        total_accounted += v["used_bytes"]
+
+    if root_used_bytes > 0:
+        airdisk_segments.append({
+            "name": "pve-root",
+            "category": "OS",
+            "bytes": root_used_bytes,
+            "color": "#b91c1c",  # red 600 — the quieter OS layer
+            "detail": f"Proxmox root filesystem · {int(root_used_bytes/1024/1024/1024)} GiB used of {int(root_size/1024/1024/1024)} GiB",
+        })
+        total_accounted += root_used_bytes
+    if swap_size > 0:
+        airdisk_segments.append({
+            "name": "swap",
+            "category": "OS",
+            "bytes": swap_size,
+            "color": "#7f1d1d",  # red 800 — dormant, deep
+            "detail": f"Linux swap · {int(swap_size/1024/1024/1024)} GiB",
+        })
+        total_accounted += swap_size
+
+    free_bytes = max(0, sda_size - total_accounted)
+    airdisk = {
+        "name": "AIRDISK",
+        "tag": "Samsung T7 · LVM-thin",
+        "total_bytes": sda_size,
+        "used_bytes": total_accounted,
+        "segments": airdisk_segments,
+        "free_bytes": free_bytes,
+    }
+
+    # ── EVO-970 breakdown from folder sizes ──
+    from system.system_info import get_system_info
+    info = get_system_info()
+    evo_total = 0
+    evo_used = 0
+    evo_pool_mount = None
+    for d in info.get("disks", []):
+        if d["name"] == "EVO-970":
+            # Re-parse "931.5 GiB" back to bytes for precision
+            def _parse(s):
+                try:
+                    n, unit = s.split()
+                    n = float(n)
+                    mult = {"KiB":1024, "MiB":1024**2, "GiB":1024**3, "TiB":1024**4}.get(unit, 1)
+                    return int(n * mult)
+                except Exception:
+                    return 0
+            evo_total = _parse(d["total"])
+            evo_used = _parse(d["used"])
+            evo_pool_mount = d["mount"]
+
+    # ARES heat-map for folders: yellow → orange → red → deep red.
+    # PHOTOS is the big star, gets the hottest tone. MORDOR is dark, matches its name.
+    folder_palette = {
+        "PHOTOS":     "#fbbf24",  # amber 400
+        "PROJECTS":   "#f97316",  # orange 500
+        "PROMETHEON": "#ea580c",  # orange 600
+        "PERSONAL":   "#ef4444",  # red 400 (ARES primary)
+        "WORK":       "#b91c1c",  # red 700
+        "MORDOR":     "#7f1d1d",  # red 800 — dark, on-theme
+    }
+    evo_segments = []
+    total_folders = 0
+    for f in info.get("folders", []):
+        name = f["name"]
+        size = int(f.get("size", 0))
+        if size < 1024 * 1024:  # skip <1 MB
+            continue
+        evo_segments.append({
+            "name": name,
+            "category": "DATA",
+            "bytes": size,
+            "color": folder_palette.get(name, "#8ba3c0"),
+            "detail": f"{name} · {f.get('display', '?')}",
+        })
+        total_folders += size
+    # "Other" = used on disk but not in top-level folders we measured
+    other = max(0, evo_used - total_folders)
+    if other > 1024 * 1024 * 100:
+        evo_segments.append({
+            "name": "fs overhead",
+            "category": "ext4",
+            "bytes": other,
+            "color": "#2d1010",
+            "detail": "ext4 journal, inodes, block-rounding on many small files. Not user data — not cleanable.",
+        })
+
+    evo = {
+        "name": "EVO-970",
+        "tag": "Samsung 970 EVO Plus · NVMe",
+        "total_bytes": evo_total,
+        "used_bytes": evo_used,
+        "segments": evo_segments,
+        "free_bytes": max(0, evo_total - evo_used),
+        "mount": evo_pool_mount,
+    }
+
+    payload = {"drives": [airdisk, evo]}
+    _storage_cache["data"] = payload
+    _storage_cache["ts"] = now
+    return jsonify(payload)
+
+
+@app.route("/api/vm/<action>", methods=["POST"])
+@require_auth
+def vm_control(action):
+    """Start or stop the Windows VM (ID 200) on PVE host."""
+    import subprocess as _sp
+    if action not in ("start", "stop", "status"):
+        return jsonify({"error": "Invalid action"}), 400
+    try:
+        if action == "status":
+            out = _sp.check_output(
+                ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+                 "root@192.168.20.51", "qm status 200"],
+                timeout=10, stderr=_sp.DEVNULL
+            ).decode().strip()
+            running = "running" in out
+            return jsonify({"vm": "win11-gaming", "running": running, "raw": out})
+        else:
+            # The GPU-swap hookscript restarts THIS service during both
+            # pre-start and post-stop (flag+restart protocol), which kills a
+            # foreground ssh and interrupts qm mid-handoff ("received
+            # interrupt / broken pipe"). Detach qm on the host so the
+            # boot/stop survives our own restart; the frontend already polls
+            # /api/vm/status for the outcome.
+            cmd = ("nohup qm " + action + " 200 >>/var/log/qm-" + action +
+                   "-200.log 2>&1 & echo detached")
+            _sp.check_output(
+                ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+                 "root@192.168.20.51", cmd],
+                timeout=15, stderr=_sp.DEVNULL
+            )
+            return jsonify({"ok": True, "action": action, "detached": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/vm/vnc-ready", methods=["POST"])
+@require_auth
+def vm_vnc_ready():
+    """Probe whether the Windows desktop is actually reachable.
+
+    `qm status` reports "running" the instant QEMU starts — long before
+    Windows boots and TightVNC begins accepting connections. The noVNC
+    iframe is useless until the upstream VNC server (the same host:port
+    websockify forwards 6080 to) is live, so the frontend gates the
+    desktop on this TCP probe instead of on `qm status`.
+    """
+    import socket as _socket
+    host = os.getenv("WINDOWS_VNC_TARGET_HOST", "192.168.20.215")
+    try:
+        port = int(os.getenv("WINDOWS_VNC_TARGET_PORT", "5900"))
+    except (TypeError, ValueError):
+        port = 5900
+    ready = False
+    try:
+        with _socket.create_connection((host, port), timeout=2):
+            ready = True
+    except OSError:
+        ready = False
+    return jsonify({"ready": ready, "target": host + ":" + str(port)})
 
 
 @app.route("/api/mordor", methods=["POST"])
@@ -1235,7 +2626,7 @@ def mordor_toggle():
     )
     manager = os.path.join(mordor_dir, "server_manager.sh")
     if action in ("start", "stop"):
-        # Fix ownership first (PROMETHEON runs as root)
+        # Fix ownership first (ARES runs as root)
         subprocess.run(["chown", "-R", "zain:zain", mordor_dir], timeout=30)
         # Run as zain
         cmd = ["sudo", "-u", "zain", "bash", manager, action]
@@ -1378,9 +2769,20 @@ def chat_endpoint():
     session_id = data.get("session_id", "default")
     image_b64 = data.get("image", "")
     image_mime = data.get("image_mime", "image/jpeg")
+    persona = (data.get("persona") or "").strip()
+    style   = (data.get("style") or "").strip()
 
     if not message and not image_b64:
         return jsonify({"error": "Empty message"}), 400
+
+    # Prepend any persona / style nudge to the message invisibly so the model
+    # sees it as an updated directive without us mutating the stored system
+    # prompt. This keeps per-turn overrides lightweight.
+    _prefix_bits = []
+    if persona: _prefix_bits.append(f"[persona active] {persona}")
+    if style:   _prefix_bits.append(f"[style] {style}")
+    if _prefix_bits and message:
+        message = "\n".join(_prefix_bits) + "\n\n" + message
 
     # ─── Direct commands (bypass AI) ───
     from ai.safe_executor import minecraft_server
@@ -1408,16 +2810,17 @@ def chat_endpoint():
         display.append({"role": "user", "text": message or "[image]"})
         full_text = ""
 
-        if not ANTHROPIC_API_KEY:
-            stream = [
-                {"type": "text", "content": "❌ Claude API key not configured. Add ANTHROPIC_API_KEY to .env"},
-                {"type": "done"},
-            ]
-        else:
+        # ARES uses the local Ollama on VM 300 by default. If ANTHROPIC_API_KEY is set,
+        # Claude takes over (useful when the 3080 is claimed by Windows).
+        if ANTHROPIC_API_KEY:
             stream = claude_interface.chat_stream(
                 message, history, ANTHROPIC_API_KEY,
                 image_b64 or None, image_mime
             )
+            backend = "claude"
+        else:
+            stream = llm_interface.chat_stream(message, history)
+            backend = "ollama"
 
         for event in stream:
             yield f"data: {json.dumps(event)}\n\n"
@@ -1426,7 +2829,14 @@ def chat_endpoint():
             elif event["type"] == "done":
                 if full_text:
                     display.append({"role": "assistant", "text": full_text})
-                _save_session(session_id, history, "claude", display)
+                _save_session(session_id, history, backend, display)
+
+        # Ollama backend doesn't emit its own 'done' — emit one so the client closes cleanly.
+        if backend == "ollama":
+            if full_text:
+                display.append({"role": "assistant", "text": full_text})
+            _save_session(session_id, history, backend, display)
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     return Response(
         stream_with_context(generate()),
@@ -1456,7 +2866,7 @@ def api_session_load(session_id):
     return jsonify(data)
 
 
-TRASH_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".prometheon-trash")
+TRASH_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".ares-trash")
 
 
 @app.route("/api/trash")
@@ -1510,11 +2920,60 @@ def trash_photo():
 
 # ─── Photo Gallery ───
 
+
+def _save_photo_index(items, force=False):
+    """Atomically write photo index — temp file + rename prevents corruption.
+
+    Guards against a buggy caller wiping the library: refuses to shrink the index
+    by more than half in a single save unless force=True. A dedup run clobbered it
+    from 46,906 -> 5 items (Jun 28 2026) and the atomic write happily persisted the
+    near-empty result; this is the floor that would have caught it.
+    """
+    assert isinstance(items, list), "photo index must be a list"
+    if not force and os.path.exists(PHOTO_INDEX_PATH):
+        try:
+            with open(PHOTO_INDEX_PATH) as _cur:
+                prev = len(json.load(_cur))
+        except Exception:
+            prev = 0
+        assert not (prev >= 100 and len(items) < prev * 0.5), (
+            f"_save_photo_index refused: {len(items)} items would shrink the index "
+            f"from {prev} (>50% drop) — pass force=True if this is intentional"
+        )
+    import tempfile
+    tmp = PHOTO_INDEX_PATH + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(items, f)
+    # Rotate a valid backup before replacing
+    if os.path.exists(PHOTO_INDEX_PATH):
+        try:
+            # Verify existing file is valid before overwriting bak
+            with open(PHOTO_INDEX_PATH) as _chk:
+                json.load(_chk)
+            import shutil as _shutil
+            _shutil.copy2(PHOTO_INDEX_PATH, PHOTO_INDEX_PATH + '.bak')
+        except Exception:
+            pass  # If current is corrupt, don't overwrite bak with garbage
+    os.replace(tmp, PHOTO_INDEX_PATH)
+    # Bust cache
+    _photo_cache["data"] = None; _photo_cache["mtime"] = 0
+
 PHOTO_INDEX_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "photo_index.json")
 _photo_cache = {"data": None, "mtime": 0}
 _summary_cache = {"data": None, "mtime": 0}
 _month_cache = {"data": None, "mtime": 0}
 _month_json_cache = {"data": None, "mtime": 0}
+
+
+_NATKEY_RE = re.compile(r"(\d+)")
+
+def _photo_sort_key(item):
+    # Primary: newer date first. Tiebreaker: filename in natural (numeric-aware) order,
+    # so IMG_2584 precedes IMG_2590 when they share an mtime.
+    fn = item.get("path", "").rsplit("/", 1)[-1]
+    parts = _NATKEY_RE.split(fn)
+    natural = tuple((int(p), "") if p.isdigit() else (0, p) for p in parts)
+    return (-item.get("date", 0), natural)
 
 
 def load_photo_index():
@@ -1525,8 +2984,21 @@ def load_photo_index():
         return []
     if _photo_cache["data"] is not None and _photo_cache["mtime"] == mtime:
         return _photo_cache["data"]
-    with open(PHOTO_INDEX_PATH) as f:
-        _photo_cache["data"] = json.load(f)
+    try:
+        with open(PHOTO_INDEX_PATH) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        app.logger.error(f"[index] photo_index.json corrupt/unreadable: {e} — trying .bak")
+        bak = PHOTO_INDEX_PATH + ".bak"
+        try:
+            with open(bak) as f:
+                data = json.load(f)
+            app.logger.warning(f"[index] Loaded {len(data)} items from backup; original is corrupt")
+        except Exception as e2:
+            app.logger.error(f"[index] Backup also failed: {e2}")
+            return _photo_cache["data"] or []
+    data.sort(key=_photo_sort_key)
+    _photo_cache["data"] = data
     _photo_cache["mtime"] = mtime
     # Rebuild reverse hash map for on-demand thumb generation
     threading.Thread(target=_build_hash_index, args=(_photo_cache["data"],), daemon=True).start()
@@ -1545,9 +3017,11 @@ def load_month_index():
         return _month_cache["data"]
     items = load_photo_index()
     by_month = {}
-    for item in sorted(items, key=lambda x: x.get("date", 0), reverse=True):
+    # load_photo_index already returns items sorted by (-date, natural filename);
+    # preserve that order so same-mtime photos stay in IMG_#### sequence.
+    for item in items:
         try:
-            dt = datetime.fromtimestamp(item.get("date", 0))
+            dt = datetime.fromtimestamp(item.get("date", 0), tz=_GALLERY_TZ)
             key = dt.strftime("%Y-%m")
         except Exception:
             continue
@@ -1560,14 +3034,29 @@ def load_month_index():
     return by_month
 
 
+# Names hardcoded out of every photo surface (People, summary, month grids,
+# search). Lowercased; matched case-insensitively against cluster.name.
+# Adding/removing names here is the only knob — no UI on purpose.
+_HARDCODED_HIDDEN_NAMES = {"goblin", "amnahraw"}
+
+
+def _is_cluster_hidden(c):
+    if c.get("hidden"):
+        return True
+    name = (c.get("name") or "").strip().lower()
+    return bool(name) and name in _HARDCODED_HIDDEN_NAMES
+
+
 def _get_hidden_hashes():
-    """Return set of photo hashes belonging to hidden face clusters."""
+    """Return set of photo hashes belonging to hidden face clusters
+    (either flagged via cluster.hidden or matched against the hardcoded
+    name blocklist)."""
     clusters = _ai.get("face_clusters")
     if not clusters:
         return set()
     hidden = set()
     for c in clusters.values():
-        if c.get("hidden"):
+        if _is_cluster_hidden(c):
             hidden.update(c.get("photo_hashes", []))
     return hidden
 
@@ -1577,23 +3066,1297 @@ def _get_screenshot_hashes():
     return _ai.get("screenshot_hashes") or set()
 
 
+_dup_hashes_mtime = 0.0
+
+
+def _get_duplicate_hashes():
+    """Return set of photo hashes that are duplicates of a kept canonical copy.
+
+    Reloads from disk when duplicate_hashes.json changes so the running
+    process picks up new entries without a restart.
+    """
+    global _dup_hashes_mtime
+    dup_path = os.path.join(_AI_DIR, "duplicate_hashes.json")
+    try:
+        mtime = os.path.getmtime(dup_path)
+    except OSError:
+        return _ai.get("duplicate_hashes") or set()
+    if mtime != _dup_hashes_mtime:
+        try:
+            with open(dup_path) as _f:
+                _ai["duplicate_hashes"] = set(json.load(_f))
+            _dup_hashes_mtime = mtime
+        except (OSError, ValueError):
+            pass
+    return _ai.get("duplicate_hashes") or set()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MY EYES ONLY VAULT  (v2 — originals move to PHOTOS/.vault/)
+# Architecture:
+#   ai_data/vault.json      — {"items": {"<thumb_key>": {<full index entry>}, ...}}
+#                             v1 compat: if "items" is a list, treated as keys-only
+#   ai_data/vault_auth.json — {"salt": "<hex>", "hash": "<hex>", "fails": N,
+#                               "lockout_until": 0.0}
+#   Original files move:  PHOTOS_ROOT/<rel> → PHOTOS_ROOT/.vault/<rel>
+#   Vault thumbs live in: vault_thumbs*/  vault_video_cache/  vault_hls/
+#     (app-dir, NOT Caddy-served)
+#   photo_index.json: entry REMOVED on vault, RESTORED on unvault.
+#   Every listing endpoint excludes vault hashes via _get_vault_hashes().
+# ═══════════════════════════════════════════════════════════════════════════════
+import hashlib as _vault_hashlib
+import hmac as _vault_hmac
+from photos.photo_scanner import PHOTOS_ROOT as PHOTOS_ROOT
+
+_VAULT_AUTH_PATH = os.path.join(_APP_DIR, "ai_data", "vault_auth.json")
+_VAULT_PATH      = os.path.join(_APP_DIR, "ai_data", "vault.json")
+
+# Original files vault dir — dot-dir inside PHOTOS_ROOT so:
+#  (a) invisible to SMB/Finder  (b) stays on same fs → atomic rename
+#  (c) inside PHOTOS tree → nightly rsync to NEXUS still backs it up
+_VAULT_ORIGINALS_DIR = os.path.join(PHOTOS_ROOT, ".vault")
+os.makedirs(_VAULT_ORIGINALS_DIR, exist_ok=True)
+
+# Vault thumb directories (NOT under static/ — Caddy cannot serve these)
+_VAULT_THUMB_DIR      = os.path.join(_APP_DIR, "vault_thumbs")
+_VAULT_THUMB_HQ_DIR   = os.path.join(_APP_DIR, "vault_thumbs_hq")
+_VAULT_THUMB_PRV_DIR  = os.path.join(_APP_DIR, "vault_thumbs_preview")
+_VAULT_THUMB_MAX_DIR  = os.path.join(_APP_DIR, "vault_thumbs_max")
+_VAULT_VIDEO_DIR      = os.path.join(_APP_DIR, "vault_video_cache")
+_VAULT_HLS_DIR        = os.path.join(_APP_DIR, "vault_hls")
+
+for _vd in (_VAULT_THUMB_DIR, _VAULT_THUMB_HQ_DIR, _VAULT_THUMB_PRV_DIR,
+            _VAULT_THUMB_MAX_DIR, _VAULT_VIDEO_DIR, _VAULT_HLS_DIR):
+    os.makedirs(_vd, exist_ok=True)
+
+_VAULT_PIN_FAILS    = 5   # max consecutive failures before lockout
+_VAULT_LOCKOUT_SECS = 60  # lockout duration
+_VAULT_SESSION_IDLE = 300 # 5-minute inactivity auto-lock (per-open; close always locks)
+
+_vault_state = {"items": {}}  # thumb_key → full index entry dict
+_vault_state_lock = threading.Lock()
+_vault_mtime = 0.0
+
+
+def _load_vault():
+    """Load vault.json into _vault_state (reload on file change).
+
+    v2 format: {"items": {"<thumb_key>": {<index entry dict>}, ...}}
+    v1 compat:  {"items": ["key1", "key2", ...]} — migrated in-memory but NOT
+                written back until next vault/unvault operation.
+    """
+    global _vault_mtime
+    try:
+        mtime = os.path.getmtime(_VAULT_PATH)
+    except OSError:
+        return
+    if mtime == _vault_mtime:
+        return
+    try:
+        with open(_VAULT_PATH) as f:
+            data = json.load(f)
+        raw = data.get("items", {})
+        if isinstance(raw, list):
+            # v1: list of keys; no stored entry yet — entries come from index
+            mapping = {k: {} for k in raw if isinstance(k, str)}
+        else:
+            mapping = {k: v for k, v in raw.items() if isinstance(k, str)}
+        with _vault_state_lock:
+            _vault_state["items"] = mapping
+        _vault_mtime = mtime
+    except (OSError, ValueError):
+        pass
+
+
+def _save_vault():
+    """Atomically write vault.json from _vault_state."""
+    tmp = _VAULT_PATH + ".tmp"
+    with _vault_state_lock:
+        items_dict = dict(_vault_state["items"])
+    with open(tmp, "w") as f:
+        json.dump({"items": items_dict}, f, indent=2)
+    os.replace(tmp, _VAULT_PATH)
+    global _vault_mtime
+    _vault_mtime = os.path.getmtime(_VAULT_PATH)
+    # Bust summary cache so vault covers are excluded on next request
+    _summary_cache["data"] = None
+    _summary_cache["mtime"] = 0
+    _month_json_cache["data"] = None
+    _month_json_cache["mtime"] = 0
+
+
+def _get_vault_hashes():
+    """Return set of thumb-keys currently in the vault."""
+    _load_vault()
+    with _vault_state_lock:
+        return set(_vault_state["items"].keys())
+
+
+def _vault_hash_pin(pin, salt_hex):
+    """Derive key from PIN using scrypt. Returns hex digest."""
+    assert isinstance(pin, str) and len(pin) <= 64, "bad pin type"
+    assert isinstance(salt_hex, str) and len(salt_hex) == 32, "bad salt"
+    dk = _vault_hashlib.scrypt(
+        pin.encode("utf-8"),
+        salt=bytes.fromhex(salt_hex),
+        n=2**14, r=8, p=1, dklen=32,
+    )
+    return dk.hex()
+
+
+def _vault_auth_load():
+    """Load vault_auth.json. Returns dict or None."""
+    try:
+        with open(_VAULT_AUTH_PATH) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _vault_auth_save(data):
+    """Atomically write vault_auth.json."""
+    tmp = _VAULT_AUTH_PATH + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp, _VAULT_AUTH_PATH)
+
+
+def _vault_session_active():
+    """True if the vault session is unlocked and not idle-expired."""
+    unlocked_at = session.get("vault_unlocked_at", 0)
+    last_active = session.get("vault_last_active", 0)
+    if not unlocked_at:
+        return False
+    if time.time() - last_active > _VAULT_SESSION_IDLE:
+        session.pop("vault_unlocked_at", None)
+        session.pop("vault_last_active", None)
+        return False
+    return True
+
+
+def _vault_touch():
+    """Refresh vault inactivity timer."""
+    session["vault_last_active"] = time.time()
+    session.modified = True
+
+
+def _vault_thumb_dirs_for_key(thumb_key):
+    """Return list of (public_dir, vault_dir, filename) tuples for a thumb key."""
+    fname = thumb_key + ".jpg"
+    pairs = [
+        (_THUMB_DIR,         _VAULT_THUMB_DIR,     fname),
+        (_THUMB_HQ_DIR,      _VAULT_THUMB_HQ_DIR,  fname),
+        (_THUMB_PREVIEW_DIR, _VAULT_THUMB_PRV_DIR,  fname),
+        (_THUMB_MAX_DIR,     _VAULT_THUMB_MAX_DIR,  thumb_key + ".webp"),
+    ]
+    return pairs
+
+
+def _vault_move_thumbs(thumb_key, direction):
+    """Move thumbnail files between public and vault directories.
+
+    direction='in'  → public → vault  (hiding)
+    direction='out' → vault → public  (restoring)
+    Idempotent: missing source is skipped without error.
+    """
+    assert direction in ("in", "out"), "invalid direction"
+    pairs = _vault_thumb_dirs_for_key(thumb_key)
+    for pub_dir, vlt_dir, fname in pairs:
+        if direction == "in":
+            src = os.path.join(pub_dir, fname)
+            dst = os.path.join(vlt_dir, fname)
+        else:
+            src = os.path.join(vlt_dir, fname)
+            dst = os.path.join(pub_dir, fname)
+        if os.path.exists(src):
+            try:
+                os.rename(src, dst)
+            except OSError:
+                pass  # cross-device: skip gracefully
+
+    # Also move video_cache mp4 and HLS dir if they exist
+    mp4_name = thumb_key + ".mp4"
+    if direction == "in":
+        mp4_src = os.path.join(_VIDEO_CACHE_DIR, mp4_name)
+        mp4_dst = os.path.join(_VAULT_VIDEO_DIR, mp4_name)
+        hls_src = os.path.join(_HLS_CACHE_DIR, thumb_key)
+        hls_dst = os.path.join(_VAULT_HLS_DIR, thumb_key)
+    else:
+        mp4_src = os.path.join(_VAULT_VIDEO_DIR, mp4_name)
+        mp4_dst = os.path.join(_VIDEO_CACHE_DIR, mp4_name)
+        hls_src = os.path.join(_VAULT_HLS_DIR, thumb_key)
+        hls_dst = os.path.join(_HLS_CACHE_DIR, thumb_key)
+
+    if os.path.exists(mp4_src):
+        try:
+            os.rename(mp4_src, mp4_dst)
+        except OSError:
+            pass
+
+    if os.path.isdir(hls_src):
+        try:
+            os.rename(hls_src, hls_dst)
+        except OSError:
+            pass
+
+
+def _thumb_key_for_item(item):
+    """Extract thumb key from a photo_index item."""
+    thumb_url = item.get("thumb", "")
+    if not thumb_url:
+        return None
+    return thumb_url.rsplit("/", 1)[-1].replace(".jpg", "")
+
+
+def _item_for_thumb_key(thumb_key):
+    """Find a photo_index item by its thumb key."""
+    items = load_photo_index()
+    for item in items:
+        if _thumb_key_for_item(item) == thumb_key:
+            return item
+    return None
+
+
+def _rel_from_index_path(index_path):
+    """Derive PHOTOS_ROOT-relative path from a canonical index path.
+
+    Strategy:
+    1. If the file exists at index_path directly → relpath from PHOTOS_ROOT.
+    2. Try _resolve_photo_path (handles legacy aliases) → relpath.
+    3. Try known prefix rewrites as last resort (file might be in .vault).
+
+    Returns rel (no leading slash) or None if it cannot be determined.
+    MUST produce the same rel regardless of whether the file is in the
+    library or already in .vault — so we always use the actual on-disk
+    path when available, and fall through to a vault-side probe.
+    """
+    assert isinstance(index_path, str) and index_path, "index_path must be non-empty str"
+
+    # 1. Direct path — file is at the index path itself (most common inside LXC)
+    if os.path.isfile(index_path):
+        try:
+            rel = os.path.relpath(index_path, PHOTOS_ROOT)
+            if not rel.startswith(".."):
+                return rel
+        except ValueError:
+            pass
+
+    # 2. _resolve_photo_path alias chain
+    rp = _resolve_photo_path(index_path)
+    if rp and os.path.isfile(rp):
+        try:
+            rel = os.path.relpath(rp, PHOTOS_ROOT)
+            if not rel.startswith(".."):
+                return rel
+        except ValueError:
+            pass
+
+    # 3. File is in .vault already — probe by stripping known root prefixes.
+    #    Try all plausible PHOTOS_ROOT values so this works on both host and LXC.
+    root_candidates = [
+        PHOTOS_ROOT,
+        "/mnt/data/PHOTOS",
+        "/mnt/data/PROMETHEUS/PHOTOS",
+        "/mnt/nvme/PROMETHEUS/PHOTOS",
+    ]
+    for root in root_candidates:
+        if not root:
+            continue
+        if index_path.startswith(root + "/"):
+            rel_candidate = index_path[len(root) + 1:]
+            # Check vault side: if PHOTOS_ROOT/.vault/<rel_candidate> exists
+            vault_check = os.path.join(PHOTOS_ROOT, ".vault", rel_candidate)
+            if os.path.isfile(vault_check):
+                return rel_candidate
+
+    # 4. Brute-force: strip the longest matching root prefix and accept
+    #    even if we can't verify existence (needed for migration path checks)
+    if index_path.startswith(PHOTOS_ROOT + "/"):
+        rel = index_path[len(PHOTOS_ROOT) + 1:]
+        if rel and not rel.startswith("."):
+            return rel
+
+    return None
+
+
+def _resolve_original_for_vault(index_path):
+    """Resolve an index path to its real on-disk library path.
+
+    Returns (real_path, rel_path) where rel_path is relative to PHOTOS_ROOT,
+    or (None, None) on failure.  real_path may be None when the file is
+    already in .vault — callers use rel directly.
+    """
+    assert isinstance(index_path, str) and index_path, "index_path must be non-empty str"
+    rel = _rel_from_index_path(index_path)
+    if not rel or rel.startswith(".."):
+        return None, None
+    # Try to find the real on-disk library path
+    rp = _resolve_photo_path(index_path)
+    if not rp:
+        candidate = os.path.join(PHOTOS_ROOT, rel)
+        if os.path.isfile(candidate):
+            rp = candidate
+    return rp, rel
+
+
+def _vault_move_original(item, direction):
+    """Move the original file between library and vault storage.
+
+    direction='in'  → PHOTOS_ROOT/<rel> → PHOTOS_ROOT/.vault/<rel>
+    direction='out' → PHOTOS_ROOT/.vault/<rel> → PHOTOS_ROOT/<rel>
+
+    Returns the destination path on success, None if source missing or error.
+    Uses os.replace for atomicity (same filesystem guaranteed).
+    """
+    assert direction in ("in", "out"), "invalid direction"
+    index_path = item.get("path", "")
+    if not index_path:
+        return None
+    # Derive rel without requiring the file to exist at its library path
+    rel = _rel_from_index_path(index_path)
+    if not rel or rel.startswith(".."):
+        return None
+
+    if direction == "in":
+        # File must exist at library path (or resolvable equivalent)
+        real_path, _ = _resolve_original_for_vault(index_path)
+        src = real_path if real_path else os.path.join(PHOTOS_ROOT, rel)
+        dst = os.path.join(_VAULT_ORIGINALS_DIR, rel)
+    else:
+        # File is in vault dir; library path is the destination
+        src = os.path.join(_VAULT_ORIGINALS_DIR, rel)
+        dst = os.path.join(PHOTOS_ROOT, rel)
+
+    if not os.path.isfile(src):
+        return None
+
+    dst_dir = os.path.dirname(dst)
+    try:
+        os.makedirs(dst_dir, exist_ok=True)
+        os.replace(src, dst)
+        return dst
+    except OSError as e:
+        app.logger.error("[vault] move original %s → %s failed: %s", src, dst, e)
+        return None
+
+
+# ─── Vault setup (called once; safe to re-call) ───────────────────────────────
+
+def _vault_ensure_initialized():
+    """Initialize vault_auth.json with scrypt-hashed default PIN if absent."""
+    if os.path.exists(_VAULT_AUTH_PATH):
+        return
+    import secrets as _sec
+    salt = _sec.token_hex(16)
+    # PIN is stored only as a hash — the plaintext never touches disk
+    pin_hash = _vault_hash_pin("2225", salt)
+    _vault_auth_save({
+        "salt": salt,
+        "hash": pin_hash,
+        "fails": 0,
+        "lockout_until": 0.0,
+    })
+    app.logger.info("[vault] vault_auth.json initialized")
+
+
+def _vault_migrate_v1():
+    """Migrate v1 vault items (originals still in library) to v2 (originals in .vault/).
+
+    For each key in vault.json whose stored entry dict is empty (v1 import),
+    we find the item in photo_index.json, move the original to .vault/,
+    remove the entry from the index, and populate the entry dict in vault.json.
+    Safe to re-run: items already migrated have a non-empty entry dict.
+    Called once at startup after _load_vault().
+    """
+    _load_vault()
+    with _vault_state_lock:
+        mapping = dict(_vault_state["items"])
+
+    if not mapping:
+        return
+
+    # Identify keys that have no stored entry (v1) and need migration
+    needs_migration = [k for k, v in mapping.items() if not v]
+    if not needs_migration:
+        return
+
+    app.logger.info("[vault] Migrating %d v1 items to v2 (moving originals)...",
+                    len(needs_migration))
+
+    items = load_photo_index()
+    key_set = set(needs_migration)
+    index_by_key = {}
+    for item in items:
+        tk = _thumb_key_for_item(item)
+        if tk and tk in key_set:
+            index_by_key[tk] = item
+
+    migrated_keys = []
+    removed_paths = set()
+    for tk in needs_migration:
+        item = index_by_key.get(tk)
+        if not item:
+            app.logger.warning("[vault] v1 migration: no index entry for key %s, skipping", tk)
+            continue
+        dst = _vault_move_original(item, "in")
+        if not dst:
+            app.logger.warning("[vault] v1 migration: could not move original for key %s (%s)",
+                               tk, item.get("path"))
+            continue
+        with _vault_state_lock:
+            _vault_state["items"][tk] = dict(item)
+        removed_paths.add(item.get("path", ""))
+        migrated_keys.append(tk)
+        app.logger.info("[vault] v1 migrated: %s", item.get("path"))
+
+    if migrated_keys:
+        # Remove migrated entries from photo_index
+        new_items = [it for it in items if it.get("path", "") not in removed_paths]
+        _save_photo_index(new_items)
+        # Persist updated vault.json (now has full entry dicts)
+        _save_vault()
+        app.logger.info("[vault] Migration complete: %d items moved to .vault/", len(migrated_keys))
+
+
+# Vault startup init deferred to after _resolve_photo_path is defined (see below).
+
+
+# ─── Vault API routes ─────────────────────────────────────────────────────────
+
+@app.route("/api/vault/status")
+@require_auth
+def vault_status():
+    """Return vault lock state + item count. Does NOT require vault unlock."""
+    _load_vault()
+    with _vault_state_lock:
+        count = len(_vault_state["items"])
+    auth = _vault_auth_load() or {}
+    locked_out = time.time() < auth.get("lockout_until", 0)
+    wa_creds = auth.get("webauthn_credentials", [])
+    wa_count = len(wa_creds) if isinstance(wa_creds, list) else 0
+    return jsonify({
+        "unlocked": _vault_session_active(),
+        "item_count": count,
+        "locked_out": locked_out,
+        "lockout_remaining": max(0, auth.get("lockout_until", 0) - time.time()),
+        "webauthn_credential_count": wa_count,
+        "webauthn_available": _FIDO2_OK,
+    })
+
+
+@app.route("/api/vault/unlock", methods=["POST"])
+@require_auth
+def vault_unlock():
+    """Unlock vault with PIN. Rate-limited."""
+    auth = _vault_auth_load()
+    if not auth:
+        return jsonify({"error": "Vault not initialized"}), 500
+
+    if time.time() < auth.get("lockout_until", 0):
+        remaining = int(auth["lockout_until"] - time.time())
+        return jsonify({"error": f"Too many failures. Retry in {remaining}s"}), 429
+
+    data = request.get_json(silent=True) or {}
+    pin = str(data.get("pin", ""))
+    if not pin or len(pin) > 16:
+        return jsonify({"error": "Bad request"}), 400
+
+    expected = _vault_hash_pin(pin, auth["salt"])
+    # Constant-time compare
+    match = _vault_hmac.compare_digest(expected, auth["hash"])
+
+    if match:
+        auth["fails"] = 0
+        _vault_auth_save(auth)
+        session["vault_unlocked_at"] = time.time()
+        session["vault_last_active"] = time.time()
+        session.modified = True
+        return jsonify({"success": True})
+    else:
+        auth["fails"] = auth.get("fails", 0) + 1
+        if auth["fails"] >= _VAULT_PIN_FAILS:
+            auth["lockout_until"] = time.time() + _VAULT_LOCKOUT_SECS
+            auth["fails"] = 0
+            _vault_auth_save(auth)
+            return jsonify({"error": f"Too many failures. Locked for {_VAULT_LOCKOUT_SECS}s"}), 429
+        _vault_auth_save(auth)
+        remaining_tries = _VAULT_PIN_FAILS - auth["fails"]
+        return jsonify({"error": f"Wrong PIN. {remaining_tries} attempt(s) left"}), 401
+
+
+@app.route("/api/vault/lock", methods=["POST"])
+@require_auth
+def vault_lock():
+    """Explicitly lock the vault."""
+    session.pop("vault_unlocked_at", None)
+    session.pop("vault_last_active", None)
+    session.modified = True
+    return jsonify({"success": True})
+
+
+# ─── WebAuthn / Biometric vault unlock ────────────────────────────────────────
+# RP: pve.tail3045df.ts.net  (matches browser origin https://pve.tail3045df.ts.net)
+# Credential store: ai_data/vault_auth.json under key "webauthn_credentials"
+#   List of: {"id": "<b64url>", "public_key": "<b64url>", "sign_count": N,
+#              "created": <epoch>, "label": "<ua snippet>"}
+# Challenge state lives in Flask session only (single-use, short TTL via _WEBAUTHN_CHALLENGE_TTL).
+# Auth failures are rate-limited via the same fails/lockout fields as PIN.
+
+_WEBAUTHN_RP_ID     = "pve.tail3045df.ts.net"
+_WEBAUTHN_ORIGIN    = "https://pve.tail3045df.ts.net"
+_WEBAUTHN_CHALLENGE_TTL = 120  # seconds — challenge expires if not consumed
+
+try:
+    from fido2.server import Fido2Server
+    from fido2.webauthn import (
+        PublicKeyCredentialRpEntity,
+        PublicKeyCredentialUserEntity,
+        UserVerificationRequirement,
+        AuthenticatorAttachment,
+        PublicKeyCredentialDescriptor,
+        PublicKeyCredentialType,
+    )
+    from fido2.cbor import decode as _fido2_cbor_decode
+    import base64 as _b64
+
+    _FIDO2_RP  = PublicKeyCredentialRpEntity(id=_WEBAUTHN_RP_ID, name="ARES Gallery")
+    _FIDO2_SRV = Fido2Server(_FIDO2_RP)
+    _FIDO2_OK  = True
+except Exception as _fido2_import_err:
+    app.logger.warning("[vault/webauthn] fido2 import failed: %s", _fido2_import_err)
+    _FIDO2_OK  = False
+
+
+def _b64url_decode(s):
+    """Decode a base64url string (with or without padding) to bytes."""
+    assert isinstance(s, str) and len(s) <= 4096, "bad b64url input"
+    s = s.replace("-", "+").replace("_", "/")
+    pad = (4 - len(s) % 4) % 4
+    return _b64.b64decode(s + "=" * pad)
+
+
+def _b64url_encode(b):
+    """Encode bytes to base64url without padding."""
+    assert isinstance(b, (bytes, bytearray)) and len(b) <= 65536, "bad bytes input"
+    return _b64.urlsafe_b64encode(bytes(b)).rstrip(b"=").decode()
+
+
+def _webauthn_creds_from_auth(auth):
+    """Build list of AttestedCredentialData for Fido2Server.authenticate_complete.
+
+    Storage format: each entry has "attested_cred_data" — base64url of the raw
+    AttestedCredentialData bytes (AAGUID + credIdLen + credId + CBOR pubkey).
+    """
+    from fido2.webauthn import AttestedCredentialData
+    raw_list = auth.get("webauthn_credentials", [])
+    assert isinstance(raw_list, list), "webauthn_credentials must be list"
+    result = []
+    for entry in raw_list:
+        if not isinstance(entry, dict):
+            continue
+        acd = entry.get("attested_cred_data", "")
+        if not acd:
+            continue
+        try:
+            acd_bytes = _b64url_decode(acd)
+            result.append(AttestedCredentialData(acd_bytes))
+        except Exception:
+            continue
+    return result
+
+
+def _webauthn_descriptors_from_auth(auth):
+    """Build list of PublicKeyCredentialDescriptor for allowCredentials."""
+    raw_list = auth.get("webauthn_credentials", [])
+    assert isinstance(raw_list, list), "webauthn_credentials must be list"
+    result = []
+    for entry in raw_list:
+        if not isinstance(entry, dict):
+            continue
+        cid = entry.get("id", "")
+        if not cid:
+            continue
+        try:
+            cid_bytes = _b64url_decode(cid)
+        except Exception:
+            continue
+        result.append(PublicKeyCredentialDescriptor(
+            type=PublicKeyCredentialType.PUBLIC_KEY,
+            id=cid_bytes,
+        ))
+    return result
+
+
+def _webauthn_opts_to_dict(opts_public_key):
+    """Convert fido2 options dict (with Enum values/bytes) to JSON-safe dict."""
+    def _conv(obj):
+        if isinstance(obj, dict):
+            return {k: _conv(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_conv(v) for v in obj]
+        if isinstance(obj, (bytes, bytearray)):
+            return _b64url_encode(bytes(obj))
+        if hasattr(obj, "value"):
+            return obj.value
+        return obj
+    return _conv(opts_public_key)
+
+
+@app.route("/api/vault/webauthn/register-options", methods=["POST"])
+@require_auth
+def vault_webauthn_register_options():
+    """Return WebAuthn credential creation options. Requires active PIN-unlocked session."""
+    if not _FIDO2_OK:
+        return jsonify({"error": "WebAuthn not available"}), 503
+    if not _vault_session_active():
+        return jsonify({"error": "PIN unlock required before enrolling biometrics"}), 403
+
+    auth = _vault_auth_load()
+    if not auth:
+        return jsonify({"error": "Vault not initialized"}), 500
+
+    user = PublicKeyCredentialUserEntity(
+        id=b"ares-vault-zain",
+        name="zain",
+        display_name="Zain",
+    )
+    existing = _webauthn_descriptors_from_auth(auth)
+    opts, state = _FIDO2_SRV.register_begin(
+        user=user,
+        credentials=existing,
+        user_verification=UserVerificationRequirement.REQUIRED,
+        authenticator_attachment=AuthenticatorAttachment.PLATFORM,
+    )
+
+    session["webauthn_reg_state"]    = state
+    session["webauthn_reg_state_ts"] = time.time()
+    session.modified = True
+
+    return jsonify({"publicKey": _webauthn_opts_to_dict(opts["publicKey"])})
+
+
+@app.route("/api/vault/webauthn/register-verify", methods=["POST"])
+@require_auth
+def vault_webauthn_register_verify():
+    """Verify and store a new WebAuthn credential. Requires active PIN-unlocked session."""
+    if not _FIDO2_OK:
+        return jsonify({"error": "WebAuthn not available"}), 503
+    if not _vault_session_active():
+        return jsonify({"error": "Vault not unlocked"}), 403
+
+    state    = session.get("webauthn_reg_state")
+    state_ts = session.get("webauthn_reg_state_ts", 0)
+    if not state or (time.time() - state_ts) > _WEBAUTHN_CHALLENGE_TTL:
+        return jsonify({"error": "Challenge expired or missing"}), 400
+
+    session.pop("webauthn_reg_state", None)
+    session.pop("webauthn_reg_state_ts", None)
+    session.modified = True
+
+    data = request.get_json(silent=True) or {}
+    if not data:
+        return jsonify({"error": "Bad request"}), 400
+
+    # Build RegistrationResponse dict from client JSON
+    # Client sends: id, rawId (b64url), response.clientDataJSON, response.attestationObject, type
+    try:
+        # fido2 2.x parses the WebAuthn JSON serialization: binary fields are
+        # base64url STRINGS the library decodes itself. Pre-decoding to bytes
+        # made its literal id-vs-rawId comparison fail (str != bytes).
+        reg_response = {
+            "id": data.get("id", ""),
+            "rawId": data.get("rawId", ""),
+            "response": {
+                "clientDataJSON": data.get("response", {}).get("clientDataJSON", ""),
+                "attestationObject": data.get("response", {}).get("attestationObject", ""),
+            },
+            "type": data.get("type", "public-key"),
+        }
+    except Exception as e:
+        app.logger.warning("[vault/webauthn] register decode error: %s", e)
+        return jsonify({"error": "Malformed credential response"}), 400
+
+    try:
+        auth_data = _FIDO2_SRV.register_complete(state, reg_response)
+    except Exception as e:
+        app.logger.warning("[vault/webauthn] register_complete failed: %s", e)
+        return jsonify({"error": str(e)}), 400
+
+    # Store the new credential
+    # AttestedCredentialData is a bytes subclass — store the raw bytes (AAGUID+credId+pubkey)
+    cred = auth_data.credential_data
+    assert cred is not None, "No credential data in auth_data"
+
+    cred_id_b64  = _b64url_encode(bytes(cred.credential_id))
+    acd_b64      = _b64url_encode(bytes(cred))   # full AttestedCredentialData bytes
+    sign_count   = auth_data.counter if hasattr(auth_data, "counter") else 0
+    ua_label     = request.headers.get("User-Agent", "")[:80]
+
+    vault_auth = _vault_auth_load() or {}
+    creds_list = vault_auth.get("webauthn_credentials", [])
+    assert isinstance(creds_list, list), "corrupted creds list"
+
+    # Reject duplicate credential ID
+    for existing in creds_list:
+        if existing.get("id") == cred_id_b64:
+            return jsonify({"error": "Credential already registered"}), 409
+
+    new_entry = {
+        "id":                 cred_id_b64,
+        "attested_cred_data": acd_b64,
+        "sign_count":         sign_count,
+        "created":            int(time.time()),
+        "label":              ua_label,
+    }
+    creds_list.append(new_entry)
+    vault_auth["webauthn_credentials"] = creds_list
+    _vault_auth_save(vault_auth)
+
+    app.logger.info("[vault/webauthn] Credential enrolled; total=%d", len(creds_list))
+    _vault_touch()
+    return jsonify({"success": True, "credential_count": len(creds_list)})
+
+
+@app.route("/api/vault/webauthn/auth-options", methods=["POST"])
+@require_auth
+def vault_webauthn_auth_options():
+    """Return WebAuthn authentication challenge. No session required."""
+    if not _FIDO2_OK:
+        return jsonify({"error": "WebAuthn not available"}), 503
+
+    auth = _vault_auth_load()
+    if not auth:
+        return jsonify({"error": "Vault not initialized"}), 500
+
+    descriptors = _webauthn_descriptors_from_auth(auth)
+    if not descriptors:
+        return jsonify({"error": "No credentials enrolled"}), 404
+
+    # Pass descriptors (not full AttestedCredentialData) to authenticate_begin so
+    # the allowCredentials list is populated without needing to parse CBOR pubkeys.
+    # The full credentials are only needed at authenticate_complete time.
+    opts, state = _FIDO2_SRV.authenticate_begin(
+        credentials=descriptors,
+        user_verification=UserVerificationRequirement.REQUIRED,
+    )
+
+    session["webauthn_auth_state"]    = state
+    session["webauthn_auth_state_ts"] = time.time()
+    session.modified = True
+
+    return jsonify({"publicKey": _webauthn_opts_to_dict(opts["publicKey"])})
+
+
+@app.route("/api/vault/webauthn/auth-verify", methods=["POST"])
+@require_auth
+def vault_webauthn_auth_verify():
+    """Verify WebAuthn assertion and create vault session. Rate-limited."""
+    if not _FIDO2_OK:
+        return jsonify({"error": "WebAuthn not available"}), 503
+
+    auth = _vault_auth_load()
+    if not auth:
+        return jsonify({"error": "Vault not initialized"}), 500
+
+    # Rate limiting — reuse the PIN lockout fields
+    if time.time() < auth.get("lockout_until", 0):
+        remaining = int(auth["lockout_until"] - time.time())
+        return jsonify({"error": f"Too many failures. Retry in {remaining}s"}), 429
+
+    state    = session.get("webauthn_auth_state")
+    state_ts = session.get("webauthn_auth_state_ts", 0)
+    if not state or (time.time() - state_ts) > _WEBAUTHN_CHALLENGE_TTL:
+        session.pop("webauthn_auth_state", None)
+        session.pop("webauthn_auth_state_ts", None)
+        session.modified = True
+        return jsonify({"error": "Challenge expired — request new options"}), 400
+
+    session.pop("webauthn_auth_state", None)
+    session.pop("webauthn_auth_state_ts", None)
+    session.modified = True
+
+    data = request.get_json(silent=True) or {}
+    if not data:
+        return jsonify({"error": "Bad request"}), 400
+
+    try:
+        # Same as register-verify: pass base64url STRINGS through — the fido2
+        # JSON parser decodes binary fields itself.
+        _r = data.get("response", {})
+        auth_response = {
+            "id":    data.get("id", ""),
+            "rawId": data.get("rawId", ""),
+            "response": {
+                "clientDataJSON":    _r.get("clientDataJSON", ""),
+                "authenticatorData": _r.get("authenticatorData", ""),
+                "signature":         _r.get("signature", ""),
+            },
+            "type": data.get("type", "public-key"),
+        }
+        if _r.get("userHandle"):
+            auth_response["response"]["userHandle"] = _r.get("userHandle")
+    except Exception as e:
+        app.logger.warning("[vault/webauthn] auth decode error: %s", e)
+        _vault_auth_fail_tick(auth)
+        return jsonify({"error": "Malformed assertion"}), 400
+
+    creds = _webauthn_creds_from_auth(auth)
+    if not creds:
+        return jsonify({"error": "No credentials enrolled"}), 404
+
+    try:
+        matched_cred = _FIDO2_SRV.authenticate_complete(state, creds, auth_response)
+    except Exception as e:
+        app.logger.warning("[vault/webauthn] authenticate_complete failed: %s", e)
+        _vault_auth_fail_tick(auth)
+        return jsonify({"error": "Biometric verification failed"}), 401
+
+    # authenticate_complete returns the matched AttestedCredentialData.
+    # Extract the counter from the assertion's authenticatorData (sign_count tracking).
+    # The authenticatorData bytes are in auth_response["response"]["authenticatorData"].
+    try:
+        from fido2.webauthn import AuthenticatorData as _AuthData
+        _adata = _AuthData(auth_response["response"]["authenticatorData"])
+        new_sign_count = _adata.counter
+    except Exception:
+        new_sign_count = 0
+
+    matched_id = _b64url_encode(bytes(matched_cred.credential_id))
+    creds_list = auth.get("webauthn_credentials", [])
+    for entry in creds_list:
+        if entry.get("id") == matched_id:
+            old_count = entry.get("sign_count", 0)
+            if new_sign_count < old_count and new_sign_count != 0:
+                app.logger.warning("[vault/webauthn] sign_count regression for %s", matched_id[:16])
+            entry["sign_count"] = new_sign_count
+    auth["webauthn_credentials"] = creds_list
+    auth["fails"] = 0
+    _vault_auth_save(auth)
+
+    # Grant vault session
+    session["vault_unlocked_at"] = time.time()
+    session["vault_last_active"]  = time.time()
+    session.modified = True
+
+    app.logger.info("[vault/webauthn] Biometric unlock OK, cred=%s", matched_id[:16])
+    return jsonify({"success": True})
+
+
+@app.route("/api/vault/webauthn/credentials", methods=["GET"])
+@require_auth
+def vault_webauthn_list_credentials():
+    """List enrolled WebAuthn credentials (no secrets returned). Requires vault session."""
+    if not _vault_session_active():
+        return jsonify({"error": "Vault locked"}), 403
+    _vault_touch()
+    auth = _vault_auth_load() or {}
+    creds_list = auth.get("webauthn_credentials", [])
+    safe = []
+    for i, entry in enumerate(creds_list):
+        if not isinstance(entry, dict):
+            continue
+        safe.append({
+            "index":   i,
+            "id":      entry.get("id", "")[:16] + "...",
+            "created": entry.get("created", 0),
+            "label":   entry.get("label", "")[:80],
+        })
+    return jsonify({"credentials": safe})
+
+
+@app.route("/api/vault/webauthn/credentials/<int:idx>", methods=["DELETE"])
+@require_auth
+def vault_webauthn_delete_credential(idx):
+    """Remove a WebAuthn credential by index. Requires vault session."""
+    if not _vault_session_active():
+        return jsonify({"error": "Vault locked"}), 403
+    _vault_touch()
+    assert 0 <= idx < 100, "bad index"
+    auth = _vault_auth_load()
+    if not auth:
+        return jsonify({"error": "Vault not initialized"}), 500
+    creds_list = auth.get("webauthn_credentials", [])
+    assert isinstance(creds_list, list), "corrupted creds list"
+    if idx >= len(creds_list):
+        return jsonify({"error": "Index out of range"}), 404
+    del creds_list[idx]
+    auth["webauthn_credentials"] = creds_list
+    _vault_auth_save(auth)
+    app.logger.info("[vault/webauthn] Credential %d removed; remaining=%d", idx, len(creds_list))
+    return jsonify({"success": True, "credential_count": len(creds_list)})
+
+
+def _vault_auth_fail_tick(auth):
+    """Increment fail counter and apply lockout if threshold reached."""
+    assert isinstance(auth, dict), "bad auth dict"
+    auth["fails"] = auth.get("fails", 0) + 1
+    if auth["fails"] >= _VAULT_PIN_FAILS:
+        auth["lockout_until"] = time.time() + _VAULT_LOCKOUT_SECS
+        auth["fails"] = 0
+    _vault_auth_save(auth)
+
+
+# ─── End WebAuthn block ────────────────────────────────────────────────────────
+
+
+@app.route("/api/vault/items")
+@require_auth
+def vault_items():
+    """Return vault contents. Requires vault session."""
+    if not _vault_session_active():
+        return jsonify({"error": "Vault locked"}), 403
+    _vault_touch()
+
+    _load_vault()
+    with _vault_state_lock:
+        mapping = dict(_vault_state["items"])
+
+    result = []
+    for tk, entry in mapping.items():
+        if not entry:
+            continue  # v1 not-yet-migrated; skip (migration runs at startup)
+        out = dict(entry)
+        out["thumb"]    = f"/api/vault/thumb/{tk}"
+        out["thumb_hq"] = f"/api/vault/thumb_hq/{tk}"
+        out["_in_vault"] = True
+        result.append(out)
+
+    result.sort(key=lambda x: -x.get("date", 0))
+    return jsonify(result)
+
+
+@app.route("/api/vault/add", methods=["POST"])
+@require_auth
+def vault_add():
+    """Move one or more items (by thumb_key list) into the vault.
+
+    v2: moves original file to PHOTOS_ROOT/.vault/<rel>, removes index entry.
+    """
+    if not _vault_session_active():
+        return jsonify({"error": "Vault locked"}), 403
+    _vault_touch()
+
+    data = request.get_json(silent=True) or {}
+    keys = data.get("thumb_keys", [])
+    if not keys or not isinstance(keys, list) or len(keys) > 500:
+        return jsonify({"error": "Bad request"}), 400
+
+    _load_vault()
+    added = []
+    failed = []
+
+    for tk in keys:
+        assert isinstance(tk, str) and len(tk) <= 64 and tk.replace("-","").isalnum(), "bad key"
+        with _vault_state_lock:
+            if tk in _vault_state["items"]:
+                continue
+
+        # Find item in index before we remove it
+        item = _item_for_thumb_key(tk)
+        if not item:
+            app.logger.warning("[vault/add] no index entry for key %s", tk)
+            failed.append(tk)
+            continue
+
+        # Move original to .vault/
+        dst = _vault_move_original(item, "in")
+        if not dst:
+            app.logger.error("[vault/add] could not move original for %s", item.get("path"))
+            failed.append(tk)
+            continue
+
+        # Move thumbs to vault thumb dirs
+        _vault_move_thumbs(tk, "in")
+
+        # Remove from photo_index (load fresh to avoid races)
+        cur_items = load_photo_index()
+        item_path = item.get("path", "")
+        new_items = [it for it in cur_items if it.get("path", "") != item_path]
+        _save_photo_index(new_items)
+
+        # Verify removal (retry once if auto-scan clobbered the write)
+        verify = load_photo_index()
+        if any(it.get("path", "") == item_path for it in verify):
+            new_items2 = [it for it in verify if it.get("path", "") != item_path]
+            _save_photo_index(new_items2)
+
+        # Record in vault state with full entry copy
+        with _vault_state_lock:
+            _vault_state["items"][tk] = dict(item)
+
+        added.append(tk)
+
+    if added:
+        _save_vault()
+
+    return jsonify({"added": added, "failed": failed, "count": len(added)})
+
+
+@app.route("/api/vault/remove", methods=["POST"])
+@require_auth
+def vault_remove():
+    """Move items out of the vault back to the normal gallery.
+
+    v2: moves original file from PHOTOS_ROOT/.vault/<rel> back to library,
+    re-inserts the saved index entry.
+    """
+    if not _vault_session_active():
+        return jsonify({"error": "Vault locked"}), 403
+    _vault_touch()
+
+    data = request.get_json(silent=True) or {}
+    keys = data.get("thumb_keys", [])
+    if not keys or not isinstance(keys, list) or len(keys) > 500:
+        return jsonify({"error": "Bad request"}), 400
+
+    _load_vault()
+    removed = []
+    failed = []
+
+    for tk in keys:
+        assert isinstance(tk, str) and len(tk) <= 64 and tk.replace("-","").isalnum(), "bad key"
+        with _vault_state_lock:
+            if tk not in _vault_state["items"]:
+                continue
+            stored_entry = _vault_state["items"][tk]
+
+        if not stored_entry:
+            app.logger.warning("[vault/remove] no stored entry for key %s, cannot restore", tk)
+            failed.append(tk)
+            continue
+
+        # Move original back to library
+        dst = _vault_move_original(stored_entry, "out")
+        if not dst:
+            app.logger.error("[vault/remove] could not move original back for key %s", tk)
+            failed.append(tk)
+            continue
+
+        # Move thumbs back to public dirs
+        _vault_move_thumbs(tk, "out")
+
+        # Re-insert into photo_index (load fresh to avoid races)
+        cur_items = load_photo_index()
+        item_path = stored_entry.get("path", "")
+        # Only insert if not already present (idempotency)
+        if not any(it.get("path", "") == item_path for it in cur_items):
+            cur_items.append(dict(stored_entry))
+            cur_items.sort(key=_photo_sort_key)
+            _save_photo_index(cur_items)
+            # Verify re-insertion (retry once)
+            verify = load_photo_index()
+            if not any(it.get("path", "") == item_path for it in verify):
+                verify.append(dict(stored_entry))
+                verify.sort(key=_photo_sort_key)
+                _save_photo_index(verify)
+
+        # Remove from vault state
+        with _vault_state_lock:
+            _vault_state["items"].pop(tk, None)
+
+        removed.append(tk)
+
+    if removed:
+        _save_vault()
+
+    return jsonify({"removed": removed, "failed": failed, "count": len(removed)})
+
+
+def _serve_vault_thumb(tier, thumb_key):
+    """Generic vault thumb server — requires vault session."""
+    if not _vault_session_active():
+        abort(403)
+    _vault_touch()
+
+    if not thumb_key or len(thumb_key) > 64:
+        abort(400)
+
+    _load_vault()
+    with _vault_state_lock:
+        if thumb_key not in _vault_state["items"]:
+            abort(404)
+
+    if tier == "thumb":
+        path = os.path.join(_VAULT_THUMB_DIR, thumb_key + ".jpg")
+        fallback = os.path.join(_THUMB_DIR, thumb_key + ".jpg")
+    elif tier == "thumb_hq":
+        path = os.path.join(_VAULT_THUMB_HQ_DIR, thumb_key + ".jpg")
+        fallback = os.path.join(_THUMB_HQ_DIR, thumb_key + ".jpg")
+    elif tier == "thumb_preview":
+        path = os.path.join(_VAULT_THUMB_PRV_DIR, thumb_key + ".jpg")
+        fallback = os.path.join(_THUMB_PREVIEW_DIR, thumb_key + ".jpg")
+    elif tier == "thumb_max":
+        path = os.path.join(_VAULT_THUMB_MAX_DIR, thumb_key + ".webp")
+        fallback = os.path.join(_THUMB_MAX_DIR, thumb_key + ".webp")
+    else:
+        abort(400)
+
+    serve_path = path if os.path.exists(path) else (fallback if os.path.exists(fallback) else None)
+    if not serve_path:
+        abort(404)
+
+    mime = "image/webp" if serve_path.endswith(".webp") else "image/jpeg"
+    return send_file(serve_path, mimetype=mime, max_age=0)
+
+
+@app.route("/api/vault/thumb/<thumb_key>")
+@require_auth
+def vault_thumb(thumb_key):
+    """Serve base thumbnail for a vaulted item."""
+    return _serve_vault_thumb("thumb", thumb_key)
+
+
+@app.route("/api/vault/thumb_hq/<thumb_key>")
+@require_auth
+def vault_thumb_hq(thumb_key):
+    """Serve HQ thumbnail for a vaulted item."""
+    return _serve_vault_thumb("thumb_hq", thumb_key)
+
+
+@app.route("/api/vault/thumb_preview/<thumb_key>")
+@require_auth
+def vault_thumb_preview(thumb_key):
+    """Serve preview thumbnail for a vaulted item."""
+    return _serve_vault_thumb("thumb_preview", thumb_key)
+
+
+@app.route("/api/vault/thumb_max/<thumb_key>")
+@require_auth
+def vault_thumb_max(thumb_key):
+    """Serve max-quality thumbnail for a vaulted item."""
+    return _serve_vault_thumb("thumb_max", thumb_key)
+
+
+def _vault_resolve_real_path(raw_path):
+    """Resolve a client-supplied path to the vault's on-disk location.
+
+    v2: originals live at PHOTOS_ROOT/.vault/<rel>.  The caller supplies the
+    canonical index path (/mnt/data/PHOTOS/PHOTOS/...) as stored in vault.json.
+
+    Returns (thumb_key, real_vault_path) or (None, None) if not vaulted.
+    """
+    assert isinstance(raw_path, str) and raw_path, "raw_path must be non-empty"
+    _load_vault()
+    with _vault_state_lock:
+        mapping = dict(_vault_state["items"])
+
+    for tk, entry in mapping.items():
+        if not entry:
+            continue
+        if entry.get("path", "") == raw_path:
+            # Build vault-side real path
+            _, rel = _resolve_original_for_vault(raw_path)
+            if not rel:
+                return None, None
+            real_path = os.path.join(_VAULT_ORIGINALS_DIR, rel)
+            if os.path.isfile(real_path):
+                return tk, real_path
+            return None, None
+
+    return None, None
+
+
+@app.route("/api/vault/download")
+@require_auth
+def vault_download():
+    """Serve original file of a vaulted item (v2: file is in .vault/)."""
+    if not _vault_session_active():
+        abort(403)
+    _vault_touch()
+
+    raw_path = request.args.get("p", "").strip()
+    if not raw_path:
+        abort(400)
+
+    tk, real_path = _vault_resolve_real_path(raw_path)
+    if not tk or not real_path:
+        abort(403)
+
+    force_dl = request.args.get("dl") == "1"
+    ext = real_path.rsplit(".", 1)[-1].lower()
+    if ext in _VIDEO_MIMES and not force_dl:
+        resp = send_file(real_path, mimetype=_VIDEO_MIMES[ext], as_attachment=False,
+                         conditional=True, download_name=os.path.basename(real_path))
+        resp.headers["Accept-Ranges"] = "bytes"
+        return resp
+    return send_file(real_path, as_attachment=True, download_name=os.path.basename(real_path))
+
+
+@app.route("/api/vault/video")
+@require_auth
+def vault_video():
+    """Serve video for a vaulted item (v2: file is in .vault/)."""
+    if not _vault_session_active():
+        abort(403)
+    _vault_touch()
+
+    raw_path = request.args.get("p", "").strip()
+    if not raw_path:
+        abort(400)
+
+    tk, real_path = _vault_resolve_real_path(raw_path)
+    if not tk or not real_path:
+        abort(403)
+
+    ext = real_path.rsplit(".", 1)[-1].lower()
+    if ext not in _VIDEO_MIMES:
+        abort(400)
+
+    # Look for cached transcode in vault dir first
+    key = _video_cache_key(real_path)
+    vault_cached = os.path.join(_VAULT_VIDEO_DIR, key + ".mp4")
+    pub_cached = os.path.join(_VIDEO_CACHE_DIR, key + ".mp4")
+
+    if os.path.exists(vault_cached):
+        resp = send_file(vault_cached, mimetype="video/mp4", as_attachment=False,
+                         conditional=True)
+        resp.headers["Accept-Ranges"] = "bytes"
+        return resp
+
+    if os.path.exists(pub_cached):
+        resp = send_file(pub_cached, mimetype="video/mp4", as_attachment=False,
+                         conditional=True)
+        resp.headers["Accept-Ranges"] = "bytes"
+        return resp
+
+    # Fall back to original in vault dir
+    mime = _VIDEO_MIMES.get(ext, "video/mp4")
+    resp = send_file(real_path, mimetype=mime, as_attachment=False, conditional=True,
+                     download_name=os.path.basename(real_path))
+    resp.headers["Accept-Ranges"] = "bytes"
+    return resp
+
+
+# ─── End Vault ────────────────────────────────────────────────────────────────
+
+
 @app.route("/api/photos/thumb-bundle")
 @require_auth
 def thumb_bundle():
-    """Stream ALL thumbnails as one binary blob for the service worker to cache.
+    """Stream all thumbnails as one binary blob for the service worker to cache.
     Format per entry: [2B url_len][url bytes][4B data_len][jpeg bytes]
-    One request replaces 30k individual thumbnail requests.
-    """
+    `?tier=hq` returns the 800px retina tier instead of the 475px base.
+    One request replaces ~30k individual thumbnail requests."""
     import struct
-    items = load_photo_index()
-    images = [item for item in items if item.get("thumb") and item.get("type") != "video"]
+    tier = (request.args.get("tier") or "").strip().lower()
+    if tier == "hq":
+        url_key = "thumb_hq"
+        src_dir = _THUMB_HQ_DIR
+    else:
+        url_key = "thumb"
+        src_dir = _THUMB_DIR
+    exclude = _get_hidden_hashes() | _get_screenshot_hashes() | _get_duplicate_hashes() | _get_vault_hashes()
+    all_items = load_photo_index()
+    if exclude:
+        all_items = [i for i in all_items if i.get("thumb", "").rsplit("/", 1)[-1].replace(".jpg", "") not in exclude]
+    images = [item for item in all_items if item.get(url_key) and item.get("type") != "video"]
     total = len(images)
 
     def generate():
         for item in images:
-            thumb_url = item["thumb"]
+            thumb_url = item[url_key]
             name = secure_filename(thumb_url.rsplit("/", 1)[-1])
-            data = _read_thumb(_THUMB_DIR, name)
+            data = _read_thumb(src_dir, name)
             if data is None:
                 continue
             url_bytes = thumb_url.encode("utf-8")
@@ -1606,6 +4369,7 @@ def thumb_bundle():
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
             "X-Thumb-Count": str(total),
+            "X-Thumb-Tier": tier or "base",
         },
     )
 
@@ -1628,7 +4392,7 @@ def warm_month(month_key):
     """
     items = load_photo_index()
     month_items = [i for i in items if
-        __import__("datetime").datetime.fromtimestamp(i["date"]).strftime("%Y-%m") == month_key]
+        datetime.fromtimestamp(i["date"], tz=_GALLERY_TZ).strftime("%Y-%m") == month_key]
     if not month_items:
         return jsonify({"status": "empty"})
     threading.Thread(target=_warm_recent_months, args=(month_items, 99), daemon=True).start()
@@ -1640,13 +4404,13 @@ def warm_month(month_key):
 def photos_page():
     hidden = _get_hidden_hashes()
     screenshots = _get_screenshot_hashes()
-    exclude = hidden | screenshots
+    exclude = hidden | screenshots | _get_vault_hashes()
     all_items = sorted(load_photo_index(), key=lambda x: x.get('date', 0), reverse=True)
     items = [i for i in all_items if not (exclude and i.get("thumb", "").rsplit("/", 1)[-1].replace(".jpg", "") in exclude)]
     groups = OrderedDict()
     for item in items:
         try:
-            dt = datetime.fromtimestamp(item.get("date", 0))
+            dt = datetime.fromtimestamp(item.get("date", 0), tz=_GALLERY_TZ)
         except Exception:
             continue
         month_key = dt.strftime("%Y-%m")
@@ -1670,7 +4434,7 @@ def photos_page():
         "total": len(items),
         "inline": inline_items,
     })
-    first_thumbs = [item["thumb"] for item in items[:30] if item.get("thumb")]
+    first_thumbs = [item["thumb"] for item in items[:8] if item.get("thumb")]
     resp = make_response(render_template("photos.html",
         photo_data_json=photo_data_json,
         first_thumbs=first_thumbs,
@@ -1682,12 +4446,14 @@ def photos_page():
 @app.route("/api/photos/month/<month_key>")
 @require_auth
 def api_photos_month(month_key):
-    """Return all items for a specific month."""
+    """Return all items for a specific month. `?kind=video` filters to videos."""
     by_month = load_month_index()
     items = by_month.get(month_key, [])
-    exclude = _get_hidden_hashes() | _get_screenshot_hashes()
+    exclude = _get_hidden_hashes() | _get_screenshot_hashes() | _get_duplicate_hashes() | _get_vault_hashes()
     if exclude:
         items = [i for i in items if i.get("thumb", "").rsplit("/", 1)[-1].replace(".jpg", "") not in exclude]
+    if (request.args.get("kind") or "").lower() == "video":
+        items = [i for i in items if i.get("type") == "video"]
     return jsonify(items)
 
 
@@ -1707,7 +4473,7 @@ def api_photos_all_months():
     except OSError:
         return jsonify({})
 
-    exclude = _get_hidden_hashes() | _get_screenshot_hashes()
+    exclude = _get_hidden_hashes() | _get_screenshot_hashes() | _get_duplicate_hashes() | _get_vault_hashes()
     if _month_json_cache["data"] is not None and _month_json_cache["mtime"] == mtime and not exclude:
         raw = _month_json_cache["data"]
     else:
@@ -1735,7 +4501,12 @@ def api_photos_all_months():
 def api_photos():
     page = request.args.get("page", 0, type=int)
     per_page = 200
-    items = sorted(load_photo_index(), key=lambda x: x.get('date', 0), reverse=True)
+    exclude = _get_hidden_hashes() | _get_screenshot_hashes() | _get_duplicate_hashes() | _get_vault_hashes()
+    all_idx = sorted(load_photo_index(), key=lambda x: x.get('date', 0), reverse=True)
+    if exclude:
+        items = [i for i in all_idx if i.get("thumb", "").rsplit("/", 1)[-1].replace(".jpg", "") not in exclude]
+    else:
+        items = all_idx
     total = len(items)
     start = page * per_page
     end = start + per_page
@@ -1748,7 +4519,7 @@ def api_photos():
     # Group by month
     groups = OrderedDict()
     for item in page_items:
-        dt = datetime.fromtimestamp(item["date"])
+        dt = datetime.fromtimestamp(item["date"], tz=_GALLERY_TZ)
         month_key = dt.strftime("%Y-%m")
         month_label = dt.strftime("%B %Y")
         if month_key not in groups:
@@ -1762,7 +4533,12 @@ def api_photos():
 @require_auth
 def api_photos_all():
     """Return every photo grouped by month in one shot — for LAN use where latency is negligible."""
-    items = sorted(load_photo_index(), key=lambda x: x.get('date', 0), reverse=True)
+    exclude = _get_hidden_hashes() | _get_screenshot_hashes() | _get_duplicate_hashes() | _get_vault_hashes()
+    all_items = sorted(load_photo_index(), key=lambda x: x.get('date', 0), reverse=True)
+    if exclude:
+        items = [i for i in all_items if i.get("thumb", "").rsplit("/", 1)[-1].replace(".jpg", "") not in exclude]
+    else:
+        items = all_items
     total = len(items)
 
     # Preload all thumbnails into RAM in background
@@ -1770,7 +4546,7 @@ def api_photos_all():
 
     groups = OrderedDict()
     for item in items:
-        dt = datetime.fromtimestamp(item["date"])
+        dt = datetime.fromtimestamp(item["date"], tz=_GALLERY_TZ)
         month_key = dt.strftime("%Y-%m")
         month_label = dt.strftime("%B %Y")
         if month_key not in groups:
@@ -1827,25 +4603,79 @@ def _pick_covers(candidates, max_covers=6):
     return pool[:max_covers]
 
 
+def _clamp_ar(ar):
+    """Aspect ratio clamped to the same range as the frontend itemAr(), so the
+    per-month sumar matches the layout. Missing/invalid → 1.0 (square)."""
+    try:
+        ar = float(ar)
+    except (TypeError, ValueError):
+        return 1.0
+    if not (ar > 0):
+        return 1.0
+    return max(0.45, min(2.8, ar))
+
+
 @app.route("/api/photos/summary")
 @require_auth
 def api_photos_summary():
-    """Pre-computed month/year summary, cached by index mtime."""
+    """Pre-computed month/year summary, cached by index mtime.
+    `?kind=video` returns a videos-only view (months that contain at least
+    one video, count = video count, covers picked from video thumbs)."""
+    kind = (request.args.get("kind") or "").lower()
     try:
         mtime = os.path.getmtime(PHOTO_INDEX_PATH)
     except OSError:
         return jsonify({"months": [], "years": [], "total": 0})
+    cache_key = "kind:" + kind
+    if (_summary_cache.get("data_" + cache_key) is not None
+            and _summary_cache.get("mtime_" + cache_key) == mtime):
+        return jsonify(_summary_cache["data_" + cache_key])
+    if kind == "video":
+        items_all = load_photo_index()
+        items = [i for i in items_all if i.get("type") == "video"]
+        months = OrderedDict()
+        for item in items:
+            try:
+                dt = datetime.fromtimestamp(item["date"], tz=_GALLERY_TZ)
+            except Exception:
+                continue
+            mk = dt.strftime("%Y-%m")
+            if mk not in months:
+                months[mk] = {"month_key": mk, "month": dt.strftime("%B %Y"),
+                              "year": dt.year, "count": 0, "sumar": 0.0, "covers": []}
+            months[mk]["count"] += 1
+            months[mk]["sumar"] += _clamp_ar(item.get("ar"))
+            thumb = item.get("thumb_hq") or item.get("thumb", "")
+            if thumb and len(months[mk]["covers"]) < 6:
+                months[mk]["covers"].append(thumb)
+        years = OrderedDict()
+        for mk, mo in months.items():
+            yk = str(mo["year"])
+            if yk not in years:
+                years[yk] = {"year": mo["year"], "count": 0, "covers": [], "months": 0}
+            years[yk]["count"] += mo["count"]
+            years[yk]["months"] += 1
+        sorted_months = sorted(months.values(), key=lambda m: m["month_key"], reverse=True)
+        sorted_years = sorted(years.values(), key=lambda y: y["year"], reverse=True)
+        result = {"months": sorted_months, "years": sorted_years,
+                  "total": len(items), "videos": len(items)}
+        _summary_cache["data_" + cache_key] = result
+        _summary_cache["mtime_" + cache_key] = mtime
+        return jsonify(result)
     if _summary_cache["data"] is not None and _summary_cache["mtime"] == mtime:
         return jsonify(_summary_cache["data"])
 
     items = load_photo_index()
+    _summary_exclude = _get_hidden_hashes() | _get_screenshot_hashes() | _get_duplicate_hashes() | _get_vault_hashes()
+    if _summary_exclude:
+        items = [i for i in items if i.get("thumb", "").rsplit("/", 1)[-1].replace(".jpg", "") not in _summary_exclude]
     months = OrderedDict()
     month_candidates = {}  # month_key -> list of {thumb, is_camera}
     MAX_COVERS = 6
     for item in items:
         if item.get("type") == "video":
             continue
-        dt = datetime.fromtimestamp(item["date"])
+        dt = datetime.fromtimestamp(item["date"], tz=_GALLERY_TZ)
         mk = dt.strftime("%Y-%m")
         if mk not in months:
             months[mk] = {
@@ -1853,10 +4683,12 @@ def api_photos_summary():
                 "month": dt.strftime("%B %Y"),
                 "year": dt.year,
                 "count": 0,
+                "sumar": 0.0,
                 "covers": [],
             }
             month_candidates[mk] = []
         months[mk]["count"] += 1
+        months[mk]["sumar"] += _clamp_ar(item.get("ar"))
         thumb = item.get("thumb_hq") or item.get("thumb", "")
         if thumb:
             month_candidates[mk].append({
@@ -1867,10 +4699,11 @@ def api_photos_summary():
     # Also count videos toward month totals
     for item in items:
         if item.get("type") == "video":
-            dt = datetime.fromtimestamp(item["date"])
+            dt = datetime.fromtimestamp(item["date"], tz=_GALLERY_TZ)
             mk = dt.strftime("%Y-%m")
             if mk in months:
                 months[mk]["count"] += 1
+                months[mk]["sumar"] += _clamp_ar(item.get("ar"))
 
     # Pick covers using CLIP aesthetic scoring (falls back to landscape heuristic)
     for mk, cands in month_candidates.items():
@@ -2043,6 +4876,8 @@ def _streaming_zip(files):
 
 
 def _resolve_photo_path(p):
+    if os.path.isfile(p):
+        return p
     for src, dst in PATH_ALIASES:
         if p.startswith(src):
             alt = dst + p[len(src):]
@@ -2052,10 +4887,33 @@ def _resolve_photo_path(p):
             alt = src + p[len(dst):]
             if os.path.isfile(alt):
                 return alt
-    return p if os.path.isfile(p) else None
+    # photo_index has stale paths with a duplicated "/PHOTOS/PHOTOS/" segment;
+    # actual files live at /mnt/data/PROMETHEUS/PHOTOS/<...> (and /mnt/data/PHOTOS
+    # is a symlink to it). Try both rewrites before giving up.
+    if "/PHOTOS/PHOTOS/" in p:
+        alt = p.replace("/PHOTOS/PHOTOS/", "/PHOTOS/", 1)
+        if os.path.isfile(alt):
+            return alt
+    if p.startswith("/mnt/data/PHOTOS/"):
+        alt = "/mnt/data/PROMETHEUS/PHOTOS/" + p[len("/mnt/data/PHOTOS/"):]
+        if os.path.isfile(alt):
+            return alt
+    return None
 
 
-_PHOTO_ALLOWED = ["/srv/mergerfs/PROMETHEUS/PHOTOS/", "/Volumes/PROMETHEUS/PHOTOS/"]
+# Deferred vault startup: _vault_migrate_v1 uses _resolve_photo_path so it
+# must run after that function is defined.
+_vault_ensure_initialized()
+if os.path.exists(_VAULT_PATH):
+    _load_vault()
+    _vault_migrate_v1()
+
+_PHOTO_ALLOWED = [
+    "/srv/mergerfs/PROMETHEUS/PHOTOS/",
+    "/Volumes/PROMETHEUS/PHOTOS/",
+    "/mnt/data/PHOTOS/",
+    "/mnt/data/PROMETHEUS/PHOTOS/",
+]
 
 
 @app.route("/api/photos/download-zip")
@@ -2114,25 +4972,620 @@ def _to_jpeg_bytes(src_path):
         return None
 
 
-@app.route("/api/photos/download")
+_VIDEO_MIMES = {
+    "mp4": "video/mp4", "m4v": "video/mp4", "mov": "video/quicktime",
+    "webm": "video/webm", "mkv": "video/x-matroska", "avi": "video/x-msvideo",
+    "3gp": "video/3gpp",
+}
+
+# ─── NVENC web-friendly video cache ───
+# HEVC / large originals get transcoded once to H.264 + AAC + faststart MP4
+# (fits Safari, Chrome, mobile, with the moov atom upfront for instant
+# playback start). Cache lives next to thumbnails on NVMe.
+_VIDEO_CACHE_DIR = os.path.join(_APP_DIR, "static", "video_cache")
+os.makedirs(_VIDEO_CACHE_DIR, exist_ok=True)
+_HLS_CACHE_DIR = os.path.join(_APP_DIR, "static", "hls")
+os.makedirs(_HLS_CACHE_DIR, exist_ok=True)
+_video_transcode_locks = {}
+_video_transcode_locks_mutex = threading.Lock()
+_NVENC_AVAILABLE = None  # lazy-detected
+
+
+def _nvenc_available():
+    """Returns 'nvenc', 'libx264', or None. Tries RTX 3080 NVENC first."""
+    global _NVENC_AVAILABLE
+    if _NVENC_AVAILABLE is not None:
+        return _NVENC_AVAILABLE
+    import subprocess
+    try:
+        r = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"],
+                           capture_output=True, timeout=3)
+        has_nvenc = b"h264_nvenc" in r.stdout
+        has_x264  = b"libx264"    in r.stdout
+    except Exception as e:
+        print(f"[video] encoder detection failed: {e}")
+        _NVENC_AVAILABLE = None
+        return None
+    if has_nvenc:
+        test = subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error",
+             "-f", "lavfi", "-i", "nullsrc=s=256x256:d=0.1",
+             "-c:v", "h264_nvenc", "-f", "null", "-"],
+            capture_output=True, timeout=10)
+        if test.returncode == 0:
+            _NVENC_AVAILABLE = "nvenc"
+            print("[video] RTX 3080 NVENC active — GPU transcoding enabled.")
+            return "nvenc"
+        print("[video] h264_nvenc present but GPU not ready; falling back to CPU.")
+    if has_x264:
+        _NVENC_AVAILABLE = "libx264"
+        print("[video] libx264 active — CPU transcoding enabled.")
+        return "libx264"
+    _NVENC_AVAILABLE = None
+    print("[video] no usable encoder found.")
+    return None
+
+def _video_cache_key(src_path):
+    """Stable hash of (path, mtime, size) so re-uploads invalidate."""
+    import hashlib
+    try:
+        st = os.stat(src_path)
+        h = hashlib.sha1(f"{os.path.abspath(src_path)}|{int(st.st_mtime)}|{st.st_size}".encode()).hexdigest()
+        return h[:24]
+    except OSError:
+        return hashlib.sha1(os.path.abspath(src_path).encode()).hexdigest()[:24]
+
+
+def _transcode_to_h264(src_path, dest_path):
+    """Run ffmpeg with NVENC. Synchronous. Returns True on success."""
+    import subprocess
+    if not _nvenc_available():
+        return False
+    tmp = dest_path + ".part"
+
+    def _cmd(gpu_decode):
+        """ffmpeg argv. gpu_decode=True keeps decode+scale on the 3080 too."""
+        if gpu_decode and _nvenc_available() == "nvenc":
+            return [
+                "ffmpeg", "-y", "-loglevel", "error",
+                # Full-GPU pipeline: NVDEC decode -> scale_cuda -> NVENC.
+                # -extra_hw_frames avoids the historical "No decoder surfaces
+                # left" failures on iPhone HEVC; format=yuv420p forces 8-bit
+                # output so 10-bit HDR sources stay browser-playable.
+                "-hwaccel", "cuda", "-hwaccel_output_format", "cuda",
+                "-extra_hw_frames", "8",
+                "-i", src_path,
+                "-map", "0:v:0?", "-map", "0:a:0?",
+                "-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "26",
+                "-vf", "scale_cuda=1920:1920:force_original_aspect_ratio=decrease:force_divisible_by=2:format=yuv420p",
+                "-c:a", "aac", "-b:a", "128k",
+                "-movflags", "+faststart",
+                "-max_muxing_queue_size", "1024",
+                "-f", "mp4",
+                tmp,
+            ]
+        return [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", src_path,
+            "-map", "0:v:0?", "-map", "0:a:0?",
+            "-c:v", "h264_nvenc" if _nvenc_available() == "nvenc" else "libx264",
+            "-preset", "p4" if _nvenc_available() == "nvenc" else "veryfast",
+            *(["-rc", "vbr", "-cq", "26"] if _nvenc_available() == "nvenc" else ["-crf", "26"]),
+            "-pix_fmt", "yuv420p",
+            # Cap longest dimension at 1920 while preserving aspect; even-pixel.
+            "-vf", "scale='if(gt(iw,ih),min(1920,iw),-2)':\'if(gt(iw,ih),-2,min(1920,ih))\',format=yuv420p",
+            "-c:a", "aac", "-b:a", "128k",
+            "-movflags", "+faststart",
+            "-max_muxing_queue_size", "1024",
+            *(["-threads", "4"] if _nvenc_available() != "nvenc" else []),
+            "-f", "mp4",
+            tmp,
+        ]
+
+    try:
+        proc = subprocess.run(_cmd(gpu_decode=True), capture_output=True, timeout=600)
+        if proc.returncode != 0:
+            # Exotic source NVDEC can't handle — fall back to CPU decode.
+            print(f"[video] GPU decode failed for {src_path}; retrying with CPU decode")
+            proc = subprocess.run(_cmd(gpu_decode=False), capture_output=True, timeout=600)
+        if proc.returncode != 0:
+            print(f"[video] transcode failed for {src_path}: {(proc.stderr or b'').decode()[-500:]}")
+            try: os.remove(tmp)
+            except OSError: pass
+            return False
+        # Sanity check: a real transcoded video is always >50KB. ffmpeg
+        # sometimes returns 0 on essentially-empty output (corrupt source,
+        # bad codec). Refuse to commit garbage to the cache.
+        try:
+            sz = os.path.getsize(tmp)
+        except OSError:
+            sz = 0
+        MIN_VALID_BYTES = 50 * 1024
+        if sz < MIN_VALID_BYTES:
+            print(f"[video] transcode produced suspiciously small file ({sz}B) for {src_path}; discarding")
+            try: os.remove(tmp)
+            except OSError: pass
+            return False
+        os.replace(tmp, dest_path)
+        return True
+    except subprocess.TimeoutExpired:
+        try: os.remove(tmp)
+        except OSError: pass
+        print(f"[video] transcode timed out for {src_path}")
+        return False
+    except Exception as e:
+        try: os.remove(tmp)
+        except OSError: pass
+        print(f"[video] transcode error for {src_path}: {e}")
+        return False
+
+
+def _video_already_web_friendly(rp):
+    """True if rp is h264 in mp4 — can be served as-is."""
+    assert rp, "empty path"
+    assert os.path.isabs(rp), "rp must be absolute"
+    if not rp.lower().endswith(".mp4"):
+        return False
+    try:
+        r = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=codec_name", "-of", "csv=p=0", rp],
+            capture_output=True, timeout=4)
+        return (r.stdout or b"").decode().strip().lower() == "h264"
+    except Exception:
+        return False
+
+
+def _ensure_video_cached(item):
+    """Transcode item if needed. Returns 'done'|'skipped'|'failed'.
+    No longer skips 'web-friendly' h264 mp4 — the cache transcode is
+    much smaller (1920px capped) and serves uniformly faster than the
+    original through Werkzeug under load."""
+    assert isinstance(item, dict), "item must be dict"
+    rp = _resolve_photo_path(item.get("path", ""))
+    if not rp or not any(os.path.abspath(rp).startswith(p) for p in _PHOTO_ALLOWED):
+        return "skipped"
+    ext = rp.rsplit(".", 1)[-1].lower()
+    if ext not in _VIDEO_MIMES:
+        return "skipped"
+    key = _video_cache_key(rp)
+    cached = os.path.join(_VIDEO_CACHE_DIR, key + ".mp4")
+    if os.path.exists(cached):
+        return "skipped"
+    with _video_transcode_locks_mutex:
+        lock = _video_transcode_locks.setdefault(key, threading.Lock())
+    with lock:
+        if os.path.exists(cached):
+            return "skipped"
+        ok = _transcode_to_h264(rp, cached)
+    return "done" if ok else "failed"
+
+
+_VIDEO_PREWARM_INTERVAL = 300  # 5 min between full re-scans
+_VIDEO_PREWARM_MAX_PASSES = 1_000_000  # bounded — runs for years of passes
+
+
+def _video_prewarm_pass(pass_idx):
+    """One full pass over the photo index. Idempotent — _ensure_video_cached
+    skips already-cached and already-web-friendly videos so a re-run only
+    does work for newly-added or newly-modified videos."""
+    items = load_photo_index()
+    assert isinstance(items, list), "photo index must be list"
+    videos = [i for i in items if i.get("type") == "video"]
+    MAX_VIDEOS = 50000
+    n = min(len(videos), MAX_VIDEOS)
+    counts = {"done": 0, "skipped": 0, "failed": 0}
+    counts_lock = threading.Lock()
+    progress = {"i": 0}
+    def _do(item):
+        try:
+            outcome = _ensure_video_cached(item)
+            if outcome in ("done", "skipped"):
+                rp = _resolve_photo_path(item.get("path", ""))
+                if rp:
+                    key = _video_cache_key(rp)
+                    cached = os.path.join(_VIDEO_CACHE_DIR, key + ".mp4")
+                    hls_dir = os.path.join(_HLS_CACHE_DIR, key)
+                    if os.path.exists(cached) and not os.path.exists(os.path.join(hls_dir, "index.m3u8")):
+                        _generate_hls(cached, hls_dir)
+        except Exception as e:
+            print(f"[video-prewarm] error on {item.get('path','?')}: {e}")
+            outcome = "failed"
+        with counts_lock:
+            counts[outcome] = counts.get(outcome, 0) + 1
+            progress["i"] += 1
+            if progress["i"] % 100 == 0:
+                print(f"[video-prewarm] pass={pass_idx} {progress['i']}/{n} {dict(counts)}", flush=True)
+        if outcome == "done" and _nvenc_available() == "nvenc":
+            time.sleep(2)  # throttle GPU — 2s between encodes prevents power spike
+    # 2 workers leaves NVENC headroom for on-demand clicks (progressive
+    # transcode + the user's own play). 6 workers saturated NVENC and made
+    # a clicked uncached video wait 20+s for a free encoder session.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(_do, videos[:n]))
+    print(f"[video-prewarm] pass {pass_idx} complete: {counts}", flush=True)
+    return counts
+
+
+def _video_cache_prune():
+    """Delete cached transcodes whose source video is no longer in the
+    index (file deleted, renamed, or rescanned with new mtime)."""
+    items = load_photo_index()
+    valid_keys = set()
+    for it in items:
+        if it.get("type") != "video":
+            continue
+        rp = _resolve_photo_path(it.get("path", ""))
+        if rp:
+            valid_keys.add(_video_cache_key(rp))
+    if not valid_keys:
+        return  # paranoid no-op if index is empty/broken
+    pruned = 0
+    try:
+        cached_files = os.listdir(_VIDEO_CACHE_DIR)
+    except OSError:
+        return
+    MAX_PRUNE = 50000
+    for fname in cached_files[:MAX_PRUNE]:
+        if not fname.endswith(".mp4"):
+            continue
+        key = fname[:-4]
+        if key not in valid_keys:
+            try:
+                os.remove(os.path.join(_VIDEO_CACHE_DIR, fname))
+                pruned += 1
+            except OSError:
+                pass
+    if pruned:
+        print(f"[video-prewarm] pruned {pruned} orphaned cache files")
+
+
+def _video_cache_cleanup_partials():
+    """Remove .part files left over from killed ffmpeg jobs (service
+    restarts, OOMs). Also nuke any committed .mp4 < 50KB — those are old
+    corrupt entries from before the post-transcode sanity check landed."""
+    MIN_VALID_BYTES = 50 * 1024
+    pruned_part = 0
+    pruned_tiny = 0
+    try:
+        files = os.listdir(_VIDEO_CACHE_DIR)
+    except OSError:
+        return
+    MAX_FILES = 100000
+    for fname in files[:MAX_FILES]:
+        p = os.path.join(_VIDEO_CACHE_DIR, fname)
+        if fname.endswith(".part"):
+            try: os.remove(p); pruned_part += 1
+            except OSError: pass
+        elif fname.endswith(".mp4"):
+            try:
+                if os.path.getsize(p) < MIN_VALID_BYTES:
+                    os.remove(p); pruned_tiny += 1
+            except OSError: pass
+    if pruned_part or pruned_tiny:
+        print(f"[video-prewarm] startup cleanup: {pruned_part} .part, {pruned_tiny} corrupt .mp4 removed", flush=True)
+
+
+def _video_prewarm_loop():
+    """Recurring NVENC pre-transcode. First pass catches everything,
+    every _VIDEO_PREWARM_INTERVAL seconds we re-scan to catch newly added
+    videos and prune orphans. Runs forever (bounded loop count)."""
+    time.sleep(120)  # let system settle before GPU load
+    _video_cache_cleanup_partials()
+    if _nvenc_available() is None:
+        print("[video-prewarm] no encoder available; skipping pre-warm")
+        return
+    for pass_idx in range(1, _VIDEO_PREWARM_MAX_PASSES + 1):
+        try:
+            _video_prewarm_pass(pass_idx)
+            _video_cache_prune()
+        except Exception as e:
+            print(f"[video-prewarm] pass {pass_idx} crashed: {e}")
+        time.sleep(_VIDEO_PREWARM_INTERVAL)
+
+
+def _sysinfo_prewarm():
+    """One-shot at startup: populate the system-info caches so the first user
+    request doesn't pay the cold SSH cost (~2.6s: Proxmox-host CPU sample +
+    offline-GPU connect timeout). The caches are stale-while-revalidate, so
+    every request after this returns instantly while refreshing in background."""
+    try:
+        get_system_info()
+    except Exception as e:
+        print(f"[sysinfo-prewarm] {e}")
+
+
+def _stream_progressive_transcode(rp):
+    """Pipe a fragmented MP4 from NVENC straight to the client. Browser
+    starts playing within ~1s as the encode runs; no full-file wait. No
+    Range/seek (the browser gets a 200 with chunked body), but the cached
+    follow-up transcode produces a fully seekable file for next click."""
+    assert rp and os.path.isabs(rp), "rp must be absolute"
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-i", rp,
+        "-map", "0:v:0?", "-map", "0:a:0?",
+        "-c:v", "h264_nvenc" if _nvenc_available() == "nvenc" else "libx264",
+        "-preset", "p1" if _nvenc_available() == "nvenc" else "ultrafast",
+        *(["-rc", "vbr", "-cq", "26"] if _nvenc_available() == "nvenc" else ["-crf", "26"]),
+        "-pix_fmt", "yuv420p",
+        "-vf", "scale='if(gt(iw,ih),min(1920,iw),-2)':'if(gt(iw,ih),-2,min(1920,ih))',format=yuv420p",
+        "-c:a", "aac", "-b:a", "128k",
+        "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+        "-f", "mp4",
+        "pipe:1",
+    ]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL, bufsize=0)
+    def gen():
+        try:
+            while True:
+                chunk = proc.stdout.read(65536)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            try:
+                proc.terminate(); proc.wait(timeout=2)
+            except Exception:
+                try: proc.kill()
+                except Exception: pass
+    return Response(stream_with_context(gen()), mimetype="video/mp4",
+                    headers={"Cache-Control": "no-store",
+                             "X-Accel-Buffering": "no"})
+
+
+def _kick_background_transcode(rp, cached_path, key):
+    """Spawn one background NVENC transcode. No-op if already running/done."""
+    assert rp and cached_path and key, "params required"
+    if os.path.exists(cached_path):
+        return
+    with _video_transcode_locks_mutex:
+        if key in _video_transcode_locks and _video_transcode_locks[key].locked():
+            return  # already in flight
+        lock = _video_transcode_locks.setdefault(key, threading.Lock())
+    def _worker():
+        if not lock.acquire(blocking=False):
+            return
+        try:
+            if not os.path.exists(cached_path):
+                _transcode_to_h264(rp, cached_path)
+        finally:
+            lock.release()
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+@app.route("/api/photos/video")
 @require_auth
-def download_photo_direct():
-    """Download a single photo. ?p=path  Optional ?fmt=jpeg to force JPEG conversion."""
+def serve_web_video():
+    """Serve a video. Cache hit → instant. Cache miss → serve original now,
+    transcode in background for next click. NEVER blocks on transcode."""
     raw_path = request.args.get("p", "").strip()
     rp = _resolve_photo_path(raw_path)
     if not rp:
         abort(404)
     if not any(os.path.abspath(rp).startswith(pfx) for pfx in _PHOTO_ALLOWED):
         abort(403)
+    ext = rp.rsplit(".", 1)[-1].lower()
+    if ext not in _VIDEO_MIMES:
+        abort(400)
+
+    # Reject if item is vaulted — use /api/vault/video instead
+    _load_vault()
+    _vk = None
+    for _vi in load_photo_index():
+        if _vi.get("path") == rp:
+            _vk = _thumb_key_for_item(_vi)
+            break
+    if _vk:
+        with _vault_state_lock:
+            if _vk in _vault_state["items"]:
+                abort(403)
+
+    # Cache hit — serve immediately, no ffprobe.
+    # NOTE: we no longer fast-path "already h264 mp4" sources. Originals are
+    # often 50-200 MB; serving them through Werkzeug under prewarm load
+    # produced multi-second stalls per Range request. The cached transcode
+    # is scaled to 1920px and ~5-15 MB — uniformly fast.
+    key = _video_cache_key(rp)
+    cached = os.path.join(_VIDEO_CACHE_DIR, key + ".mp4")
+    if os.path.exists(cached):
+        # Redirect to Caddy-served static URL so Caddy handles file I/O
+        # directly (sendfile, native range requests) — no Python in the hot path.
+        static_url = "/static/video_cache/" + key + ".mp4"
+        return redirect(static_url, code=302)
+
+    # Cache miss. Two parallel actions:
+    # 1. Kick background transcode — second click will be a cache hit.
+    # 2. Serve via progressive CPU transcode (libx264 ultrafast pipes data
+    #    to the browser immediately; first frame appears in <1s even for HEVC
+    #    sources that Chrome can't decode natively). No Range/seek on this
+    #    first response, but the cached follow-up will be fully seekable.
+    _kick_background_transcode(rp, cached, key)
+    if _nvenc_available() is not None:
+        return _stream_progressive_transcode(rp)
+    # Fallback if libx264 is somehow missing: serve raw original.
+    mime = "video/mp4" if ext in ("mp4", "mov", "m4v") else _VIDEO_MIMES.get(ext, "video/mp4")
+    resp = send_file(rp, mimetype=mime, as_attachment=False,
+                     conditional=True, download_name=os.path.basename(rp))
+    resp.headers["Accept-Ranges"] = "bytes"
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
+
+_hls_gen_locks = {}
+_hls_gen_locks_mutex = threading.Lock()
+
+
+def _generate_hls(cached_mp4, hls_dir):
+    """Segment a cached H.264 MP4 into HLS with stream copy (no re-encode).
+    Returns True on success. Safe to call concurrently — locks per key."""
+    assert os.path.isabs(cached_mp4) and os.path.isabs(hls_dir), "abs paths required"
+    m3u8 = os.path.join(hls_dir, "index.m3u8")
+    if os.path.exists(m3u8):
+        return True
+    key = os.path.basename(hls_dir)
+    with _hls_gen_locks_mutex:
+        lock = _hls_gen_locks.setdefault(key, threading.Lock())
+    with lock:
+        if os.path.exists(m3u8):
+            return True
+        tmp = hls_dir + ".part"
+        try:
+            os.makedirs(tmp, exist_ok=True)
+            cmd = [
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-i", cached_mp4,
+                "-c", "copy",
+                "-hls_time", "4",
+                "-hls_playlist_type", "vod",
+                "-hls_flags", "independent_segments",
+                "-hls_segment_filename", os.path.join(tmp, "seg%04d.ts"),
+                os.path.join(tmp, "index.m3u8"),
+            ]
+            r = subprocess.run(cmd, capture_output=True, timeout=120)
+            if r.returncode != 0 or not os.path.exists(os.path.join(tmp, "index.m3u8")):
+                print(f"[hls] segment failed for {cached_mp4}: {r.stderr.decode()[-300:]}")
+                import shutil; shutil.rmtree(tmp, ignore_errors=True)
+                return False
+            if os.path.exists(hls_dir):
+                import shutil; shutil.rmtree(hls_dir, ignore_errors=True)
+            os.rename(tmp, hls_dir)
+            return True
+        except Exception as e:
+            print(f"[hls] error: {e}")
+            import shutil; shutil.rmtree(tmp, ignore_errors=True)
+            return False
+
+
+@app.route("/api/photos/hls")
+@require_auth
+def serve_hls_playlist():
+    """Return HLS playlist URL for a video. Generates HLS on first call
+    (stream copy from cached MP4 — typically < 2s). Subsequent calls are
+    instant redirects to Caddy-served /static/hls/{key}/index.m3u8."""
+    raw_path = request.args.get("p", "").strip()
+    rp = _resolve_photo_path(raw_path)
+    if not rp or not any(os.path.abspath(rp).startswith(pfx) for pfx in _PHOTO_ALLOWED):
+        abort(404)
+    ext = rp.rsplit(".", 1)[-1].lower()
+    if ext not in _VIDEO_MIMES:
+        abort(400)
+    # Reject if item is vaulted
+    _load_vault()
+    for _hvi in load_photo_index():
+        if _hvi.get("path") == rp:
+            _hvk = _thumb_key_for_item(_hvi)
+            if _hvk:
+                with _vault_state_lock:
+                    if _hvk in _vault_state["items"]:
+                        abort(403)
+            break
+    key = _video_cache_key(rp)
+    hls_dir = os.path.join(_HLS_CACHE_DIR, key)
+    cached_mp4 = os.path.join(_VIDEO_CACHE_DIR, key + ".mp4")
+
+    if not os.path.exists(os.path.join(hls_dir, "index.m3u8")):
+        if not os.path.exists(cached_mp4):
+            ok = _transcode_to_h264(rp, cached_mp4)
+            if not ok:
+                return jsonify({"error": "transcode failed"}), 500
+        ok = _generate_hls(cached_mp4, hls_dir)
+        if not ok:
+            return jsonify({"error": "hls generation failed"}), 500
+
+    return redirect(f"/static/hls/{key}/index.m3u8", code=302)
+
+
+_infuse_tokens = {}
+_infuse_tokens_lock = threading.Lock()
+
+
+@app.route("/api/photos/infuse-token")
+@require_auth
+def infuse_token():
+    """Issue a 24-hour token URL for Infuse to stream a video without a
+    browser session cookie. Returns {infuse_url, direct_url}."""
+    import secrets as _secrets
+    raw_path = request.args.get("p", "").strip()
+    rp = _resolve_photo_path(raw_path)
+    if not rp or not any(os.path.abspath(rp).startswith(pfx) for pfx in _PHOTO_ALLOWED):
+        abort(404)
+    ext = rp.rsplit(".", 1)[-1].lower()
+    if ext not in _VIDEO_MIMES:
+        abort(400)
+    key = _video_cache_key(rp)
+    cached_mp4 = os.path.join(_VIDEO_CACHE_DIR, key + ".mp4")
+    token = _secrets.token_urlsafe(24)
+    with _infuse_tokens_lock:
+        _infuse_tokens[token] = {
+            "path": cached_mp4 if os.path.exists(cached_mp4) else rp,
+            "expires": time.time() + 86400,
+        }
+    host = request.host_url.rstrip("/")
+    direct = f"{host}/api/photos/play/{token}"
+    infuse_url = f"infuse://x-callback-url/play?url={direct}"
+    return jsonify({"infuse_url": infuse_url, "direct_url": direct})
+
+
+@app.route("/api/photos/play/<token>")
+def play_with_token(token):
+    """Serve a video using a time-limited token (for Infuse / native players).
+    No session auth required — the token IS the credential."""
+    assert token and len(token) < 100, "invalid token"
+    with _infuse_tokens_lock:
+        entry = _infuse_tokens.get(token)
+    if not entry or entry["expires"] < time.time():
+        abort(403)
+    fp = entry["path"]
+    if not os.path.isfile(fp):
+        abort(404)
+    import mimetypes as _mt
+    mime = _mt.guess_type(fp)[0] or "video/mp4"
+    resp = send_file(fp, mimetype=mime, conditional=True)
+    resp.headers["Accept-Ranges"] = "bytes"
+    return resp
+
+
+@app.route("/api/photos/download")
+@require_auth
+def download_photo_direct():
+    """Serve a photo/video. ?p=path  Videos stream inline (range support). ?dl=1 forces attachment. ?fmt=jpeg converts to JPEG."""
+    raw_path = request.args.get("p", "").strip()
+    rp = _resolve_photo_path(raw_path)
+    if not rp:
+        abort(404)
+    if not any(os.path.abspath(rp).startswith(pfx) for pfx in _PHOTO_ALLOWED):
+        abort(403)
+    # Reject if item is vaulted
+    _load_vault()
+    for _dvi in load_photo_index():
+        if _dvi.get("path") == rp:
+            _dvk = _thumb_key_for_item(_dvi)
+            if _dvk:
+                with _vault_state_lock:
+                    if _dvk in _vault_state["items"]:
+                        abort(403)
+            break
+    force_download = request.args.get("dl") == "1"
     want_jpeg = request.args.get("fmt") == "jpeg"
     ext = rp.rsplit(".", 1)[-1].lower()
     if want_jpeg and ext not in ("jpg", "jpeg"):
         buf = _to_jpeg_bytes(rp)
         if buf:
             stem = os.path.splitext(os.path.basename(rp))[0]
-            return send_file(buf, mimetype="image/jpeg", as_attachment=True,
+            return send_file(buf, mimetype="image/jpeg",
+                             as_attachment=force_download,
                              download_name=stem + ".jpg")
-    return send_file(rp, as_attachment=True, download_name=os.path.basename(rp))
+    # Videos: inline with explicit mimetype so browser streams and supports Range
+    if ext in _VIDEO_MIMES and not force_download:
+        resp = send_file(rp, mimetype=_VIDEO_MIMES[ext], as_attachment=False,
+                         conditional=True, download_name=os.path.basename(rp))
+        resp.headers["Accept-Ranges"] = "bytes"
+        return resp
+    return send_file(rp, as_attachment=force_download or True,
+                     download_name=os.path.basename(rp))
 
 
 # ─── Photo Upload (iPhone Sync) ───
@@ -2141,6 +5594,7 @@ from photos.photo_scanner import gen_thumb, get_media_date, hash_path, IMAGE_EXT
 import hashlib as _hashlib
 
 _content_hashes = {}
+_index_write_lock = threading.Lock()
 _content_hashes_lock = threading.Lock()
 
 
@@ -2165,13 +5619,146 @@ def _save_content_hashes():
     with _content_hashes_lock:
         data = dict(_content_hashes)
     try:
-        with open(CONTENT_HASH_FILE, "w") as f:
+        tmp = CONTENT_HASH_FILE + ".tmp"
+        with open(tmp, "w") as f:
             json.dump(data, f)
+        os.replace(tmp, CONTENT_HASH_FILE)
     except Exception as e:
         print(f"[hashes] Failed to save content hashes: {e}")
 
 
-threading.Thread(target=_load_content_hashes, daemon=True).start()
+# Load synchronously at import. The previous background-thread load had a
+# subtle race: an upload arriving while the thread was still reading the
+# 4MB JSON would mutate the in-memory dict, then the load would finish and
+# overwrite (losing the new entry), causing the next sync of the same
+# photo to bypass dedup and create a duplicate.
+_load_content_hashes()
+
+# Per-content-SHA lock map. Multiple uploads of the same SHA serialize
+# through the inner critical section; uploads of different SHAs proceed
+# in parallel. Stale entries are pruned best-effort once the request
+# completes — see _release_upload_lock.
+_upload_locks = {}
+_upload_locks_lock = threading.Lock()
+
+
+def _acquire_upload_lock(sha: str) -> threading.Lock:
+    with _upload_locks_lock:
+        lk = _upload_locks.get(sha)
+        if lk is None:
+            lk = threading.Lock()
+            _upload_locks[sha] = lk
+        return lk
+
+
+# Note: locks are kept in _upload_locks for the process lifetime. Bounded
+# by unique SHAs ever uploaded — a few MB of RAM at worst. Releasing the
+# entry mid-flight while another thread is waiting on it would create a
+# subtle race (waiter holds the old lock, new caller gets a new lock,
+# both run the critical section), so we accept the bounded leak.
+
+
+# iOS PHAsset localIdentifier dedup: {ios_id: content_sha}
+_IOS_IDS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ios_photo_ids.json")
+_ios_ids = {}
+_ios_ids_lock = threading.Lock()
+_ios_ids_dirty = False
+
+
+def _load_ios_ids():
+    global _ios_ids
+    if os.path.exists(_IOS_IDS_FILE):
+        try:
+            with open(_IOS_IDS_FILE) as f:
+                data = json.load(f)
+            with _ios_ids_lock:
+                _ios_ids = data
+            print(f"[ios_ids] Loaded {len(data)} iOS PHAsset identifiers")
+        except Exception as e:
+            print(f"[ios_ids] Failed to load: {e}")
+
+
+def _record_ios_id(ios_id: str, content_sha: str):
+    """Record that we've seen this iOS PHAsset id (atomic persist-on-write)."""
+    global _ios_ids_dirty
+    if not ios_id:
+        return
+    with _ios_ids_lock:
+        if _ios_ids.get(ios_id) == content_sha:
+            return
+        _ios_ids[ios_id] = content_sha
+        _ios_ids_dirty = True
+    # Persist in background; coalesce with a small debounce via thread
+    threading.Thread(target=_save_ios_ids, daemon=True).start()
+
+
+def _save_ios_ids():
+    global _ios_ids_dirty
+    with _ios_ids_lock:
+        if not _ios_ids_dirty:
+            return
+        data = dict(_ios_ids)
+        _ios_ids_dirty = False
+    try:
+        tmp = _IOS_IDS_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, _IOS_IDS_FILE)
+    except Exception as e:
+        print(f"[ios_ids] Failed to save: {e}")
+
+
+threading.Thread(target=_load_ios_ids, daemon=True).start()
+
+
+@app.route("/api/photos/hashes")
+@require_auth
+def photo_hashes():
+    """Return set of SHA256 content hashes for dedup checking."""
+    with _content_hashes_lock:
+        return jsonify(list(_content_hashes.keys()))
+
+
+@app.route("/api/photos/ios-ids")
+@require_auth
+def photo_ios_ids():
+    """Return list of iOS PHAsset localIdentifiers the server has seen.
+
+    The iOS app uses this to skip the expensive SHA256 check for photos
+    it already uploaded — just filter out any asset whose localIdentifier
+    is in this set.
+    """
+    with _ios_ids_lock:
+        return jsonify(list(_ios_ids.keys()))
+
+
+@app.route("/api/photos/register-ios-ids", methods=["POST"])
+@require_auth
+def register_ios_ids():
+    """Batch-register iOS identifiers for photos the client has confirmed
+    are already on the NAS (via SHA256 match). Payload: [[ios_id, content_sha], ...].
+    This lets the server learn about pre-existing photos so future syncs are instant.
+    """
+    data = request.get_json(silent=True) or []
+    if not isinstance(data, list):
+        return jsonify({"error": "expected list"}), 400
+    added = 0
+    with _ios_ids_lock:
+        for pair in data:
+            if not isinstance(pair, list) or len(pair) != 2:
+                continue
+            ios_id, sha = pair
+            if not (isinstance(ios_id, str) and isinstance(sha, str)):
+                continue
+            if not ios_id or _ios_ids.get(ios_id) == sha:
+                continue
+            _ios_ids[ios_id] = sha
+            added += 1
+        global _ios_ids_dirty
+        _ios_ids_dirty = _ios_ids_dirty or (added > 0)
+    if added:
+        threading.Thread(target=_save_ios_ids, daemon=True).start()
+    return jsonify({"registered": added, "total_known": len(_ios_ids)})
 
 
 @app.route("/api/upload", methods=["POST"])
@@ -2194,16 +5781,56 @@ def upload_photo():
     file_bytes = f.read()
     content_sha = _hashlib.sha256(file_bytes).hexdigest()
 
+    # iOS PHAsset localIdentifier for fast future dedup (avoids SHA256 round-trip)
+    ios_id = (request.form.get("photo_ios_id") or "").strip()
+
+    # iOS-id dedup must come BEFORE content-SHA dedup. iCloud Photos can
+    # hand out different byte sequences for the same PHAsset across syncs
+    # (HEIC re-encodes, edit revisions, low-res→full-res transitions), so
+    # the SHA can drift even though we're looking at the same logical
+    # photo. Without this check the server would fall through to the
+    # filename-collision branch and save IMG_XXXX_1.EXT next to the
+    # original — which is exactly the duplication the user is seeing.
+    if ios_id:
+        with _ios_ids_lock:
+            prior_sha = _ios_ids.get(ios_id)
+        if prior_sha:
+            return jsonify({"status": "skipped", "reason": "duplicate_ios_id",
+                            "prior_sha": prior_sha}), 200
+
+    # Serialize the rest of the upload by content SHA so two parallel
+    # uploads of the same bytes can't both pass the dedup check before
+    # either finishes writing.
+    upload_lock = _acquire_upload_lock(content_sha)
+    with upload_lock:
+        return _do_upload(f, file_bytes, content_sha, ios_id, ext)
+
+
+def _do_upload(f, file_bytes, content_sha, ios_id, ext):
+    filename = secure_filename(f.filename)
+
     # Content-hash dedup: same bytes already on NAS (regardless of filename)
     with _content_hashes_lock:
         existing = _content_hashes.get(content_sha)
     if existing:
+        # Still record the iOS id so the phone can skip this on next sync.
+        if ios_id:
+            _record_ios_id(ios_id, content_sha)
         return jsonify({"status": "skipped", "reason": "duplicate_content",
                         "existing_path": existing}), 200
 
-    # Save to iPhone/<YYYY>/<MM>/
-    now = datetime.now()
-    dest_dir = os.path.join(PHOTOS_ROOT, "iPhone", str(now.year), f"{now.month:02d}")
+    # Determine date: phone creation_date > EXIF > now
+    client_date = request.form.get("creation_date")
+    if client_date:
+        try:
+            photo_dt = datetime.fromtimestamp(float(client_date), tz=_GALLERY_TZ)
+        except (ValueError, OSError):
+            photo_dt = datetime.now(tz=_GALLERY_TZ)
+    else:
+        photo_dt = datetime.now(tz=_GALLERY_TZ)
+
+    # Save to iPhone/<YYYY>/<MM>/ based on actual photo date
+    dest_dir = os.path.join(PHOTOS_ROOT, "iPhone", str(photo_dt.year), f"{photo_dt.month:02d}")
     os.makedirs(dest_dir, exist_ok=True)
     dest_path = os.path.join(dest_dir, filename)
 
@@ -2230,8 +5857,15 @@ def upload_photo():
     gen_thumb(dest_path, thumb_path, 475, 3, is_video)
     gen_thumb(dest_path, thumb_hq_path, 800, 2, is_video)
 
-    # Extract EXIF date
-    date = get_media_date(dest_path)
+    # Date priority: phone creation_date > EXIF > mtime
+    date = None
+    if client_date:
+        try:
+            date = float(client_date)
+        except (ValueError, OSError):
+            pass
+    if date is None:
+        date = get_media_date(dest_path)
     if date is None:
         date = os.path.getmtime(dest_path)
 
@@ -2253,12 +5887,11 @@ def upload_photo():
             break
     items.insert(insert_pos, entry)
 
-    with open(PHOTO_INDEX_PATH, "w") as idx_f:
-        json.dump(items, idx_f)
+    _save_photo_index(items)
 
-    # Invalidate caches
-    _photo_cache["data"] = None
-    _photo_cache["mtime"] = 0
+    if ios_id:
+        _record_ios_id(ios_id, content_sha)
+
     _summary_cache["data"] = None
     _summary_cache["mtime"] = 0
     _month_json_cache["data"] = None
@@ -2321,45 +5954,168 @@ def rotate_photo():
 @app.route("/api/photos/delete", methods=["POST"])
 @require_auth
 def delete_photo():
-    """Move a photo to the recycling bin and remove from index."""
+    """Move a photo to the recycling bin and remove from all indices."""
     data = request.json
     photo_path = data.get("path", "")
     if not photo_path:
         return jsonify({"error": "No path provided"}), 400
 
-    # Security: only allow deleting from known photo directories
+    # Security: only allow deleting from known photo directories.
+    # The same filesystem is mounted at different paths on the PVE host
+    # vs. the LXC (/mnt/nvme/PHOTOS/ vs /mnt/data/PHOTOS/), and the
+    # photo_index can hold either form depending on which side wrote it.
     abs_path = os.path.abspath(photo_path)
-    allowed = ["/srv/mergerfs/PROMETHEUS/PHOTOS/", "/Volumes/PROMETHEUS/PHOTOS/"]
+    allowed = [
+        "/mnt/data/PHOTOS/",
+        "/mnt/data/PROMETHEUS/PHOTOS/",
+        "/mnt/nvme/PHOTOS/",
+        "/mnt/nvme/PROMETHEUS/PHOTOS/",
+        "/srv/mergerfs/PROMETHEUS/PHOTOS/",
+        "/Volumes/PROMETHEUS/PHOTOS/",
+    ]
     if not any(abs_path.startswith(prefix) for prefix in allowed):
         return jsonify({"error": "Not allowed"}), 403
 
-    # Move to recycling bin
-    result = trash_file(photo_path)
+    # Resolve to the actual on-disk path. The photo_index has stale paths
+    # with a duplicated "/PHOTOS/PHOTOS/" segment; the resolver rewrites
+    # them to the real filesystem location.
+    real_path = _resolve_photo_path(photo_path)
+    if not real_path or not os.path.isfile(real_path):
+        return jsonify({"error": "Path does not exist: " + photo_path}), 404
+
+    # Compute thumb hash from the indexed path (that's what was hashed
+    # at index time, so it matches the on-disk thumb filename even if
+    # the path was stale).
+    try:
+        rel_path = os.path.relpath(photo_path, PHOTOS_ROOT)
+    except ValueError:
+        rel_path = os.path.relpath(real_path, PHOTOS_ROOT)
+    photo_hash = hash_path(rel_path)
+    thumb_name = photo_hash + ".jpg"
+
+    # Move the real file to the recycling bin
+    result = trash_file(real_path)
     if not result["success"]:
         return jsonify({"error": result["error"]}), 400
 
-    # Remove from index
+    # Remove from photo index (atomic)
     items = load_photo_index()
     items = [i for i in items if i["path"] != photo_path]
-    with open(PHOTO_INDEX_PATH, "w") as f:
-        json.dump(items, f)
+    _save_photo_index(items)
 
-    # Remove thumbnails
-    rel_path = os.path.relpath(photo_path, PHOTOS_ROOT)
-    thumb_name = hash_path(rel_path) + ".jpg"
+    # Remove thumbnails from disk + RAM cache
     for tdir in [THUMB_DIR, THUMB_HQ_DIR]:
         tp = os.path.join(tdir, thumb_name)
         if os.path.exists(tp):
-            os.unlink(tp)
+            try:
+                os.unlink(tp)
+            except OSError:
+                pass
+    with _thumb_cache_lock:
+        _thumb_cache.pop((_THUMB_DIR, thumb_name), None)
+        _thumb_cache.pop((_THUMB_HQ_DIR, thumb_name), None)
 
-    # Invalidate caches
+    # Remove video frame thumbnail if present
+    vidframe = os.path.join(_AI_DIR, "vidframes", photo_hash + ".jpg")
+    if os.path.exists(vidframe):
+        try:
+            os.unlink(vidframe)
+        except OSError:
+            pass
+
+    # Remove CLIP embedding row (atomic npy + json rewrite)
+    try:
+        import numpy as np
+        hashes_path = os.path.join(_AI_DIR, "clip_hashes.json")
+        emb_path = os.path.join(_AI_DIR, "clip_embeddings.npy")
+        if os.path.exists(hashes_path) and os.path.exists(emb_path):
+            with open(hashes_path) as f:
+                clip_hashes = json.load(f)
+            if photo_hash in clip_hashes:
+                idx = clip_hashes.index(photo_hash)
+                clip_hashes.pop(idx)
+                embs = np.load(emb_path)
+                embs = np.delete(embs, idx, axis=0)
+                # Write atomically — np.save appends .npy so use a path that already ends in .npy
+                tmp_emb = emb_path[:-4] + ".tmp.npy"  # clip_embeddings.tmp.npy
+                np.save(tmp_emb, embs)
+                os.replace(tmp_emb, emb_path)
+                _atomic_write_json(hashes_path, clip_hashes)
+                # Refresh in-memory CLIP index
+                _ai["clip_hashes"] = clip_hashes
+                _ai["clip_emb"] = embs
+                _ai["hash_to_idx"] = {h: i for i, h in enumerate(clip_hashes)}
+    except Exception as e:
+        app.logger.warning(f"[delete] CLIP cleanup failed for {photo_hash}: {e}")
+
+    # Remove face data tied to this photo
+    try:
+        import numpy as np
+        fi_path = os.path.join(_AI_DIR, "face_index.json")
+        fc_path = os.path.join(_AI_DIR, "face_clusters.json")
+        fe_path = os.path.join(_AI_DIR, "face_embeddings.npy")
+        if os.path.exists(fi_path):
+            with open(fi_path) as f:
+                face_index = json.load(f)
+            if photo_hash in face_index:
+                dead_faces = face_index.pop(photo_hash)
+                # emb_idx may be int or list[int] depending on how face data was written
+                dead_emb_idxs = set()
+                for _face in dead_faces:
+                    if "emb_idx" not in _face:
+                        continue
+                    _ei = _face["emb_idx"]
+                    if isinstance(_ei, list):
+                        dead_emb_idxs.update(_ei)
+                    else:
+                        dead_emb_idxs.add(_ei)
+                _atomic_write_json(fi_path, face_index)
+
+                # Update face_clusters: remove hash + emb_indices
+                if os.path.exists(fc_path) and dead_emb_idxs:
+                    with open(fc_path) as f:
+                        clusters = json.load(f)
+                    surviving = {}
+                    for cid, c in clusters.items():
+                        c["photo_hashes"] = [h for h in c.get("photo_hashes", []) if h != photo_hash]
+                        c["emb_indices"] = [i for i in c.get("emb_indices", []) if i not in dead_emb_idxs]
+                        if c.get("exemplars"):
+                            c["exemplars"] = [i for i in c["exemplars"] if i not in dead_emb_idxs]
+                        c["photo_count"] = len(c["photo_hashes"])
+                        # Drop cluster only if it has zero photos AND zero emb_indices
+                        if c["photo_count"] > 0 or c.get("emb_indices"):
+                            surviving[cid] = c
+                    _atomic_write_json(fc_path, surviving)
+
+                # Rebuild face_embeddings.npy with dead rows zeroed (preserve row indices)
+                # We zero rather than delete to keep all emb_idx references stable.
+                # A future re-cluster will compact them.
+                if os.path.exists(fe_path) and dead_emb_idxs:
+                    face_embs = np.load(fe_path)
+                    for i in dead_emb_idxs:
+                        if i < len(face_embs):
+                            face_embs[i] = 0.0
+                    tmp_fe = fe_path[:-4] + ".tmp.npy"  # face_embeddings.tmp.npy
+                    np.save(tmp_fe, face_embs)
+                    os.replace(tmp_fe, fe_path)
+
+                # Invalidate in-memory AI state so next search reloads fresh data
+                _ai["face_index"] = None
+                _ai["face_clusters"] = None
+                _ai["face_embs"] = None
+                _ai["face_centroids"] = None
+                _ai["emb_to_cluster"] = None
+    except Exception as e:
+        app.logger.warning(f"[delete] Face cleanup failed for {photo_hash}: {e}")
+
+    # Invalidate photo/summary/month caches
     _photo_cache["data"] = None
     _photo_cache["mtime"] = 0
     _summary_cache["data"] = None
     _summary_cache["mtime"] = 0
     _month_json_cache["data"] = None
 
-    return jsonify({"status": "ok", "trash_name": result["trash_name"]})
+    return jsonify({"ok": True, "trash_name": result["trash_name"]})
 
 
 def _startup_preload():
@@ -2370,9 +6126,32 @@ def _startup_preload():
             return
         _build_hash_index(items)
         load_month_index()
-        threading.Thread(target=_warm_all_thumbs, args=(items,), daemon=True).start()
+        # Disabled: startup warmer spawns dozens of ffmpeg workers and chokes the LXC.
+        # Video thumbs are backfilled by scripts/backfill_video_thumbs.py instead.
+        # Image thumbs: load existing into RAM but don't regenerate missing.
+        threading.Thread(target=_load_existing_thumbs, args=(items,), daemon=True).start()
+        # Peak-quality WebP tier — backfilled in background so lightbox-full
+        # loads stay tiny (200-500 KB vs 2-5 MB original) on slow links.
+        threading.Thread(target=_prewarm_all_max_webp, args=(items,), daemon=True).start()
     except Exception:
         pass
+
+
+def _load_existing_thumbs(items):
+    """Load already-generated thumbs into RAM cache without regenerating missing ones."""
+    loaded = 0
+    for item in items:
+        url = item.get("thumb", "")
+        if not url:
+            continue
+        name = url.rsplit("/", 1)[-1]
+        path = os.path.join(_THUMB_DIR, name)
+        if os.path.exists(path) and (_THUMB_DIR, name) not in _thumb_cache:
+            _read_thumb(_THUMB_DIR, name)
+            loaded += 1
+    if loaded:
+        print(f"[warmer] Loaded {loaded} existing thumbs into RAM (no regen).")
+    _build_landscape_index()
 
 
 def _warm_all_thumbs(items):
@@ -2428,7 +6207,9 @@ def _warm_all_thumbs(items):
             _read_thumb(_THUMB_DIR, name)  # immediately cache in RAM
 
     done = 0
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    # Throttled: 2 workers so warmer doesn't starve HTTP during startup flood.
+    # With ~9k missing videos this is slower but keeps ARES responsive.
+    with ThreadPoolExecutor(max_workers=2) as pool:
         for _ in pool.map(_gen, missing):
             done += 1
             if done % 1000 == 0:
@@ -2457,36 +6238,101 @@ def _prewarm_all_previews(items):
 
     if not missing:
         print(f"[preview] All {len(items)} previews cached.")
-        return
+    else:
+        print(f"[preview] Pre-generating {len(missing)} lightbox previews...")
+        done = 0
+        for item, name in missing:
+            orig = item.get("path", "")
+            if not orig or not os.path.isfile(orig):
+                continue
+            ext = os.path.splitext(orig)[1].lower()
+            is_video = ext in VIDEO_EXTS
+            out = os.path.join(_THUMB_PREVIEW_DIR, name)
+            try:
+                gen_thumb(orig, out, 2048, 1, is_video)
+            except Exception:
+                pass
+            done += 1
+            if done % 500 == 0:
+                print(f"[preview] {done}/{len(missing)} previews done", flush=True)
+        print(f"[preview] Done — {done} previews generated.", flush=True)
+    # Now produce the peak-quality WebP tier — same set of items, larger
+    # resolution, smaller file size than the JPEG originals on the wire.
+    _prewarm_all_max_webp(items)
 
-    print(f"[preview] Pre-generating {len(missing)} lightbox previews...")
-    done = 0
-    for item, name in missing:
-        orig = item.get("path", "")
-        if not orig or not os.path.isfile(orig):
-            continue
-        ext = os.path.splitext(orig)[1].lower()
-        is_video = ext in VIDEO_EXTS
-        out = os.path.join(_THUMB_PREVIEW_DIR, name)
+
+def _gen_max_webp(src_path, out_path, max_size=2560, quality=85):
+    """Generate a high-res WebP from a still image. Returns True on success.
+    Used as the peak-quality lightbox tier — files are ~200-500 KB vs the
+    2-5 MB JPEG/HEIC originals, decoding at full retina display density."""
+    assert src_path and out_path, "paths required"
+    assert max_size >= 256, "max_size sanity"
+    try:
         try:
-            gen_thumb(orig, out, 2048, 1, is_video)
-        except Exception:
+            import pillow_heif
+            pillow_heif.register_heif_opener()
+        except ImportError:
             pass
-        done += 1
-        if done % 500 == 0:
-            print(f"[preview] {done}/{len(missing)} previews done")
-    print(f"[preview] Done — {done} previews generated.")
+        from PIL import Image, ImageOps
+        img = Image.open(src_path)
+        img = ImageOps.exif_transpose(img)
+        img.thumbnail((max_size, max_size * 4), Image.LANCZOS)
+        img.convert("RGB").save(out_path, "WEBP", quality=quality, method=4)
+        return os.path.exists(out_path)
+    except Exception as e:
+        print(f"[max-webp] failed for {src_path}: {e}", flush=True)
+        return False
+
+
+def _prewarm_all_max_webp(items):
+    """Build /static/thumbs_max/<hash>.webp for every still image. Skipped
+    for videos (those use the video_cache transcode pipeline)."""
+    time.sleep(3)
+    photos = [i for i in items if i.get("type") != "video"]
+    missing = []
+    MAX_PHOTOS = 200000
+    for item in photos[:MAX_PHOTOS]:
+        url = item.get("thumb_hq") or item.get("thumb") or ""
+        if not url:
+            continue
+        name = url.rsplit("/", 1)[-1].rsplit(".", 1)[0] + ".webp"
+        out = os.path.join(_THUMB_MAX_DIR, name)
+        if not os.path.exists(out):
+            missing.append((item, out))
+    if not missing:
+        print(f"[max-webp] All {len(photos)} max-tier WebPs cached.", flush=True)
+        return
+    print(f"[max-webp] Pre-generating {len(missing)} peak-quality WebPs...", flush=True)
+    done = 0
+    failed = 0
+    skipped = 0
+    processed = 0
+    for item, out in missing:
+        orig_raw = item.get("path", "")
+        # Use the same path-rewrite chain that serve routes use so the
+        # photo_index's "/mnt/data/PHOTOS/PHOTOS/..." entries actually
+        # resolve to the real file on disk.
+        orig = _resolve_photo_path(orig_raw)
+        if not orig:
+            skipped += 1
+        elif _gen_max_webp(orig, out):
+            done += 1
+        else:
+            failed += 1
+        processed += 1
+        if processed % 200 == 0:
+            print(f"[max-webp] {processed}/{len(missing)} processed (done={done} failed={failed} skipped={skipped})", flush=True)
+    print(f"[max-webp] Done — {done} generated, {failed} failed, {skipped} unresolved.", flush=True)
 
 
 def _warm_recent_months(items, months=3):
     """Generate missing thumbs for the N most recent months in a thread pool."""
-    from datetime import datetime
     from collections import OrderedDict
 
     # Group by month, take the most recent N
     groups = OrderedDict()
     for item in items:
-        mk = datetime.fromtimestamp(item["date"]).strftime("%Y-%m")
+        mk = datetime.fromtimestamp(item["date"], tz=_GALLERY_TZ).strftime("%Y-%m")
         groups.setdefault(mk, []).append(item)
 
     recent_keys = sorted(groups.keys(), reverse=True)[:months]
@@ -2544,24 +6390,38 @@ def _auto_scan_loop():
     import time as _time
     _time.sleep(15)  # let startup finish first
 
-    skip_dirs = {"takeouts"}
+    skip_dirs = {"takeouts", "RECYCLE_BIN", "_inbox-snapchat"}
     skip_patterns = {"branded", "low-res"}
+
+    def _lib_rel(index_path):
+        """Library-relative suffix of an index path, tolerant of prefix forms."""
+        for marker in ("/PHOTOS/PHOTOS/", "/PHOTOS/"):
+            if marker in index_path:
+                return index_path.split(marker, 1)[1]
+        return index_path
 
     while True:
         try:
             items = load_photo_index()
-            known_paths = {e["path"] for e in items}
-            # Also check aliased paths (NAS vs Mac mount)
-            known_aliased = set()
-            for p in known_paths:
-                known_aliased.add(p)
-                alt = resolve_media_path(p)
-                if alt:
-                    known_aliased.add(alt)
+            # SAFETY: if the index loaded empty (corrupt/unreadable — both main and
+            # .bak), do NOT treat every file on disk as "new" and rebuild from
+            # scratch. That nukes the library and regenerates ~47k thumbnails.
+            # Recovery from a genuinely empty index is photo_scanner.py's explicit
+            # job, not this incremental loop.
+            if not items:
+                print("[auto-scan] empty index load — skipping cycle (refusing to rebuild from scratch)")
+                _time.sleep(_AUTO_SCAN_INTERVAL)
+                continue
+            # Compare by library-relative path so the canonical index prefix
+            # (/mnt/data/PHOTOS/PHOTOS/...) matches real walk paths — raw
+            # path comparison saw every indexed file as "new" and mass-duplicated.
+            known_rel = {_lib_rel(e["path"]) for e in items}
 
             new_files = []
             for root, dirs, files in os.walk(PHOTOS_ROOT):
-                dirs[:] = [d for d in dirs if d not in skip_dirs]
+                # Skip named dirs AND any dot-directory (includes .vault)
+                dirs[:] = [d for d in dirs
+                           if d not in skip_dirs and not d.startswith(".")]
                 for fname in files:
                     if fname.startswith("._"):
                         continue
@@ -2572,8 +6432,17 @@ def _auto_scan_loop():
                     if ext not in ALL_EXTS:
                         continue
                     filepath = os.path.join(root, fname)
-                    if filepath not in known_aliased:
+                    if os.path.relpath(filepath, PHOTOS_ROOT) not in known_rel:
                         new_files.append((filepath, ext))
+
+            # SAFETY: a normal sync adds a handful of files. Thousands of "new"
+            # files means the index is short/clobbered (or PHOTOS_ROOT changed) —
+            # refuse rather than mass-rebuild. Recover via photo_scanner.py.
+            if len(new_files) > 2000:
+                print(f"[auto-scan] {len(new_files)} 'new' files vs {len(items)} indexed — "
+                      f"refusing mass rebuild; run photo_scanner.py explicitly.")
+                _time.sleep(_AUTO_SCAN_INTERVAL)
+                continue
 
             if new_files:
                 print(f"[auto-scan] Found {len(new_files)} new file(s), indexing...")
@@ -2587,7 +6456,7 @@ def _auto_scan_loop():
                         rel_path = os.path.relpath(filepath, PHOTOS_ROOT)
                         thumb_name = hash_path(rel_path) + ".jpg"
                         entry = {
-                            "path": filepath,
+                            "path": os.path.join("/mnt/data/PHOTOS/PHOTOS", rel_path),
                             "thumb": f"/static/thumbs/{thumb_name}",
                             "thumb_hq": f"/static/thumbs_hq/{thumb_name}",
                             "date": date,
@@ -2607,11 +6476,7 @@ def _auto_scan_loop():
                 if new_entries:
                     merged = items + new_entries
                     merged.sort(key=lambda x: x["date"], reverse=True)
-                    with open(PHOTO_INDEX_PATH, "w") as f:
-                        json.dump(merged, f)
-                    # Bust caches so the app picks up new photos
-                    _photo_cache["data"] = None
-                    _photo_cache["mtime"] = 0
+                    _save_photo_index(merged)
                     _summary_cache["data"] = None
                     _summary_cache["mtime"] = 0
                     _month_cache["data"] = None
@@ -2632,12 +6497,21 @@ if _should_run_background():
 # ─── AI Search (CLIP semantic search + face clusters) ───
 
 _AI_DIR = os.path.join(_APP_DIR, "ai_data")
+
+
+def _atomic_write_json(path, data):
+    """Atomically write JSON to path via tmp file + os.replace (same as _save_photo_index)."""
+    tmp = path + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp, path)
 _ai = {
     "clip_hashes": None, "clip_emb": None, "hash_to_idx": {},
     "model": None, "tokenizer": None, "ready": False,
     "face_clusters": None, "face_index": None,
     "face_embs": None, "face_centroids": None, "emb_to_cluster": None,
     "screenshot_hashes": None,
+    "duplicate_hashes": None,
     "name_to_cluster": {},
 }
 
@@ -2645,6 +6519,21 @@ _ai = {
 def _load_ai_index():
     """Load CLIP embeddings + face clusters from disk (no model yet)."""
     import numpy as np
+
+    # Screenshot hashes are independent of CLIP and used to filter the gallery.
+    ss_path_early = os.path.join(_AI_DIR, "screenshot_hashes.json")
+    if os.path.exists(ss_path_early):
+        with open(ss_path_early) as f:
+            _ai["screenshot_hashes"] = set(json.load(f))
+        ss_n = len(_ai["screenshot_hashes"])
+        print(f"[ai] Loaded {ss_n} screenshot hashes.")
+
+    dup_path_early = os.path.join(_AI_DIR, "duplicate_hashes.json")
+    if os.path.exists(dup_path_early):
+        with open(dup_path_early) as f:
+            _ai["duplicate_hashes"] = set(json.load(f))
+        dup_n = len(_ai["duplicate_hashes"])
+        print(f"[ai] Loaded {dup_n} duplicate hashes.")
 
     hashes_path = os.path.join(_AI_DIR, "clip_hashes.json")
     emb_path = os.path.join(_AI_DIR, "clip_embeddings.npy")
@@ -2671,15 +6560,29 @@ def _load_ai_index():
         with open(fc_path) as f:
             _ai["face_clusters"] = json.load(f)
         print(f"[ai] Loaded {len(_ai['face_clusters'])} face clusters.")
-        # Clear avatar cache — cluster IDs may have shifted; will regenerate on demand
+        # Only wipe avatar cache when face_clusters.json has changed since the
+        # avatars were last generated.  Previously we wiped unconditionally on every
+        # service restart, forcing 229 PIL crop requests on the first People tab open.
         avatar_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "face_avatars")
-        if os.path.isdir(avatar_dir):
-            for fn in os.listdir(avatar_dir):
-                if fn.endswith(".jpg"):
-                    try:
-                        os.unlink(os.path.join(avatar_dir, fn))
-                    except OSError:
-                        pass
+        fc_mtime = os.path.getmtime(fc_path)
+        _stamp_path = os.path.join(avatar_dir, ".fc_mtime")
+        _stamp_ok = False
+        if os.path.isdir(avatar_dir) and os.path.exists(_stamp_path):
+            try:
+                with open(_stamp_path) as _sf:
+                    _stamp_ok = abs(float(_sf.read().strip()) - fc_mtime) < 1.0
+            except (OSError, ValueError):
+                _stamp_ok = False
+        if not _stamp_ok:
+            # face_clusters.json changed — invalidate stale avatars
+            if os.path.isdir(avatar_dir):
+                for fn in os.listdir(avatar_dir):
+                    if fn.endswith(".jpg"):
+                        try:
+                            os.unlink(os.path.join(avatar_dir, fn))
+                        except OSError:
+                            pass
+            print("[ai] Avatar cache invalidated (face_clusters.json changed).")
 
     fi_path = os.path.join(_AI_DIR, "face_index.json")
     if os.path.exists(fi_path):
@@ -2733,33 +6636,46 @@ def _load_ai_index():
                 if not hq_idxs:
                     hq_idxs = idxs
                 centroids[cid] = face_embs[hq_idxs].mean(axis=0)
-            # Load exemplars if available
+            # Load exemplars if available (guard against int-index corruption)
             stored_ex = c.get("exemplars")
             if stored_ex and len(stored_ex) > 0:
-                exemplar_data[cid] = np.array(stored_ex, dtype=np.float32)
+                e0 = stored_ex[0]
+                if isinstance(e0, (list, tuple)) and len(e0) == 512:
+                    exemplar_data[cid] = np.array(stored_ex, dtype=np.float32)
+                # else: skip corrupted exemplar (int indices written by bad indexer run)
         _ai["face_centroids"] = centroids
         _ai["face_exemplars"] = exemplar_data
         if centroids:
             cids = list(centroids.keys())
-            # Build emb→cluster using exemplar matching where available
+            # Build emb→cluster via vectorized distance computation.
+            # Prior nested-loop exemplar approach: ~33s for 17k embs × 231 clusters.
+            # Vectorized centroid matmul: ~1.6s. We use centroids here for speed;
+            # exemplar matching is reserved for the search-time avatar path.
+            t_etc0 = time.time()
+            n_embs = len(face_embs)
+            centroid_matrix = np.stack([centroids[cid] for cid in cids])  # (C, 512)
+            valid_idxs = [idx for idx in emb_to_hash if idx < n_embs]
             emb_to_cluster = {}
-            for emb_idx, ph in emb_to_hash.items():
-                if emb_idx >= len(face_embs):
-                    continue
-                emb = face_embs[emb_idx]
-                best_cid = None
-                best_dist = float("inf")
-                for ci in cids:
-                    if ci in exemplar_data:
-                        d = float(np.min(np.linalg.norm(exemplar_data[ci] - emb, axis=1)))
-                    else:
-                        d = float(np.linalg.norm(centroids[ci] - emb))
-                    if d < best_dist:
-                        best_dist = d
-                        best_cid = ci
-                if best_cid is not None:
-                    emb_to_cluster[emb_idx] = best_cid
+            # Process in chunks of 4096 to bound peak RAM (17k × 231 × 4B = ~16 MB total)
+            CHUNK = 4096
+            i = 0
+            max_iter = (len(valid_idxs) + CHUNK - 1) // CHUNK
+            for _step in range(max_iter):
+                batch_idxs = valid_idxs[i:i + CHUNK]
+                if not batch_idxs:
+                    break
+                emb_batch = face_embs[batch_idxs]           # (B, 512)
+                a2 = np.sum(emb_batch ** 2, axis=1, keepdims=True)    # (B, 1)
+                b2 = np.sum(centroid_matrix ** 2, axis=1, keepdims=True)  # (C, 1)
+                ab = emb_batch @ centroid_matrix.T            # (B, C)
+                sq_dists = a2 + b2.T - 2 * ab               # (B, C)
+                best = np.argmin(sq_dists, axis=1)           # (B,)
+                for j, emb_idx in enumerate(batch_idxs):
+                    emb_to_cluster[emb_idx] = cids[int(best[j])]
+                i += CHUNK
             _ai["emb_to_cluster"] = emb_to_cluster
+            t_etc1 = time.time()
+            print(f"[ai] emb_to_cluster built ({len(emb_to_cluster)} entries) in {t_etc1-t_etc0:.2f}s")
         print(f"[ai] Face embeddings loaded, centroids for {len(centroids)} clusters, "
               f"exemplars for {len(exemplar_data)}.")
 
@@ -2785,22 +6701,51 @@ def _rebuild_name_map():
 
 
 def _parse_people_query(q):
-    """Split query on ' and ', match parts against known names.
+    """Greedy longest-prefix tokenize: extract person names from the query and
+    treat the rest as semantic CLIP text.
 
-    Returns (matched_people, semantic_text) where matched_people is a list of
-    (name, cluster_id) tuples and semantic_text is the remaining non-name text
-    (or empty string if everything matched).
+    Examples (assuming 'haadi' and 'mary jane' are known names):
+        'haadi bald'              -> [('haadi', cid)],            'bald'
+        'bald haadi'              -> [('haadi', cid)],            'bald'
+        'mary jane park beach'    -> [('mary jane', cid)],        'park beach'
+        'zain hamza beach'        -> [('zain', cid), ('hamza',cid)], 'beach'
+        'zain and hamza'          -> [('zain', cid), ('hamza',cid)], ''
+        'sunset over water'       -> [],                          'sunset over water'
     """
     name_map = _ai.get("name_to_cluster") or {}
-    parts = [p.strip() for p in q.lower().split(" and ") if p.strip()]
+    if not name_map or not q.strip():
+        return [], q.strip()
+
+    # Split on commas and ' and ' as soft separators; each segment is then
+    # tokenized and greedy-matched.
+    segments = re.split(r"\s*(?:,|\band\b)\s*", q.lower())
     matched = []
-    unmatched = []
-    for part in parts:
-        if part in name_map:
-            matched.append((part, name_map[part]))
-        else:
-            unmatched.append(part)
-    semantic = " and ".join(unmatched)
+    seen_cids = set()
+    leftover = []
+
+    for segment in segments:
+        tokens = segment.strip().split()
+        i = 0
+        n = len(tokens)
+        while i < n:
+            # try longest-prefix match starting at i
+            best = 0
+            for L in range(n - i, 0, -1):
+                candidate = " ".join(tokens[i:i + L])
+                cid = name_map.get(candidate)
+                if cid is not None:
+                    if cid not in seen_cids:
+                        matched.append((candidate, cid))
+                        seen_cids.add(cid)
+                    best = L
+                    break
+            if best:
+                i += best
+            else:
+                leftover.append(tokens[i])
+                i += 1
+
+    semantic = " ".join(leftover).strip()
     return matched, semantic
 
 
@@ -2820,14 +6765,25 @@ def _load_clip_model():
     try:
         import torch
         import open_clip
+        # Prefer GPU when available — RTX 3080 passthrough makes text encoding ~10× faster.
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         model, _, _ = open_clip.create_model_and_transforms(
             "ViT-B-32", pretrained="laion2b_s34b_b79k"
         )
         model.eval()
+        model = model.to(device)
         _ai["model"] = model
         _ai["tokenizer"] = open_clip.get_tokenizer("ViT-B-32")
+        _ai["device"] = device
         _ai["ready"] = True
-        print("[ai] CLIP text encoder loaded — search is ready.")
+        if device == "cuda":
+            try:
+                gpu_name = torch.cuda.get_device_name(0)
+                print(f"[ai] CLIP text encoder loaded on GPU ({gpu_name}) — search is ready.")
+            except Exception:
+                print("[ai] CLIP text encoder loaded on GPU — search is ready.")
+        else:
+            print("[ai] CLIP text encoder loaded on CPU — search is ready.")
         # Bust summary cache so covers get re-picked with CLIP aesthetic scoring
         _summary_cache["data"] = None
         _summary_cache["mtime"] = 0
@@ -2877,7 +6833,10 @@ def _get_portrait_embedding():
         try:
             tokenizer = _ai["tokenizer"]
             model     = _ai["model"]
+            device    = _ai.get("device", "cpu")
             texts = tokenizer(PORTRAIT_QUERIES)
+            if device == "cuda":
+                texts = texts.to(device)
             with torch.no_grad():
                 embs = model.encode_text(texts)
                 embs = embs / embs.norm(dim=-1, keepdim=True)
@@ -2904,7 +6863,10 @@ def _get_aesthetic_embedding():
         try:
             tokenizer = _ai["tokenizer"]
             model     = _ai["model"]
+            device    = _ai.get("device", "cpu")
             texts = tokenizer(AESTHETIC_QUERIES)
+            if device == "cuda":
+                texts = texts.to(device)
             with torch.no_grad():
                 embs = model.encode_text(texts)
                 embs = embs / embs.norm(dim=-1, keepdim=True)
@@ -2966,15 +6928,71 @@ def _pick_aesthetic_covers(candidates, max_covers=6):
 
 
 def _startup_ai():
+    # Serial: face index first (sets clip_emb which _load_clip_model checks),
+    # then CLIP text encoder, then avatar prewarm.
+    # With vectorized emb_to_cluster: face index ~1.6s, CLIP ~2.7s, total ~4.3s
+    # (vs previous ~36s due to O(N×C) exemplar loop).
     try:
         _load_ai_index()
         _load_clip_model()
     except Exception as e:
         print(f"[ai] Startup error: {e}")
+    try:
+        _prewarm_avatars()
+    except Exception as e:
+        print(f"[ai] Avatar prewarm error: {e}")
 
 
 if _should_run_background():
     threading.Thread(target=_startup_ai, daemon=True).start()
+
+
+# ─── Search caches ───
+# hash→item lookup is rebuilt whenever the photo index changes.
+_hash_to_item_cache = {"sig": None, "map": None}
+
+def _get_hash_to_item():
+    items = load_photo_index()
+    sig = len(items)  # cheap signature — photo index is append-only enough
+    cached = _hash_to_item_cache
+    if cached["sig"] == sig and cached["map"] is not None:
+        return cached["map"]
+    m = {}
+    for item in items:
+        url = item.get("thumb", "")
+        if url:
+            h = url.rsplit("/", 1)[-1].replace(".jpg", "")
+            m[h] = item
+    cached["sig"] = sig
+    cached["map"] = m
+    return m
+
+
+# Cache query→embedding. Typing "foo" → "foo " shouldn't re-encode "foo".
+_query_emb_cache = {}  # lowercased text → np.ndarray
+_QUERY_EMB_CACHE_MAX = 256
+
+def _encode_query(text):
+    import numpy as np
+    import torch
+    key = text.strip().lower()
+    cached = _query_emb_cache.get(key)
+    if cached is not None:
+        return cached
+    model = _ai["model"]
+    tokenizer = _ai["tokenizer"]
+    device = _ai.get("device", "cpu")
+    tokens = tokenizer([text])
+    if device == "cuda":
+        tokens = tokens.to(device)
+    with torch.no_grad():
+        tf = model.encode_text(tokens)
+        tf = (tf / tf.norm(dim=-1, keepdim=True)).squeeze().cpu().numpy()
+    if len(_query_emb_cache) >= _QUERY_EMB_CACHE_MAX:
+        # Evict oldest (insertion-order dict)
+        _query_emb_cache.pop(next(iter(_query_emb_cache)))
+    _query_emb_cache[key] = tf
+    return tf
 
 
 @app.route("/api/photos/search")
@@ -3003,14 +7021,15 @@ def api_search_photos():
             "sample_face": c.get("sample_face", ""),
         })
 
-    # Build hash→item lookup
-    items = load_photo_index()
-    hash_to_item = {}
-    for item in items:
-        url = item.get("thumb", "")
-        if url:
-            h = url.rsplit("/", 1)[-1].replace(".jpg", "")
-            hash_to_item[h] = item
+    # Build hash→item lookup (cached across requests, invalidated on index change)
+    hash_to_item = _get_hash_to_item()
+    # Honor the hardcoded hidden-name blocklist (and existing hidden /
+    # screenshot / dedup exclusions) in search just like the gallery does.
+    hidden = _get_hidden_hashes() | _get_screenshot_hashes() | _get_duplicate_hashes() | _get_vault_hashes()
+    def _lookup(h):
+        if h in hidden:
+            return None
+        return hash_to_item.get(h)
 
     # Case 1: People only (no semantic text)
     if matched_people and not semantic_text:
@@ -3022,7 +7041,7 @@ def api_search_photos():
 
         results = []
         for h in combined:
-            item = hash_to_item.get(h)
+            item = _lookup(h)
             if item:
                 results.append(item)
         results.sort(key=lambda x: -x.get("date", 0))
@@ -3044,7 +7063,7 @@ def api_search_photos():
             combined = combined & s
         results = []
         for h in combined:
-            item = hash_to_item.get(h)
+            item = _lookup(h)
             if item:
                 results.append(item)
         results.sort(key=lambda x: -x.get("date", 0))
@@ -3056,18 +7075,15 @@ def api_search_photos():
     if _ai["clip_emb"] is None:
         return jsonify({"error": "AI index not built. SSH into the NAS and run: python ai_indexer.py"}), 404
     if not _ai["ready"]:
-        return jsonify({"error": "AI search is loading, try again in a moment..."}), 503
-
-    import torch
-    model = _ai["model"]
-    tokenizer = _ai["tokenizer"]
+        # CLIP text encoder is still loading in the background — return a soft warming signal
+        # instead of a 503 error so the frontend can show a non-alarming status.
+        return jsonify({
+            "results": [], "query": q, "people": people_info,
+            "warming": True, "sort": "date",
+        })
 
     clip_query = semantic_text if semantic_text else q
-    text = tokenizer([clip_query])
-    with torch.no_grad():
-        tf = model.encode_text(text)
-        tf = (tf / tf.norm(dim=-1, keepdim=True)).squeeze().cpu().numpy()
-
+    tf = _encode_query(clip_query)
     scores = _ai["clip_emb"] @ tf
 
     if matched_people:
@@ -3077,8 +7093,13 @@ def api_search_photos():
         for s in person_sets[1:]:
             allowed = allowed & s
 
+        # Guard against index/embedding desync: clip_hashes can drift longer
+        # than scores when new photos are appended to the index between the
+        # embedding matmul and this iteration.
+        n = min(len(scores), len(_ai["clip_hashes"]))
         scored = []
-        for i, h in enumerate(_ai["clip_hashes"]):
+        for i in range(n):
+            h = _ai["clip_hashes"][i]
             if h in allowed:
                 scored.append((i, float(scores[i])))
         scored.sort(key=lambda x: -x[1])
@@ -3087,7 +7108,7 @@ def api_search_photos():
         results = []
         for idx, score in scored:
             h = _ai["clip_hashes"][idx]
-            item = hash_to_item.get(h)
+            item = _lookup(h)
             if item and score > 0.15:
                 results.append({**item, "score": round(score, 3)})
 
@@ -3097,11 +7118,12 @@ def api_search_photos():
         })
 
     # Pure semantic search (no people)
-    top_idx = np.argsort(scores)[::-1][:limit]
+    n = min(len(scores), len(_ai["clip_hashes"]))
+    top_idx = np.argsort(scores[:n])[::-1][:limit]
     results = []
     for idx in top_idx:
         h = _ai["clip_hashes"][idx]
-        item = hash_to_item.get(h)
+        item = _lookup(h)
         score = float(scores[idx])
         if item and score > 0.18:
             results.append({**item, "score": round(score, 3)})
@@ -3237,8 +7259,7 @@ def api_people_create():
     }
 
     fc_path = os.path.join(_AI_DIR, "face_clusters.json")
-    with open(fc_path, "w") as f:
-        json.dump(clusters, f, indent=2)
+    _atomic_write_json(fc_path, clusters)
     _ai["face_clusters"] = clusters
     _rebuild_name_map()
 
@@ -3256,7 +7277,7 @@ def api_faces():
 
     result = []
     for cid, c in clusters.items():
-        if c.get("hidden"):
+        if _is_cluster_hidden(c):
             continue
         result.append({
             "id": cid,
@@ -3287,6 +7308,187 @@ def api_screenshots():
     return jsonify(results)
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# FAVORITES  +  ON THIS DAY  +  EXIF PANEL   (Immich-style additions)
+# Favorites are keyed by photo hash (the thumb md5 stem) — the same stable id
+# used by screenshots, vault, and face clusters.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_FAVORITES_PATH = os.path.join(_AI_DIR, "favorites.json")
+_favorites_lock = threading.Lock()
+_favorites_cache = {"data": None, "mtime": -1.0}
+
+
+def _item_hash(item):
+    """Stable per-photo id = thumb filename stem. '' if absent."""
+    url = item.get("thumb", "") if item else ""
+    if not url:
+        return ""
+    return url.rsplit("/", 1)[-1].replace(".jpg", "")
+
+
+def _get_favorite_hashes():
+    """Return set of favorited photo hashes, reloaded when the file changes."""
+    try:
+        mtime = os.path.getmtime(_FAVORITES_PATH)
+    except OSError:
+        return set()
+    if _favorites_cache["data"] is not None and _favorites_cache["mtime"] == mtime:
+        return _favorites_cache["data"]
+    try:
+        with open(_FAVORITES_PATH) as f:
+            data = set(json.load(f))
+    except (OSError, ValueError):
+        data = set()
+    _favorites_cache["data"] = data
+    _favorites_cache["mtime"] = mtime
+    return data
+
+
+def _save_favorite_hashes(hashes):
+    """Atomically persist the favorites set. Returns the new count."""
+    assert isinstance(hashes, (set, list)), "hashes must be a collection"
+    payload = sorted(hashes)
+    tmp = _FAVORITES_PATH + ".tmp"
+    with _favorites_lock:
+        with open(tmp, "w") as f:
+            json.dump(payload, f)
+        os.replace(tmp, _FAVORITES_PATH)
+    _favorites_cache["data"] = set(payload)
+    try:
+        _favorites_cache["mtime"] = os.path.getmtime(_FAVORITES_PATH)
+    except OSError:
+        _favorites_cache["mtime"] = -1.0
+    return len(payload)
+
+
+@app.route("/api/photos/favorites")
+@require_auth
+def api_favorites():
+    """Return all favorited photos, newest first."""
+    favs = _get_favorite_hashes()
+    if not favs:
+        return jsonify([])
+    items = load_photo_index()
+    results = [it for it in items if _item_hash(it) in favs]
+    results.sort(key=lambda x: -x.get("date", 0))
+    return jsonify(results)
+
+
+@app.route("/api/photos/favorite", methods=["POST"])
+@require_auth
+def api_favorite_toggle():
+    """Set or toggle favorite state for one photo hash.
+    Body: {"hash": "<md5>", "favorite": true|false|null}.
+    When "favorite" is omitted/null the state is toggled."""
+    body = request.get_json(silent=True) or {}
+    h = (body.get("hash") or "").strip()
+    if not h or "/" in h or "." in h:
+        return jsonify({"error": "invalid hash"}), 400
+    favs = set(_get_favorite_hashes())
+    want = body.get("favorite", None)
+    new_state = (h not in favs) if want is None else bool(want)
+    if new_state:
+        favs.add(h)
+    else:
+        favs.discard(h)
+    count = _save_favorite_hashes(favs)
+    return jsonify({"ok": True, "hash": h, "favorited": new_state, "count": count})
+
+
+@app.route("/api/photos/memories")
+@require_auth
+def api_memories():
+    """On This Day: photos from the same month/day in prior years.
+    Query: ?month=1-12&day=1-31 (defaults to today in the gallery timezone).
+    Returns groups [{year, count, items:[...]}] newest year first, excluding
+    the current year and any screenshot/hidden/vault/duplicate photos."""
+    now = datetime.now(tz=_GALLERY_TZ)
+    try:
+        month = int(request.args.get("month", now.month))
+        day = int(request.args.get("day", now.day))
+    except (TypeError, ValueError):
+        return jsonify({"error": "month and day must be integers"}), 400
+    if not (1 <= month <= 12 and 1 <= day <= 31):
+        return jsonify({"error": "month/day out of range"}), 400
+
+    exclude = (_get_screenshot_hashes() | _get_hidden_hashes()
+               | _get_vault_hashes() | _get_duplicate_hashes())
+    by_year = {}
+    for it in load_photo_index():
+        if _item_hash(it) in exclude:
+            continue
+        try:
+            dt = datetime.fromtimestamp(it.get("date", 0), tz=_GALLERY_TZ)
+        except (OSError, OverflowError, ValueError):
+            continue
+        if dt.month != month or dt.day != day or dt.year == now.year:
+            continue
+        by_year.setdefault(dt.year, []).append(it)
+
+    groups = []
+    for year in sorted(by_year, reverse=True):
+        items = sorted(by_year[year], key=lambda x: -x.get("date", 0))
+        groups.append({"year": year, "count": len(items),
+                       "years_ago": now.year - year, "items": items})
+    return jsonify({"month": month, "day": day, "groups": groups})
+
+
+# Curated EXIF tags surfaced in the lightbox info panel, plus a small cache.
+_EXIF_FIELDS = [
+    "Make", "Model", "LensModel", "LensID", "LensInfo",
+    "ImageWidth", "ImageHeight", "ImageSize", "Megapixels",
+    "FNumber", "Aperture", "ExposureTime", "ShutterSpeed",
+    "ISO", "FocalLength", "FocalLengthIn35mmFormat",
+    "GPSLatitude", "GPSLongitude", "GPSPosition", "GPSAltitude",
+    "DateTimeOriginal", "CreateDate", "FileType", "MIMEType",
+    "FileSize", "Duration", "VideoFrameRate", "Software", "Orientation",
+]
+_exif_cache = {}  # hash -> dict
+_exif_cache_lock = threading.Lock()
+
+
+@app.route("/api/photos/exif")
+@require_auth
+def api_exif():
+    """Return curated EXIF metadata for one photo (read on demand via exiftool).
+    Query: ?path=<canonical index path>. Cached in memory by photo hash."""
+    raw_path = request.args.get("path", "")
+    if not raw_path or ".." in raw_path:
+        return jsonify({"error": "invalid path"}), 400
+
+    # Resolve to a readable file: literal index path first, then alias.
+    real = raw_path if os.path.isfile(raw_path) else resolve_media_path(raw_path)
+    if not real or not os.path.isfile(real):
+        return jsonify({"error": "file not found", "fields": {}}), 404
+
+    cache_key = real
+    with _exif_cache_lock:
+        if cache_key in _exif_cache:
+            return jsonify(_exif_cache[cache_key])
+
+    try:
+        out = subprocess.run(
+            ["exiftool", "-json", "-n", "-coordFormat", "%.6f", real],
+            capture_output=True, text=True, timeout=15,
+        )
+        meta = (json.loads(out.stdout) or [{}])[0] if out.stdout.strip() else {}
+    except (subprocess.SubprocessError, ValueError, OSError):
+        meta = {}
+
+    fields = {k: meta[k] for k in _EXIF_FIELDS if k in meta and meta[k] not in (None, "")}
+    lat, lon = meta.get("GPSLatitude"), meta.get("GPSLongitude")
+    gps = None
+    if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+        gps = {"lat": round(lat, 6), "lon": round(lon, 6)}
+    result = {"fields": fields, "gps": gps,
+              "name": os.path.basename(real), "path": raw_path}
+    with _exif_cache_lock:
+        if len(_exif_cache) < 5000:
+            _exif_cache[cache_key] = result
+    return jsonify(result)
+
+
 @app.route("/api/photos/face/<cluster_id>")
 @require_auth
 def api_face_photos(cluster_id):
@@ -3297,13 +7499,14 @@ def api_face_photos(cluster_id):
 
     photo_hashes = set(clusters[cluster_id].get("photo_hashes", []))
     new_hashes = set(clusters[cluster_id].get("new_hashes", [])) | set(clusters[cluster_id].get("review_hashes", []))
+    exclude = _get_hidden_hashes() | _get_screenshot_hashes() | _get_duplicate_hashes() | _get_vault_hashes()
     items = load_photo_index()
     results = []
     for item in items:
         url = item.get("thumb", "")
         if url:
             h = url.rsplit("/", 1)[-1].replace(".jpg", "")
-            if h in photo_hashes:
+            if h in photo_hashes and h not in exclude:
                 item_copy = dict(item)
                 if h in new_hashes:
                     item_copy["is_new"] = True
@@ -3325,8 +7528,7 @@ def api_name_face(cluster_id):
     clusters[cluster_id]["name"] = name
 
     fc_path = os.path.join(_AI_DIR, "face_clusters.json")
-    with open(fc_path, "w") as f:
-        json.dump(clusters, f, indent=2)
+    _atomic_write_json(fc_path, clusters)
     _rebuild_name_map()
 
     return jsonify({"status": "ok", "name": name})
@@ -3361,8 +7563,7 @@ def api_merge_faces():
     del clusters[source_id]
 
     fc_path = os.path.join(_AI_DIR, "face_clusters.json")
-    with open(fc_path, "w") as f:
-        json.dump(clusters, f, indent=2)
+    _atomic_write_json(fc_path, clusters)
     _rebuild_name_map()
     _invalidate_avatar(source_id)
     _invalidate_avatar(target_id)
@@ -3399,8 +7600,7 @@ def api_remove_from_face(cluster_id):
     c["excluded_hashes"] = list(excluded)
 
     fc_path = os.path.join(_AI_DIR, "face_clusters.json")
-    with open(fc_path, "w") as f:
-        json.dump(clusters, f, indent=2)
+    _atomic_write_json(fc_path, clusters)
     _invalidate_avatar(cluster_id)
 
     return jsonify({
@@ -3560,6 +7760,69 @@ _AVATAR_DIR = os.path.join(_APP_DIR, "static", "face_avatars")
 os.makedirs(_AVATAR_DIR, exist_ok=True)
 
 
+def _prewarm_avatars():
+    """Pre-generate all missing avatar crops after startup so the first People tab
+    open does not pay PIL crop latency for each of the 200+ clusters.
+    Runs in a background thread; writes face_avatars/.fc_mtime stamp on completion."""
+    clusters = _ai.get("face_clusters")
+    face_embs = _ai.get("face_embs")
+    if not clusters or face_embs is None:
+        return
+    import numpy as np
+    from PIL import Image
+    import io as _io
+    done = 0
+    skipped = 0
+    fc_path = os.path.join(_AI_DIR, "face_clusters.json")
+    for cluster_id, c in clusters.items():
+        avatar_hash = c.get("avatar_hash")
+        v = "11"
+        if avatar_hash:
+            cache_path = os.path.join(_AVATAR_DIR, f"{cluster_id}_v{v}_{avatar_hash[:8]}.jpg")
+        else:
+            cache_path = os.path.join(_AVATAR_DIR, f"{cluster_id}_v{v}.jpg")
+        if os.path.exists(cache_path):
+            skipped += 1
+            continue
+        # Try pre-cropped face images first (fast — just a resize)
+        centroids = _ai.get("face_centroids") or {}
+        centroid = centroids.get(cluster_id)
+        stored_indices = c.get("emb_indices")
+        generated = False
+        if stored_indices and centroid is not None:
+            valid = [i for i in stored_indices if i < len(face_embs)]
+            if valid:
+                dists = [(i, float(np.linalg.norm(face_embs[i] - centroid))) for i in valid]
+                dists.sort(key=lambda x: x[1])
+                for best_idx, _ in dists[:10]:
+                    face_path = os.path.join(_APP_DIR, "static", "faces", f"{best_idx}.jpg")
+                    if os.path.exists(face_path):
+                        try:
+                            img = Image.open(face_path).convert("RGB")
+                            sq = img.resize((300, 300), Image.LANCZOS)
+                            buf = _io.BytesIO()
+                            sq.save(buf, "JPEG", quality=90)
+                            buf.seek(0)
+                            with open(cache_path, "wb") as fout:
+                                fout.write(buf.read())
+                            generated = True
+                            done += 1
+                            break
+                        except Exception:
+                            continue
+        if not generated:
+            skipped += 1
+    # Write mtime stamp so next restart skips wipe if clusters unchanged
+    _stamp_path = os.path.join(_AVATAR_DIR, ".fc_mtime")
+    try:
+        fc_mtime = os.path.getmtime(fc_path) if os.path.exists(fc_path) else 0.0
+        with open(_stamp_path, "w") as sf:
+            sf.write(str(fc_mtime))
+    except OSError:
+        pass
+    print(f"[ai] Avatar prewarm complete: {done} generated, {skipped} skipped.")
+
+
 def _invalidate_avatar(cluster_id):
     """Delete cached avatar for a cluster so it gets regenerated."""
     import glob as _glob
@@ -3638,8 +7901,7 @@ def api_person_avatar(cluster_id):
             c["avatar_hash"] = photo_hash
             c["avatar_bbox"] = None
             fc_path = os.path.join(_AI_DIR, "face_clusters.json")
-            with open(fc_path, "w") as f:
-                json.dump(clusters, f, indent=2)
+            _atomic_write_json(fc_path, clusters)
             _invalidate_avatar(cluster_id)
             try:
                 img = Image.open(thumb_path).convert("RGB")
@@ -3664,8 +7926,7 @@ def api_person_avatar(cluster_id):
         c["avatar_hash"] = photo_hash
         c["avatar_bbox"] = list(chosen_bbox)
         fc_path = os.path.join(_AI_DIR, "face_clusters.json")
-        with open(fc_path, "w") as f:
-            json.dump(clusters, f, indent=2)
+        _atomic_write_json(fc_path, clusters)
 
         # Generate and cache the avatar crop
         _invalidate_avatar(cluster_id)
@@ -3884,8 +8145,7 @@ def api_move_face():
                 to_c.pop("excluded_hashes", None)
 
     fc_path = os.path.join(_AI_DIR, "face_clusters.json")
-    with open(fc_path, "w") as f:
-        json.dump(clusters, f, indent=2)
+    _atomic_write_json(fc_path, clusters)
     _invalidate_avatar(from_id)
     _invalidate_avatar(to_id)
 
@@ -4051,10 +8311,293 @@ def api_face_review_submit():
         c["excluded_hashes"] = list(excl)
 
     fc_path = os.path.join(_AI_DIR, "face_clusters.json")
-    with open(fc_path, "w") as f:
-        json.dump(clusters, f, indent=2)
+    _atomic_write_json(fc_path, clusters)
 
     return jsonify({"status": "ok"})
+
+
+
+
+# DUPES REVIEW ROUTES
+_DUPES_STATE = {"components": None, "resolved": None, "index_mtime": 0}
+_DUPES_LOCK = threading.Lock()
+_DUPES_REVIEW_STATE_PATH = os.path.join(_AI_DIR, "dupes_review_state.json")
+_DUPES_TRASH_BASE = "/mnt/data/.ares-trash"
+_PRIOR_DEDUP_MANIFESTS_BASE = [
+    os.path.join(_AI_DIR, "dedup-manifest-20260419-230520.jsonl"),
+    os.path.join(_AI_DIR, "dedup-manifest-v2-20260419-234555.jsonl"),
+]
+
+def _dupes_load_review_state():
+    try:
+        if os.path.exists(_DUPES_REVIEW_STATE_PATH):
+            with open(_DUPES_REVIEW_STATE_PATH) as _f:
+                return set(json.load(_f).get("resolved", []))
+    except Exception:
+        pass
+    return set()
+
+def _dupes_save_review_state(resolved_set):
+    tmp = _DUPES_REVIEW_STATE_PATH + ".tmp"
+    with open(tmp, "w") as _f:
+        json.dump({"resolved": list(resolved_set)}, _f)
+    os.replace(tmp, _DUPES_REVIEW_STATE_PATH)
+
+def _dupes_covered_paths():
+    covered = set()
+    mfs = list(_PRIOR_DEDUP_MANIFESTS_BASE)
+    try:
+        for fn in os.listdir(_AI_DIR):
+            if fn.startswith("dedup-manifest-") and fn.endswith(".jsonl"):
+                p = os.path.join(_AI_DIR, fn)
+                if p not in mfs:
+                    mfs.append(p)
+    except Exception:
+        pass
+    for mf in mfs:
+        if not os.path.exists(mf):
+            continue
+        try:
+            with open(mf) as _f:
+                for line in _f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    rec = json.loads(line)
+                    for k in ("trashed_path", "keeper_path"):
+                        pp = rec.get(k, "")
+                        if pp:
+                            covered.add(pp)
+        except Exception:
+            pass
+    return covered
+
+def _build_dupes_components_internal():
+    import numpy as _np, hashlib as _hl
+    items = load_photo_index()
+    if not items:
+        return []
+    ch = _ai.get("clip_hashes")
+    ce = _ai.get("clip_emb")
+    h2i = _ai.get("hash_to_idx", {})
+    if not ch or ce is None or len(ch) == 0:
+        return []
+    def _hrel(rel_path):
+        return _hl.md5(rel_path.encode()).hexdigest()
+    h2item = {}
+    for it in items:
+        p = it.get("path", "")
+        if not p:
+            continue
+        try:
+            rel = os.path.relpath(p, PHOTOS_ROOT)
+            h = _hrel(rel)
+        except Exception:
+            continue
+        h2item[h] = it
+    covered = _dupes_covered_paths()
+    vhashes = [h for h in ch if h in h2item and h in h2i]
+    if len(vhashes) < 2:
+        return []
+    vidxs = [h2i[h] for h in vhashes]
+    em = ce[vidxs]
+    norms = _np.linalg.norm(em, axis=1, keepdims=True)
+    norms = _np.where(norms == 0, 1, norms)
+    en = em / norms
+    THR = 0.97
+    n = len(vhashes)
+    CHUNK = 500
+    pairs = []
+    for i in range(0, n, CHUNK):
+        chunk = en[i:i+CHUNK]
+        sims = chunk @ en.T
+        rows, cols = _np.where(sims >= THR)
+        for r, c in zip(rows.tolist(), cols.tolist()):
+            gi = i + r
+            if gi >= c:
+                continue
+            phi = vhashes[gi]
+            phj = vhashes[c]
+            iti = h2item.get(phi)
+            itj = h2item.get(phj)
+            if iti is None or itj is None:
+                continue
+            if iti["path"] in covered and itj["path"] in covered:
+                continue
+            pairs.append((phi, phj, float(sims[r, c])))
+    parent = {}
+    def _find(x):
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+    def _union(a, b):
+        ra, rb = _find(a), _find(b)
+        if ra != rb:
+            parent[rb] = ra
+    for phi, phj, sim in pairs:
+        _union(phi, phj)
+    groups = {}
+    for phi, phj, sim in pairs:
+        r = _find(phi)
+        groups.setdefault(r, set()).update([phi, phj])
+    components = []
+    for root_ph, member_set in groups.items():
+        members = list(member_set)
+        if len(members) < 2:
+            continue
+        mitems = [h2item[h] for h in members if h in h2item]
+        if not mitems:
+            continue
+        if all(it["path"] in covered for it in mitems):
+            continue
+        mhashes = [h for h in members if h in h2i]
+        max_sim = 0.0
+        if len(mhashes) >= 2:
+            midxs = [h2i[h] for h in mhashes]
+            e2 = en[midxs]
+            s2 = e2 @ e2.T
+            _np.fill_diagonal(s2, 0)
+            max_sim = float(s2.max())
+        enriched = []
+        for it in mitems:
+            ph2 = None
+            try:
+                rel2 = os.path.relpath(it["path"], PHOTOS_ROOT)
+                ph2 = _hrel(rel2)
+            except Exception:
+                pass
+            fsz = 0
+            try:
+                if os.path.exists(it["path"]):
+                    fsz = os.path.getsize(it["path"])
+            except Exception:
+                pass
+            enriched.append({"path": it["path"], "thumb": it.get("thumb",""), "thumb_hq": it.get("thumb_hq","") or it.get("thumb",""), "date": it.get("date",0), "type": it.get("type","image"), "size": fsz, "_ph": ph2, "sim_to_first": 0.0})
+        enriched.sort(key=lambda x: -x["size"])
+        fp = enriched[0].get("_ph")
+        enriched[0]["sim_to_first"] = 1.0
+        for m in enriched[1:]:
+            mp = m.get("_ph")
+            if mp and fp and mp in h2i and fp in h2i:
+                m["sim_to_first"] = round(float(en[h2i[mp]] @ en[h2i[fp]]), 4)
+        gid = "clip97-" + root_ph
+        components.append({"group_id": gid, "members": enriched, "max_sim": max_sim, "size": len(enriched)})
+    components.sort(key=lambda c: (-c["size"], -c["max_sim"]))
+    return components
+
+def _get_dupes_components(force_rebuild=False):
+    with _DUPES_LOCK:
+        try:
+            mtime = os.path.getmtime(PHOTO_INDEX_PATH)
+        except OSError:
+            mtime = 0
+        if force_rebuild or _DUPES_STATE["components"] is None or _DUPES_STATE["index_mtime"] != mtime:
+            _DUPES_STATE["components"] = _build_dupes_components_internal()
+            _DUPES_STATE["index_mtime"] = mtime
+            if _DUPES_STATE["resolved"] is None:
+                _DUPES_STATE["resolved"] = _dupes_load_review_state()
+        return _DUPES_STATE["components"], _DUPES_STATE["resolved"]
+
+
+@app.route("/dupes")
+@require_auth
+def dupes_review_page():
+    return render_template("dupes_review.html")
+
+
+@app.route("/api/photos/dupes/count")
+@require_auth
+def api_dupes_count():
+    components, resolved = _get_dupes_components()
+    pending = [c for c in components if c["group_id"] not in resolved]
+    return jsonify({"pending": len(pending)})
+
+
+@app.route("/api/photos/dupes/pending")
+@require_auth
+def api_dupes_pending():
+    cursor = int(request.args.get("cursor", 0))
+    components, resolved = _get_dupes_components()
+    pending = [c for c in components if c["group_id"] not in resolved]
+    total = len(pending)
+    if cursor >= total:
+        return jsonify({"done": True, "total_remaining": 0})
+    c = pending[cursor]
+    members_out = []
+    for m in c["members"]:
+        members_out.append({
+            "path": m["path"],
+            "thumb": m.get("thumb", ""),
+            "thumb_hq": m.get("thumb_hq", "") or m.get("thumb", ""),
+            "date": m.get("date", 0),
+            "size": m.get("size", 0),
+            "type": m.get("type", "image"),
+            "sim_to_first": round(m.get("sim_to_first", 0.0), 4),
+            "is_video": m.get("type") == "video",
+        })
+    return jsonify({
+        "group_id": c["group_id"],
+        "members": members_out,
+        "total_remaining": total - cursor,
+        "cursor": cursor,
+        "done": False,
+    })
+
+
+@app.route("/api/photos/dupes/resolve", methods=["POST"])
+@require_auth
+def api_dupes_resolve():
+    import shutil as _shu
+    data = request.json or {}
+    group_id = data.get("group_id", "")
+    keep_paths = data.get("keep", [])
+    trash_paths = data.get("trash", [])
+    if not group_id:
+        return jsonify({"error": "no group_id"}), 400
+    allowed = ["/mnt/data/PHOTOS/", "/srv/mergerfs/PROMETHEUS/PHOTOS/"]
+    run_ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    trash_dir = os.path.join(_DUPES_TRASH_BASE, run_ts + "-dedup-review")
+    manifest_date = datetime.utcnow().strftime("%Y%m%d")
+    manifest_path = os.path.join(_AI_DIR, "dedup-manifest-review-" + manifest_date + ".jsonl")
+    trashed = []
+    errors = []
+    for p in trash_paths:
+        abs_p = os.path.abspath(p)
+        if not any(abs_p.startswith(pfx) for pfx in allowed):
+            errors.append(p + ": not allowed")
+            continue
+        if not os.path.exists(abs_p):
+            trashed.append(p)
+            continue
+        rel = os.path.relpath(abs_p, "/")
+        dest = os.path.join(trash_dir, rel)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        try:
+            _shu.move(abs_p, dest)
+            trashed.append(p)
+        except Exception as e:
+            errors.append(p + ": " + str(e))
+    if trashed:
+        trash_set = set(trashed)
+        items = load_photo_index()
+        items_clean = [it for it in items if it["path"] not in trash_set]
+        _save_photo_index(items_clean)
+        try:
+            keeper = keep_paths[0] if keep_paths else ""
+            with open(manifest_path, "a") as mf:
+                for pp in trashed:
+                    mf.write(json.dumps({"trashed_path": pp, "keeper_path": keeper, "reason": "review", "group_id": group_id}) + chr(10))
+        except Exception:
+            pass
+    with _DUPES_LOCK:
+        if _DUPES_STATE["resolved"] is None:
+            _DUPES_STATE["resolved"] = _dupes_load_review_state()
+        _DUPES_STATE["resolved"].add(group_id)
+        _dupes_save_review_state(_DUPES_STATE["resolved"])
+        _DUPES_STATE["components"] = None
+    return jsonify({"status": "ok", "trashed": len(trashed), "errors": errors})
 
 
 def _mc_auto_shutdown():
@@ -4130,8 +8673,8 @@ def _run_startup_tasks():
     base = os.path.dirname(os.path.abspath(__file__))
 
     # Reinstall sudoers rules from the NAS mount (picks up any edits)
-    sudoers_src = os.path.join(base, "prometheon-sudoers")
-    sudoers_dst = "/etc/sudoers.d/prometheon"
+    sudoers_src = os.path.join(base, "ares-sudoers")
+    sudoers_dst = "/etc/sudoers.d/ares"
     try:
         import shutil
         shutil.copy2(sudoers_src, sudoers_dst)
@@ -4172,27 +8715,39 @@ def _run_startup_tasks():
         print(f"[startup] TLS cert: {e}")
 
 
+@app.route("/windows")
+@require_auth
+def windows_view():
+    return render_template("windows.html", vnc_password=os.getenv("WINDOWS_VNC_PASSWORD", ""))
+
+
 if __name__ == "__main__":
     print("\n  ╔═══════════════════════════════════════╗")
-    print("  ║       PROMETHEON NAS Terminal AI       ║")
+    print("  ║       ARES NAS Terminal AI       ║")
     print("  ║       https://prometheus               ║")
     print("  ╚═══════════════════════════════════════╝\n")
     threading.Thread(target=_run_startup_tasks, daemon=True).start()
     threading.Thread(target=_mc_auto_shutdown, daemon=True).start()
+    threading.Thread(target=_video_prewarm_loop, daemon=True).start()
+    # One-shot: warm the system-info caches in the serving worker so the first
+    # dashboard load is instant (caches are stale-while-revalidate thereafter).
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        threading.Thread(target=_sysinfo_prewarm, daemon=True).start()
     print("  [mc-auto] Auto-shutdown watchdog started (10min idle → off)")
     import sys
     use_debug = "--no-debug" not in sys.argv
     extra_files = []
-    if use_debug:
-        for root, dirs, files in os.walk(os.path.join(_APP_DIR, "templates")):
-            for f in files:
+    for root, dirs, files in os.walk(os.path.join(_APP_DIR, "templates")):
+        for f in files:
+            extra_files.append(os.path.join(root, f))
+    for root, dirs, files in os.walk(os.path.join(_APP_DIR, "static")):
+        for f in files:
+            if f.endswith((".css", ".js", ".svg")):
                 extra_files.append(os.path.join(root, f))
-        for root, dirs, files in os.walk(os.path.join(_APP_DIR, "static")):
-            for f in files:
-                if f.endswith((".css", ".js", ".svg")):
-                    extra_files.append(os.path.join(root, f))
     app.run(
-        host="0.0.0.0", port=8080, threaded=True,
-        debug=use_debug, use_reloader=use_debug,
-        extra_files=extra_files if use_debug else None,
+        host=os.getenv("ARES_HOST", "0.0.0.0"),
+        port=int(os.getenv("ARES_PORT", "8080")),
+        threaded=True,
+        debug=use_debug, use_reloader=True,
+        extra_files=extra_files,
     )

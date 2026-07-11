@@ -578,6 +578,23 @@
         </style>
 </head>
 <body>
+<!-- NEXUS watchdog banner (2026-07-06): polls /api/alerts; hidden when level=ok -->
+<div id="nexus-alert-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;padding:10px 16px;font:600 14px/1.4 system-ui,sans-serif;color:#fff;text-align:center;"></div>
+<script>
+(function(){
+  var el=document.getElementById("nexus-alert-banner");
+  function poll(){
+    fetch("/api/alerts",{credentials:"same-origin"}).then(function(r){return r.json();}).then(function(a){
+      if(a.level==="ok"){el.style.display="none";return;}
+      el.style.background=a.level==="red"?"#dc2626":"#d97706";
+      el.textContent="NEXUS "+a.level.toUpperCase()+": "+(a.reasons||[]).join(" \u00b7 ");
+      el.style.display="block";
+    }).catch(function(){});
+  }
+  poll(); setInterval(poll, 60000);
+})();
+</script>
+
 <div class="app">
     
 
@@ -637,16 +654,8 @@
                 </div>
                 <svg class="nav-card-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
             </a>
-            <a href="/drives" class="nav-card">
-                <span class="nav-card-num">002</span>
-                <div class="nav-card-body">
-                    <div class="nav-card-label">Storage · <span id="nc-pool">—</span></div>
-                    <div class="nav-card-title">Drives</div>
-                </div>
-                <svg class="nav-card-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
-            </a>
             <a href="/terminal" class="nav-card">
-                <span class="nav-card-num">003</span>
+                <span class="nav-card-num">002</span>
                 <div class="nav-card-body">
                     <div class="nav-card-label">Shell · pve</div>
                     <div class="nav-card-title">Terminal</div>
@@ -654,10 +663,18 @@
                 <svg class="nav-card-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
             </a>
             <a href="/journals" class="nav-card">
-                <span class="nav-card-num">004</span>
+                <span class="nav-card-num">003</span>
                 <div class="nav-card-body">
                     <div class="nav-card-label">Notes · Archive</div>
                     <div class="nav-card-title">Journals</div>
+                </div>
+                <svg class="nav-card-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+            </a>
+            <a href="/breakdown" class="nav-card">
+                <span class="nav-card-num">004</span>
+                <div class="nav-card-body">
+                    <div class="nav-card-label">Money · Net Worth</div>
+                    <div class="nav-card-title">Finance</div>
                 </div>
                 <svg class="nav-card-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
             </a>
@@ -892,7 +909,8 @@ async function loadVitals() {
         var pool = (i.disks || []).find(function(d){return d.name==='PROMETHEUS';});
         if (pool) {
             document.getElementById('h-pool').textContent = pool.percent + '%';
-            document.getElementById('nc-pool').textContent = pool.used + ' / ' + pool.total;
+            var ncPool = document.getElementById('nc-pool');
+            if (ncPool) ncPool.textContent = pool.used + ' / ' + pool.total;
         }
         var g = i.gpu || {};
         window.gpuOnline = !!g.online;

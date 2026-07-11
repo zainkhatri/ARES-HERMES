@@ -1,4 +1,4 @@
-"""Anthropic Claude API integration for PROMETHEON (vision + tools)."""
+"""Anthropic Claude API integration for ARES (vision + tools)."""
 
 import json
 import os
@@ -26,7 +26,7 @@ CLAUDE_TOOLS = [
     },
     {
         "name": "trash_file",
-        "description": "Move a file or directory to the PROMETHEON recycling bin instead of permanently deleting it. Items auto-purge after 30 days.",
+        "description": "Move a file or directory to the ARES recycling bin instead of permanently deleting it. Items auto-purge after 30 days.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -40,7 +40,7 @@ CLAUDE_TOOLS = [
     },
     {
         "name": "list_trash",
-        "description": "List all items currently in the PROMETHEON recycling bin, showing original paths, age, and when they'll be purged.",
+        "description": "List all items currently in the ARES recycling bin, showing original paths, age, and when they'll be purged.",
         "input_schema": {
             "type": "object",
             "properties": {}

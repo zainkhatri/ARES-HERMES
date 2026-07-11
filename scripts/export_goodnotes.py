@@ -23,7 +23,7 @@ GOODNOTES_DB = os.path.expanduser(
 GN_EXPORTS = os.path.expanduser(
     "~/Library/Containers/com.goodnotesapp.x/Data/tmp/Exports"
 )
-JOURNALS_DIR = "/Volumes/PROMETHEUS/PERSONAL/journals"
+JOURNALS_DIR = os.environ.get("JOURNALS_DIR") or "/Volumes/PROMETHEUS/PERSONAL/journals"
 
 TEMPLATE_NAMES = {
     "Text Stamps", "Back To School", "Sticky Notes", "Everyday Stickers",

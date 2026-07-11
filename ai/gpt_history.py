@@ -1,4 +1,4 @@
-"""ChatGPT history search — used as a tool by PROMETHEON's Claude agent."""
+"""ChatGPT history search — used as a tool by ARES's Claude agent."""
 
 import json
 import math
@@ -67,11 +67,13 @@ def _score_convo(convo, query_terms, total_docs, doc_freq):
     return score
 
 
-def search_history(query, top_n=8):
+def search_history(query, top_n=3, snippet_chars=280):
     """Search ChatGPT conversation history. Returns formatted results string.
 
-    Automatically expands the query with related terms and deduplicates
-    so we don't miss relevant conversations.
+    Keep top_n SMALL (default 3) and snippets SHORT. The LLM consuming this
+    tends to regurgitate whatever it gets — less is more. The response is
+    explicitly labeled as research notes, not an answer, so the model has to
+    synthesize before replying to the user.
     """
     index_data = _load_index()
     if not index_data:
@@ -115,12 +117,18 @@ def search_history(query, top_n=8):
         return f"No conversations found matching: {query}"
 
     from datetime import datetime
-    parts = [f"Found {len(results)} relevant conversations:\n"]
+    parts = [
+        "═══ RESEARCH NOTES from Zain's ChatGPT archive — SYNTHESIZE, DO NOT PASTE ═══",
+        f"Query: {query!r}  ·  Top {len(results)} hits (of many). Use these notes to ANSWER THE QUESTION IN YOUR OWN WORDS.",
+        "",
+    ]
     for i, (score, convo) in enumerate(results, 1):
         created = datetime.fromtimestamp(convo["created"]).strftime("%Y-%m-%d") if convo.get("created") else "unknown"
-        parts.append(
-            f'--- {i}. "{convo["title"]}" ({created}, {convo["msg_count"]} msgs) ---\n'
-            f'{convo["transcript"]}\n'
-        )
+        snippet = (convo.get("transcript") or "").strip()
+        if len(snippet) > snippet_chars:
+            snippet = snippet[:snippet_chars].rstrip() + "…"
+        parts.append(f'[{i}] "{convo["title"]}" — {created} — {convo["msg_count"]} msgs')
+        parts.append(snippet)
+        parts.append("")
 
     return "\n".join(parts)

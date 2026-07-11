@@ -9,14 +9,122 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
+
+# Camera local timezone used when no UTC offset is embedded in EXIF.
+# Use ZoneInfo so DST is applied correctly for each shot date.
+_LA_TZ = ZoneInfo("America/Los_Angeles")
+
+# Google Takeout sidecar root: sibling of the year directories.
+# Layout: GOOGLE/metadata/<year>/<fname>.supplemental-metadata.json
+_GOOGLE_META_DIR = None  # resolved lazily from PHOTOS_ROOT
+
+
+def _google_meta_dir():
+    """Return the Google metadata directory, resolved once."""
+    global _GOOGLE_META_DIR
+    if _GOOGLE_META_DIR is None:
+        # GOOGLE lives directly under the library root.
+        # e.g. PHOTOS_ROOT = /mnt/data/PHOTOS -> GOOGLE dir = /mnt/data/PHOTOS/GOOGLE
+        candidate = os.path.join(PHOTOS_ROOT, "GOOGLE", "metadata")
+        if os.path.isdir(candidate):
+            _GOOGLE_META_DIR = candidate
+        else:
+            _GOOGLE_META_DIR = ""  # sentinel: no sidecar dir found
+    return _GOOGLE_META_DIR
+
+
+def _google_sidecar_ts(filepath):
+    """Return photoTakenTime UTC epoch from Google Takeout sidecar, or None.
+
+    Tries three filename variants in order:
+      1. <name>.supplemental-metadata.json
+      2. <name>.json           (older Takeout format)
+      3. truncated-name forms  (Takeout clips long filenames at 46 chars)
+    """
+    meta_root = _google_meta_dir()
+    if not meta_root:
+        return None
+
+    # Derive year from path: .../GOOGLE/<year>/file
+    parts = filepath.replace("\\", "/").split("/")
+    try:
+        g_idx = parts.index("GOOGLE")
+    except ValueError:
+        return None
+    if g_idx + 2 >= len(parts):
+        return None
+    year = parts[g_idx + 1]
+    fname = parts[-1]
+
+    year_dir = os.path.join(meta_root, year)
+    if not os.path.isdir(year_dir):
+        return None
+
+    candidates = [
+        fname + ".supplemental-metadata.json",
+        fname + ".json",
+    ]
+    # Takeout truncates filenames to 46 chars before the extension
+    stem, ext = os.path.splitext(fname)
+    if len(stem) > 46:
+        trunc = stem[:46] + ext
+        candidates.append(trunc + ".supplemental-metadata.json")
+        candidates.append(trunc + ".json")
+
+    for candidate in candidates:
+        sidecar = os.path.join(year_dir, candidate)
+        if not os.path.exists(sidecar):
+            continue
+        try:
+            with open(sidecar) as sf:
+                data = json.load(sf)
+            ts_str = data.get("photoTakenTime", {}).get("timestamp")
+            if ts_str:
+                return float(ts_str)
+        except Exception:
+            pass
+    return None
 
 # NAS-local paths
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-PHOTOS_ROOT = os.path.join(os.path.dirname(PROJECT_ROOT), "PHOTOS", "PHOTOS")
+
+# Library root: probe known locations (LXC bind-mount first, then ARES host),
+# same idiom as app.py's _WORK_CANDIDATES. Env var wins for overrides.
+_PHOTOS_ROOT_CANDIDATES = [
+    os.environ.get("PHOTOS_ROOT"),
+    "/mnt/data/PHOTOS",               # inside LXC 101 (symlink to PROMETHEUS/PHOTOS)
+    "/mnt/data/PROMETHEUS/PHOTOS",    # inside LXC 101 (real dir)
+    "/mnt/nvme/PROMETHEUS/PHOTOS",    # ARES host
+]
+PHOTOS_ROOT = next(
+    (p for p in _PHOTOS_ROOT_CANDIDATES if p and os.path.isdir(os.path.join(p, "GOOGLE"))),
+    "/mnt/data/PHOTOS",
+)
+
+# Canonical path prefix used by every existing photo_index.json entry; the app's
+# _resolve_photo_path() rewrites it to a real path. New entries keep this form
+# so the index stays uniform.
+INDEX_PREFIX = "/mnt/data/PHOTOS/PHOTOS"
+
+
+def _resolve_disk_path(index_path):
+    """Map an index path (canonical or legacy prefix) to a real on-disk file, or None."""
+    assert isinstance(index_path, str) and index_path, "index_path must be non-empty str"
+    if os.path.isfile(index_path):
+        return index_path
+    for marker in ("/PHOTOS/PHOTOS/", "/PHOTOS/"):
+        if marker in index_path:
+            rel = index_path.split(marker, 1)[1]
+            cand = os.path.join(PHOTOS_ROOT, rel)
+            if os.path.isfile(cand):
+                return cand
+    return None
 THUMB_DIR = os.path.join(PROJECT_ROOT, "static", "thumbs")
 THUMB_HQ_DIR = os.path.join(PROJECT_ROOT, "static", "thumbs_hq")
 INDEX_FILE = os.path.join(PROJECT_ROOT, "photo_index.json")
@@ -27,6 +135,14 @@ WORKERS = 8
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".tiff", ".tif", ".bmp", ".gif", ".webp"}
 VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".m4v"}
 ALL_EXTS = IMAGE_EXTS | VIDEO_EXTS
+
+
+def _atomic_write_json(path, data):
+    """Write JSON atomically so concurrent readers never see partial writes."""
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, path)
 
 
 def hash_path(path):
@@ -71,28 +187,65 @@ def infer_date_from_path(filepath):
 
 
 def get_media_date(filepath):
-    """Extract real date from EXIF/metadata. Falls back to mtime."""
+    """Extract real date from EXIF/metadata.  Priority order:
+
+    1. EXIF DateTimeOriginal + OffsetTimeOriginal/OffsetTime (timezone-aware UTC).
+    2. Google Takeout sidecar photoTakenTime.timestamp (already UTC epoch).
+    3. Naive EXIF datetime (no offset) interpreted as America/Los_Angeles.
+    4. ffprobe creation_time (videos).
+    5. path-inferred date / mtime (last resort).
+    """
+    assert isinstance(filepath, str) and filepath, "filepath must be a non-empty string"
+
+    # --- Step 1 & 3: exiftool with offset fields ---
     try:
         result = subprocess.run(
-            ["exiftool", "-DateTimeOriginal", "-CreateDate", "-MediaCreateDate",
-             "-s3", "-d", "%Y:%m:%d %H:%M:%S", filepath],
-            capture_output=True, text=True, timeout=10
+            [
+                "exiftool",
+                "-DateTimeOriginal", "-OffsetTimeOriginal", "-OffsetTime",
+                "-CreateDate", "-MediaCreateDate",
+                "-s3", "-d", "%Y:%m:%d %H:%M:%S",
+                filepath,
+            ],
+            capture_output=True, text=True, timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():
-            for line in result.stdout.strip().split("\n"):
-                line = line.strip()
-                if line and line != "0000:00:00 00:00:00":
-                    parsed = parse_date(line)
-                    if parsed:
-                        return parsed
+            lines = [ln.strip() for ln in result.stdout.strip().split("\n") if ln.strip()]
+            # exiftool -s3 prints values in the order requested.
+            # Line 0 = DateTimeOriginal, Line 1 = OffsetTimeOriginal, Line 2 = OffsetTime,
+            # Line 3 = CreateDate, Line 4 = MediaCreateDate (only present when found).
+            naive_str = None
+            offset_str = None
+            for ln in lines:
+                if re.match(r"\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}", ln):
+                    if ln != "0000:00:00 00:00:00":
+                        naive_str = ln
+                        break
+            for ln in lines:
+                if re.match(r"[+-]\d{2}:\d{2}", ln):
+                    offset_str = ln
+                    break
+            if naive_str:
+                ts = parse_date_with_offset(naive_str, offset_str)
+                if ts is not None:
+                    return ts
     except Exception:
         pass
 
+    # --- Step 2: Google Takeout sidecar ---
+    if "/GOOGLE/" in filepath:
+        sidecar_ts = _google_sidecar_ts(filepath)
+        if sidecar_ts is not None:
+            return sidecar_ts
+
+    # --- Step 4: ffprobe creation_time (video fallback) ---
     try:
         result = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-print_format", "json",
-             "-show_entries", "format_tags=creation_time", filepath],
-            capture_output=True, text=True, timeout=10
+            [
+                "ffprobe", "-v", "quiet", "-print_format", "json",
+                "-show_entries", "format_tags=creation_time", filepath,
+            ],
+            capture_output=True, text=True, timeout=10,
         )
         if result.returncode == 0:
             data = json.loads(result.stdout)
@@ -104,6 +257,7 @@ def get_media_date(filepath):
     except Exception:
         pass
 
+    # --- Step 5: path inference / mtime ---
     mtime = os.path.getmtime(filepath)
     date_from_path = infer_date_from_path(filepath)
 
@@ -119,19 +273,72 @@ def get_media_date(filepath):
     return mtime
 
 
+def parse_date_with_offset(naive_str, offset_str):
+    """Convert an EXIF naive datetime string + optional offset string to a UTC epoch.
+
+    If offset_str is provided (e.g. '-07:00'), the datetime is treated as that
+    local timezone and converted to UTC correctly.  If no offset is given, the
+    datetime is interpreted as America/Los_Angeles (DST-aware) so that photos
+    taken in California without embedded timezone info land in the right UTC slot.
+
+    Returns a float UTC epoch, or None on parse failure.
+    Two assertions guard inputs; failure returns None rather than raising.
+    """
+    assert isinstance(naive_str, str), "naive_str must be a string"
+    assert offset_str is None or isinstance(offset_str, str), "offset_str must be str or None"
+
+    try:
+        dt_naive = datetime.strptime(naive_str.strip(), "%Y:%m:%d %H:%M:%S")
+    except ValueError:
+        return None
+
+    if offset_str and re.match(r"[+-]\d{2}:\d{2}", offset_str.strip()):
+        # Parse the explicit UTC offset.
+        sign = 1 if offset_str[0] == "+" else -1
+        parts = offset_str.strip()[1:].split(":")
+        offset_minutes = sign * (int(parts[0]) * 60 + int(parts[1]))
+        tz = timezone(timedelta(minutes=offset_minutes))
+        dt_aware = dt_naive.replace(tzinfo=tz)
+    else:
+        # No offset: interpret local time as America/Los_Angeles (handles DST via fold=0).
+        dt_aware = dt_naive.replace(tzinfo=_LA_TZ)
+
+    return dt_aware.timestamp()
+
+
 def parse_date(date_str):
+    """Parse a date string that may already carry timezone info (ISO-8601 / RFC 3339).
+
+    Used for ffprobe creation_time which arrives as a UTC ISO string.
+    For plain EXIF strings (no offset), call parse_date_with_offset instead so
+    the correct timezone is applied rather than silently assuming UTC.
+
+    Returns a float UTC epoch, or None on parse failure.
+    """
+    assert isinstance(date_str, str) and date_str, "date_str must be a non-empty string"
+
     date_str = date_str.strip()
+    # Formats with embedded timezone (already UTC-aware): parse directly.
     for fmt in [
-        "%Y:%m:%d %H:%M:%S",
         "%Y-%m-%dT%H:%M:%S.%fZ",
         "%Y-%m-%dT%H:%M:%S%z",
         "%Y-%m-%dT%H:%M:%SZ",
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%d",
     ]:
         try:
             dt = datetime.strptime(date_str[:26], fmt)
+            # strptime with %z returns an aware datetime; .timestamp() is correct.
+            # strptime with Z suffix returns naive but represents UTC — make it aware.
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
             return dt.timestamp()
+        except ValueError:
+            continue
+    # Fallback for plain date strings: treat as America/Los_Angeles (same as no-offset EXIF).
+    for fmt in ["%Y-%m-%d %H:%M:%S", "%Y:%m:%d %H:%M:%S", "%Y-%m-%d"]:
+        try:
+            dt_naive = datetime.strptime(date_str[:19], fmt)
+            dt_aware = dt_naive.replace(tzinfo=_LA_TZ)
+            return dt_aware.timestamp()
         except ValueError:
             continue
     return None
@@ -187,7 +394,7 @@ def _extract_date(job):
         date = os.path.getmtime(filepath)
     thumb_name = hash_path(rel_path) + ".jpg"
     return {
-        "path": filepath,
+        "path": os.path.join(INDEX_PREFIX, rel_path),
         "thumb": f"/static/thumbs/{thumb_name}",
         "thumb_hq": f"/static/thumbs_hq/{thumb_name}",
         "date": date,
@@ -200,13 +407,14 @@ def scan():
     print(f"Workers: {WORKERS}")
     start = time.time()
 
-    SKIP_DIRS = {"takeouts"}
+    SKIP_DIRS = {"takeouts", "RECYCLE_BIN", "_inbox-snapchat"}
 
     SKIP_PATTERNS = {"branded", "low-res"}
 
     all_files = []
     for root, dirs, files in os.walk(PHOTOS_ROOT):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        # Skip named dirs and any dot-directory (includes .vault)
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
         for fname in files:
             if fname.startswith("._"):
                 continue
@@ -251,8 +459,7 @@ def scan():
 
     entries.sort(key=lambda x: x["date"], reverse=True)
 
-    with open(INDEX_FILE, "w") as f:
-        json.dump(entries, f)
+    _atomic_write_json(INDEX_FILE, entries)
 
     elapsed = time.time() - start
     print(f"\nDone in {elapsed:.1f}s ({elapsed/60:.1f}m)")
@@ -269,7 +476,7 @@ def scan_incremental():
     print(f"[incremental] Scanning {PHOTOS_ROOT} for new files ...")
     start = time.time()
 
-    SKIP_DIRS = {"takeouts"}
+    SKIP_DIRS = {"takeouts", "RECYCLE_BIN", "_inbox-snapchat"}
 
     # Load existing index
     existing = []
@@ -283,14 +490,17 @@ def scan_incremental():
             scan()
             return
 
-    known_paths = {e["path"] for e in existing}
+    # Resolve every index path to its real on-disk location so comparisons work
+    # regardless of which prefix form an entry uses.
+    known_real = {rp for rp in (_resolve_disk_path(e["path"]) for e in existing) if rp}
 
     SKIP_PATTERNS = {"branded", "low-res"}
 
     # Walk filesystem for all media files
     all_files = []
     for root, dirs, files in os.walk(PHOTOS_ROOT):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        # Skip named dirs and any dot-directory (includes .vault)
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
         for fname in files:
             if fname.startswith("._"):
                 continue
@@ -300,12 +510,12 @@ def scan_incremental():
             ext = os.path.splitext(fname)[1].lower()
             if ext in ALL_EXTS:
                 filepath = os.path.join(root, fname)
-                if filepath not in known_paths:
+                if filepath not in known_real:
                     all_files.append((filepath, ext))
 
     # Remove index entries for files that no longer exist on disk or match skip patterns
     def _should_keep(e):
-        if not os.path.exists(e["path"]):
+        if _resolve_disk_path(e["path"]) is None:
             return False
         fname_lower = os.path.basename(e["path"]).lower()
         return not any(pat in fname_lower for pat in SKIP_PATTERNS)
@@ -318,8 +528,7 @@ def scan_incremental():
     if not all_files:
         if removed:
             still_exist.sort(key=lambda x: x["date"], reverse=True)
-            with open(INDEX_FILE, "w") as f:
-                json.dump(still_exist, f)
+            _atomic_write_json(INDEX_FILE, still_exist)
             print(f"[incremental] Index updated (deletions only). Done in {time.time()-start:.1f}s")
         else:
             print(f"[incremental] No new files found. Done in {time.time()-start:.1f}s")
@@ -349,8 +558,17 @@ def scan_incremental():
     merged = still_exist + new_entries
     merged.sort(key=lambda x: x["date"], reverse=True)
 
-    with open(INDEX_FILE, "w") as f:
-        json.dump(merged, f)
+    _atomic_write_json(INDEX_FILE, merged)
+
+    # Fill `ar` (aspect ratio) for any entries that don't have it yet —
+    # reads thumb headers only, so it's cheap. Entries whose thumbs aren't
+    # generated yet are skipped and picked up on the next run.
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from backfill_ar import backfill as _backfill_ar
+        _backfill_ar(INDEX_FILE)
+    except Exception as e:
+        print(f"[incremental] ar backfill skipped: {e}")
 
     elapsed = time.time() - start
     print(f"[incremental] Done in {elapsed:.1f}s — added {len(new_entries)}, removed {removed}, failed {failed}.")
@@ -377,12 +595,13 @@ def build_content_hashes():
     print(f"[hashes] Scanning {PHOTOS_ROOT} for media files ...")
     start = time.time()
 
-    SKIP_DIRS = {"takeouts"}
+    SKIP_DIRS = {"takeouts", "RECYCLE_BIN", "_inbox-snapchat"}
     SKIP_PATTERNS = {"branded", "low-res"}
 
     all_files = []
     for root, dirs, files in os.walk(PHOTOS_ROOT):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        # Skip named dirs and any dot-directory (includes .vault)
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
         for fname in files:
             if fname.startswith("._"):
                 continue
@@ -416,8 +635,7 @@ def build_content_hashes():
             else:
                 failed += 1
 
-    with open(CONTENT_HASH_FILE, "w") as f:
-        json.dump(hashes, f)
+    _atomic_write_json(CONTENT_HASH_FILE, hashes)
 
     elapsed = time.time() - start
     print(f"[hashes] Done in {elapsed:.1f}s ({elapsed/60:.1f}m)")

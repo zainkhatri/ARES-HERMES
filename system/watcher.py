@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Watch PROMETHEON source files and restart the service when .py files change.
+"""Watch ARES source files and restart the service when .py files change.
 
 Template/HTML changes are handled by Flask's TEMPLATES_AUTO_RELOAD — no restart needed.
 Python file changes require a full service restart, which this script handles.
@@ -9,9 +9,9 @@ import os
 import time
 import subprocess
 
-WATCH_DIR = '/srv/mergerfs/PROMETHEUS/PROMETHEON'
+WATCH_DIR = '/srv/mergerfs/PROMETHEUS/ARES'
 WATCH_EXTS = {'.py'}
-SERVICE = 'prometheon'
+SERVICE = 'ares'
 POLL_INTERVAL = 2  # seconds
 RESTART_COOLDOWN = 6  # seconds after restart before re-polling
 

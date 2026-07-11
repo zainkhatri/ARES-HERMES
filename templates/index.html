@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content, viewport-fit=cover">
-    <title>PROMETHEON</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <title>ARES & NEXUS</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="apple-touch-icon" href="/static/icon-180.png">
     
@@ -19,9 +19,9 @@
             extend: {
                 colors: {
                     bg:     { DEFAULT: '#04070d', panel: '#070c16', tertiary: '#0a1220' },
-                    accent: { DEFAULT: '#6495ed', bright: '#9ab5f5', dim: '#111d40' },
-                    term:   { white: '#9bbdd4', bright: '#ddf0ff', gray: '#2d4a60', dark: '#101e2d' },
-                    border: '#0c1e30',
+                    accent: { DEFAULT: '#ef4444', bright: '#fca5a5', dim: '#401111' },
+                    term:   { white: '#f5e5e5', bright: '#fff5f5', gray: '#602d2d', dark: '#2d1010' },
+                    border: '#301010',
                 },
                 fontFamily: {
                     mono:     ['JetBrains Mono', 'monospace'],
@@ -47,13 +47,13 @@
         /* ── Grid background texture ── */
         #output-area {
             background-image:
-                linear-gradient(rgba(100,149,237,0.025) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(100,149,237,0.025) 1px, transparent 1px);
+                linear-gradient(rgba(239,68,68,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(239,68,68,0.025) 1px, transparent 1px);
             background-size: 40px 40px;
         }
         #output-area::-webkit-scrollbar { width: 3px; }
         #output-area::-webkit-scrollbar-track { background: transparent; }
-        #output-area::-webkit-scrollbar-thumb { background: #0c1e30; }
+        #output-area::-webkit-scrollbar-thumb { background: #301010; }
 
         /* ── Thinking pulse ── */
         @keyframes think-pulse {
@@ -64,8 +64,8 @@
 
         /* ── Header ── */
         #header {
-            border-bottom: 1px solid #0c1e30;
-            box-shadow: 0 1px 30px rgba(100,149,237,0.06);
+            border-bottom: 1px solid #301010;
+            box-shadow: 0 1px 30px rgba(239,68,68,0.06);
         }
 
         /* ── Sys info labels ── */
@@ -74,39 +74,39 @@
             font-weight: 700;
             font-size: 10px;
             letter-spacing: 0.15em;
-            color: #6495ed;
+            color: #ef4444;
             text-transform: uppercase;
         }
         .stat-val {
             font-family: 'JetBrains Mono', monospace;
             font-size: 11px;
-            color: #9bbdd4;
+            color: #f5e5e5;
         }
         #info-user, #info-hostname {
             font-family: 'Rajdhani', sans-serif;
             font-weight: 700;
             letter-spacing: 0.1em;
-            color: #6495ed;
+            color: #ef4444;
         }
 
         /* ── Input area ── */
         #input-area {
-            border-top: 1px solid #0c1e30;
+            border-top: 1px solid #301010;
             background: #04070d;
-            box-shadow: 0 -1px 24px rgba(100,149,237,0.04);
+            box-shadow: 0 -1px 24px rgba(239,68,68,0.04);
         }
         #input:focus { outline: none; }
         .prompt-sigil {
             font-family: 'JetBrains Mono', monospace;
-            color: #6495ed;
-            text-shadow: 0 0 8px rgba(100,149,237,0.8), 0 0 20px rgba(100,149,237,0.4);
+            color: #ef4444;
+            text-shadow: 0 0 8px rgba(239,68,68,0.8), 0 0 20px rgba(239,68,68,0.4);
             font-weight: 500;
         }
 
         /* ── Status bar ── */
         #status-bar {
             background: #070c16;
-            border-top: 1px solid #0c1e30;
+            border-top: 1px solid #301010;
             font-family: 'Rajdhani', sans-serif;
             font-weight: 600;
             font-size: 10px;
@@ -115,20 +115,20 @@
         }
 
         /* ── Disk bars ── */
-        .disk-track { width: 72px; height: 2px; background: #101e2d; }
+        .disk-track { width: 72px; height: 2px; background: #2d1010; }
         .disk-fill { height: 100%; }
-        .disk-fill.low    { background: #6495ed; box-shadow: 0 0 4px rgba(100,149,237,0.7); }
+        .disk-fill.low    { background: #ef4444; box-shadow: 0 0 4px rgba(239,68,68,0.7); }
         .disk-fill.medium { background: #f0c040; box-shadow: 0 0 4px rgba(240,192,64,0.7); }
         .disk-fill.high   { background: #ff4a6e; box-shadow: 0 0 4px rgba(255,74,110,0.7); }
 
         /* ── Message leaders ── */
         .resp-leader {
-            color: #6495ed;
-            text-shadow: 0 0 8px rgba(100,149,237,0.8), 0 0 20px rgba(100,149,237,0.3);
+            color: #ef4444;
+            text-shadow: 0 0 8px rgba(239,68,68,0.8), 0 0 20px rgba(239,68,68,0.3);
         }
         .user-leader {
-            color: #6495ed;
-            text-shadow: 0 0 6px rgba(100,149,237,0.6);
+            color: #ef4444;
+            text-shadow: 0 0 6px rgba(239,68,68,0.6);
         }
 
         /* ── Copy button ── */
@@ -145,26 +145,26 @@
 
         /* ── Attach icon ── */
         .attach-btn {
-            color: #2d4a60;
+            color: #602d2d;
             transition: color 0.15s;
             line-height: 1;
         }
-        .attach-btn:hover { color: #6495ed; }
+        .attach-btn:hover { color: #ef4444; }
 
         /* ── Inline code ── */
         code {
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.85em;
             background: #070c16;
-            border: 1px solid #0c1e30;
+            border: 1px solid #301010;
             padding: 1px 5px;
-            color: #9ab5f5;
+            color: #fca5a5;
         }
 
         /* ── Separator ── */
         .sys-sep {
             height: 1px;
-            background: linear-gradient(90deg, transparent, #0c1e30 30%, #0c1e30 70%, transparent);
+            background: linear-gradient(90deg, transparent, #301010 30%, #301010 70%, transparent);
             margin: 4px 0;
         }
 
@@ -181,9 +181,101 @@
             #input-area { padding-left: calc(12px + env(safe-area-inset-left)); padding-right: calc(12px + env(safe-area-inset-right)); }
         }
     </style>
+<script>window.__NODE="ARES"</script>
+    <script src="/static/node-switcher.js" defer></script>
+
+<style>
+    /* Hide all old ARES titlebars */
+    #main-header, #titlebar, .fixed.top-0.left-0.right-0.z-40,
+    .fleet-bar, header.bg-panel, header.bg-bg, body > div > .sticky.top-0.z-50 { display:none !important; }
+    body > div.bg-panel:first-of-type { display:none !important; }
+    /* Hide the internal "← HOME | user @ ARES" nav row inside terminal header — redundant */
+    #header > div:first-child, #header > .sys-sep:first-of-type { display:none !important; }
+    /* In case of fixed body padding for old titlebar */
+    body { padding-top:0 !important; }
+
+    /* === Unified Navbar === */
+    :root {
+        --nav-ares: #ef4444;
+        --nav-blue: #6495ed;
+        --nav-line: rgba(239,68,68,0.08);
+        --nav-line-2: rgba(239,68,68,0.18);
+        --nav-text-2: #8ba3c0;
+        --nav-text-3: #4a5d78;
+    }
+    .navbar {
+        position:sticky; top:0; z-index:99999;
+        background:rgba(4,7,13,0.92);
+        border-bottom:1px solid var(--nav-line);
+        padding:14px 24px;
+        padding-top:calc(14px + env(safe-area-inset-top, 0px));
+        padding-left:calc(24px + env(safe-area-inset-left, 0px));
+        padding-right:calc(24px + env(safe-area-inset-right, 0px));
+        display:flex; align-items:center; justify-content:space-between; gap:20px;
+        font-family:'Bricolage Grotesque', sans-serif;
+    }
+    .navbar-left { display:flex; align-items:center; gap:16px; min-width:0; }
+    .nbr { display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; transition:opacity 0.18s ease; min-width:0; }
+    .nbr-other { opacity:0.7; }
+    .nbr-other:hover { opacity:1; }
+    .nbr-mark {
+        width:26px; height:26px; flex-shrink:0;
+        display:flex; align-items:center; justify-content:center;
+        border:1px solid; font-weight:800; font-size:14px; line-height:1;
+    }
+    .nbr-mark.m-a { border-color:var(--nav-ares); color:var(--nav-ares); }
+    .nbr-mark.m-n { border-color:var(--nav-blue); color:var(--nav-blue); }
+    .nbr-id { display:flex; align-items:baseline; gap:8px; min-width:0; }
+    .nbr-name { font-weight:700; font-size:14px; letter-spacing:0.02em; white-space:nowrap; }
+    .nbr-name.n-a { color:var(--nav-ares); }
+    .nbr-name.n-n { color:var(--nav-blue); }
+    .nbr-sep { color:var(--nav-text-3); font-size:11px; }
+    .nbr-tag { font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--nav-text-2); letter-spacing:0.1em; text-transform:uppercase; white-space:nowrap; }
+    .back-chip {
+        display:inline-flex; align-items:center; gap:6px;
+        font-family:'JetBrains Mono', monospace; font-size:10px;
+        color:var(--nav-text-2);
+        text-decoration:none;
+        letter-spacing:0.15em; text-transform:uppercase;
+        padding:5px 11px;
+        border:1px solid var(--nav-line-2);
+        transition:color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .back-chip svg { transition:transform 0.18s ease; }
+    .back-chip:hover { color:var(--nav-ares); border-color:var(--nav-ares); background:rgba(239,68,68,0.05); }
+    .back-chip:hover svg { transform:translateX(-2px); }
+    @media (max-width:600px) {
+        .navbar { padding:12px 14px; gap:10px; }
+        .nbr-tag { display:none; }
+        .back-chip span { display:none; }
+        .back-chip { padding:5px 8px; }
+    }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&display=swap" rel="stylesheet">
 </head>
 <body class="bg-bg text-term-white font-mono text-[13px]">
 <div id="pg-overlay"></div>
+
+<!-- ── Sessions drawer (mobile-friendly session switcher; mirrors /resume) ── -->
+<div id="sessions-scrim" onclick="closeSessions()"
+     style="position:fixed;inset:0;background:rgba(4,7,13,0.6);backdrop-filter:blur(2px);z-index:100000;opacity:0;pointer-events:none;transition:opacity .18s ease"></div>
+<aside id="sessions-drawer"
+       style="position:fixed;top:0;right:0;bottom:0;width:min(86vw,360px);z-index:100001;
+              background:#070c16;border-left:1px solid #301010;box-shadow:-12px 0 40px rgba(0,0,0,0.5);
+              transform:translateX(100%);transition:transform .22s cubic-bezier(.4,0,.2,1);
+              display:flex;flex-direction:column;
+              padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px)">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #301010">
+        <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:0.18em;color:#ef4444">SESSIONS</span>
+        <button onclick="closeSessions()" style="color:#602d2d;font-size:20px;line-height:1;padding:4px 8px;background:none;border:none;cursor:pointer">×</button>
+    </div>
+    <button onclick="newSession()"
+            style="margin:14px 18px 6px;padding:11px 14px;background:transparent;border:1px solid #ef4444;color:#ef4444;
+                   font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;letter-spacing:0.05em;cursor:pointer;text-align:left">
+        + New session
+    </button>
+    <div id="sessions-list" style="flex:1;overflow-y:auto;padding:6px 12px 18px"></div>
+</aside>
 
 <div id="terminal" class="flex flex-col">
 
@@ -196,11 +288,11 @@
                style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:10px;letter-spacing:0.15em;text-transform:uppercase">
                 ← HOME
             </a>
-            <span style="color:#0c1e30">│</span>
+            <span style="color:#301010">│</span>
             <div class="flex items-center gap-1">
-                <span id="info-user" style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:0.1em;color:#6495ed">{{ username }}</span>
+                <span id="info-user" style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:0.1em;color:#ef4444">{{ username }}</span>
                 <span class="text-term-gray" style="font-size:9px">@</span>
-                <span id="info-hostname" style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:0.1em;color:#6495ed">PROMETHEON</span>
+                <span id="info-hostname" style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:0.1em;color:#ef4444">ARES</span>
             </div>
         </div>
         <div class="sys-sep" style="margin-bottom:8px"></div>
@@ -210,17 +302,17 @@
 
             <!-- ASCII art — shrinks to fit, never grows beyond natural width -->
             <div id="ascii-wrap" style="overflow:hidden;min-width:0;flex:0 1 auto">
-                <div id="ascii-art" class="font-mono" style="color:#6495ed;font-size:13px;line-height:1.15;white-space:pre;transform-origin:left center;text-shadow:0 0 6px rgba(100,149,237,0.9),0 0 18px rgba(100,149,237,0.35),0 0 40px rgba(100,149,237,0.12);opacity:0.85">
-██████╗ ██████╗  ██████╗ ███╗   ███╗███████╗████████╗██╗  ██╗███████╗ ██████╗ ███╗   ██╗
-██╔══██╗██╔══██╗██╔═══██╗████╗ ████║██╔════╝╚══██╔══╝██║  ██║██╔════╝██╔═══██╗████╗  ██║
-██████╔╝██████╔╝██║   ██║██╔████╔██║█████╗     ██║   ███████║█████╗  ██║   ██║██╔██╗ ██║
-██╔═══╝ ██╔══██╗██║   ██║██║╚██╔╝██║██╔══╝     ██║   ██╔══██║██╔══╝  ██║   ██║██║╚██╗██║
-██║     ██║  ██║╚██████╔╝██║ ╚═╝ ██║███████╗   ██║   ██║  ██║███████╗╚██████╔╝██║ ╚████║
-╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝</div>
+                <div id="ascii-art" class="font-mono" style="color:#ef4444;font-size:13px;line-height:1.15;white-space:pre;transform-origin:left center;text-shadow:0 0 6px rgba(239,68,68,0.9),0 0 18px rgba(239,68,68,0.35),0 0 40px rgba(239,68,68,0.12);opacity:0.85">
+ █████╗ ██████╗ ███████╗███████╗
+██╔══██╗██╔══██╗██╔════╝██╔════╝
+███████║██████╔╝█████╗  ███████╗
+██╔══██║██╔══██╗██╔══╝  ╚════██║
+██║  ██║██║  ██║███████╗███████║
+╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝</div>
             </div>
 
             <!-- Stats column -->
-            <div class="shrink-0 space-y-0.5" style="border-left:1px solid #0c1e30;padding-left:20px">
+            <div class="shrink-0 space-y-0.5" style="border-left:1px solid #301010;padding-left:20px">
                 <div class="flex items-center gap-2">
                     <span class="stat-label">OS</span>
                     <span class="stat-val" id="info-os">—</span>
@@ -268,7 +360,7 @@
 
     <!-- ── Image Preview Strip ── -->
     <div id="image-preview-strip" class="hidden bg-bg-panel border-t border-border px-3 py-2 flex items-center gap-3 shrink-0">
-        <img id="preview-thumb" src="" alt="" class="h-10 w-10 object-cover shrink-0" style="border:1px solid #0c1e30">
+        <img id="preview-thumb" src="" alt="" class="h-10 w-10 object-cover shrink-0" style="border:1px solid #301010">
         <div class="flex-1 min-w-0">
             <div id="preview-filename" class="text-[10px] text-term-gray truncate"
                  style="font-family:'Rajdhani',sans-serif;letter-spacing:0.08em"></div>
@@ -277,12 +369,12 @@
         </div>
         <button id="copy-image-btn" onclick="copyImageToClipboard()"
                 class="text-[9px] text-term-gray hover:text-accent px-2 py-1 transition-colors shrink-0"
-                style="font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:0.12em;border:1px solid #0c1e30">
+                style="font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:0.12em;border:1px solid #301010">
             COPY
         </button>
         <button onclick="clearImage()"
                 class="text-[9px] text-term-gray hover:text-red-400 px-2 py-1 transition-colors shrink-0"
-                style="font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:0.12em;border:1px solid #0c1e30">
+                style="font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:0.12em;border:1px solid #301010">
             CLEAR
         </button>
     </div>
@@ -456,7 +548,10 @@ async function loadSystemInfo() {
         document.getElementById('status-mem').textContent = 'MEM ' + info.memory_percent + '%';
 
         if (info.api_usage) {
-            document.getElementById('info-api').textContent = 'Claude Sonnet 4 · cloud';
+            const au = info.api_usage;
+            const model = au.model || 'unknown';
+            const loc = au.local ? 'local' : 'cloud';
+            document.getElementById('info-api').textContent = model + ' · ' + loc;
         }
 
         const diskLines = document.getElementById('disk-lines');
@@ -512,9 +607,13 @@ async function handleResume(arg) {
         return;
     }
 
-    const target = sessions[idx];
+    await loadSession(sessions[idx].id);
+}
+
+// Load a session by id and render it. Shared by /resume and the sessions drawer.
+async function loadSession(id) {
     try {
-        const loadResp = await fetch(`/api/sessions/${encodeURIComponent(target.id)}`);
+        const loadResp = await fetch(`/api/sessions/${encodeURIComponent(id)}`);
         if (!loadResp.ok) { appendMessage('error', 'Failed to load session.'); return; }
         const loaded = await loadResp.json();
 
@@ -531,6 +630,59 @@ async function handleResume(arg) {
         appendMessage('assistant', `── Session resumed: "${loaded.title}" ──`);
     } catch (e) {
         appendMessage('error', 'Error loading session: ' + e.message);
+    }
+}
+
+// ─── Sessions drawer ───
+function openSessions() {
+    const scrim = document.getElementById('sessions-scrim');
+    const drawer = document.getElementById('sessions-drawer');
+    scrim.style.opacity = '1';
+    scrim.style.pointerEvents = 'auto';
+    drawer.style.transform = 'translateX(0)';
+    renderSessionList();
+}
+function closeSessions() {
+    const scrim = document.getElementById('sessions-scrim');
+    const drawer = document.getElementById('sessions-drawer');
+    scrim.style.opacity = '0';
+    scrim.style.pointerEvents = 'none';
+    drawer.style.transform = 'translateX(100%)';
+}
+function newSession() {
+    sessionId = 'session_' + Date.now();
+    outputArea.innerHTML = '';
+    appendMessage('assistant', '── New session started ──');
+    closeSessions();
+    input.focus();
+}
+async function renderSessionList() {
+    const list = document.getElementById('sessions-list');
+    list.innerHTML = '<div style="color:#602d2d;font-size:11px;padding:10px 6px;letter-spacing:0.1em">LOADING…</div>';
+    try {
+        const resp = await fetch('/api/sessions');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const sessions = await resp.json();
+        if (!sessions.length) {
+            list.innerHTML = '<div style="color:#602d2d;font-size:11px;padding:10px 6px;letter-spacing:0.1em">No saved sessions.</div>';
+            return;
+        }
+        list.innerHTML = '';
+        sessions.forEach(s => {
+            const row = document.createElement('button');
+            row.style.cssText = 'display:block;width:100%;text-align:left;padding:11px 12px;margin-bottom:6px;'
+                + 'background:#0a1220;border:1px solid #301010;cursor:pointer;transition:border-color .12s';
+            row.onmouseenter = () => row.style.borderColor = '#ef4444';
+            row.onmouseleave = () => row.style.borderColor = '#301010';
+            const meta = (s.updated_at_str ? s.updated_at_str + '  ·  ' : '') + (s.message_count || 0) + ' msgs';
+            row.innerHTML = '<div style="color:#f5e5e5;font-size:12px;font-family:JetBrains Mono,monospace;'
+                + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(s.title || '[session]') + '</div>'
+                + '<div style="color:#602d2d;font-size:10px;font-family:Rajdhani,sans-serif;letter-spacing:0.08em;margin-top:3px">' + escapeHtml(meta) + '</div>';
+            row.onclick = async () => { closeSessions(); await loadSession(s.id); };
+            list.appendChild(row);
+        });
+    } catch (e) {
+        list.innerHTML = '<div style="color:#f87171;font-size:11px;padding:10px 6px">Failed to load sessions.</div>';
     }
 }
 
@@ -582,7 +734,7 @@ function addCopyButton(div, rawText) {
     const btn = document.createElement('button');
     btn.textContent = 'COPY';
     btn.className = 'msg-copy-btn absolute top-0 right-0 px-1.5 py-0.5 text-term-gray hover:text-accent transition-colors';
-    btn.style.cssText = 'font-family:Rajdhani,sans-serif;font-weight:700;font-size:8px;letter-spacing:0.15em;border:1px solid #0c1e30;background:#04070d';
+    btn.style.cssText = 'font-family:Rajdhani,sans-serif;font-weight:700;font-size:8px;letter-spacing:0.15em;border:1px solid #301010;background:#04070d';
     btn.onclick = () => {
         navigator.clipboard.writeText(rawText).then(() => {
             btn.textContent = 'COPIED';
@@ -799,6 +951,24 @@ document.addEventListener('click', (e) => {
 // ─── Init ───
 loadSystemInfo();
 setInterval(loadSystemInfo, 5000);
+</script>
+<script>
+(function(){
+    function inject(){
+        if (document.querySelector('.navbar')) return;
+        // Hide known old titlebars
+        ['#main-header','#titlebar'].forEach(function(sel){
+            var el = document.querySelector(sel); if (el) el.style.display='none';
+        });
+        // Hide any .fixed.top-0 titlebar-style headers (defensive)
+        document.querySelectorAll('.fixed.top-0.left-0.right-0').forEach(function(el){ el.style.display='none'; });
+        var wrap = document.createElement('div');
+        wrap.innerHTML = '<header class="navbar">\n    <div class="navbar-left">\n        <a href="/" class="nbr nbr-self">\n            <div class="nbr-mark m-a">A</div>\n            <div class="nbr-id">\n                <span class="nbr-name n-a">ARES</span>\n                <span class="nbr-sep">/</span>\n                <span class="nbr-tag">TERMINAL</span>\n            </div>\n        </a>\n        <button onclick="openSessions()" class="back-chip" style="background:none;cursor:pointer">\n            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>\n            <span>Sessions</span>\n        </button>\n    </div>\n    <a href="/jump/nexus" class="nbr nbr-other">\n        <div class="nbr-mark m-n">N</div>\n        <div class="nbr-id">\n            <span class="nbr-name n-n">NEXUS</span>\n            <span class="nbr-sep">/</span>\n            <span class="nbr-tag">MINI-NAS</span>\n        </div>\n    </a>\n</header>';
+        document.body.insertBefore(wrap.firstChild, document.body.firstChild);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject);
+    else inject();
+})();
 </script>
 </body>
 </html>

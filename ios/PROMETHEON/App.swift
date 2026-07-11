@@ -37,9 +37,7 @@ struct LaunchScreen: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 20) {
-                Text("P")
-                    .font(.system(size: 90, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color(red: 0.494, green: 0.722, blue: 0.941))
+                BlockP(size: 90)
                     .shadow(color: Color(red: 0.494, green: 0.722, blue: 0.941).opacity(glowOpacity), radius: 20)
 
                 Text("PROMETHEON")
@@ -69,5 +67,37 @@ struct LaunchScreen: View {
                 glowOpacity = 0.8
             }
         }
+    }
+}
+
+/// Block-character style "P" built from rectangles
+struct BlockP: View {
+    let size: CGFloat
+    private let accent = Color(red: 0.494, green: 0.722, blue: 0.941)
+
+    var body: some View {
+        let u = size / 7
+        let r: CGFloat = size / 30
+        ZStack(alignment: .topLeading) {
+            // Vertical stem
+            RoundedRectangle(cornerRadius: r)
+                .fill(accent)
+                .frame(width: u * 2, height: u * 7)
+            // Top bar
+            RoundedRectangle(cornerRadius: r)
+                .fill(accent)
+                .frame(width: u * 5.5, height: u * 1.4)
+            // Right arm
+            RoundedRectangle(cornerRadius: r)
+                .fill(accent)
+                .frame(width: u * 1.7, height: u * 3.8)
+                .offset(x: u * 3.8)
+            // Middle bar
+            RoundedRectangle(cornerRadius: r)
+                .fill(accent)
+                .frame(width: u * 5.5, height: u * 1.2)
+                .offset(y: u * 2.8)
+        }
+        .frame(width: size * 0.79, height: size)
     }
 }

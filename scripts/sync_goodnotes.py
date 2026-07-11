@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Sync Goodnotes notebooks to PROMETHEON journals.
+Sync Goodnotes notebooks to ARES journals.
 
 Reads the Goodnotes Mac app's local database (synced via iCloud) to build
 a journal index. When Goodnotes Auto-Backup is enabled, copies exported
 PDFs from iCloud Drive to the NAS journals directory.
 
-Run periodically via launchd (see com.prometheon.goodnotes-sync.plist).
+Run periodically via launchd (see com.ares.goodnotes-sync.plist).
 """
 
 import json
@@ -26,8 +26,10 @@ ICLOUD_DRIVE = os.path.expanduser(
     "~/Library/Mobile Documents/com~apple~CloudDocs"
 )
 
-# Detect NAS journals dir
-if sys.platform == "darwin":
+# Detect NAS journals dir (env override wins — mount path has moved twice)
+if os.environ.get("JOURNALS_DIR"):
+    JOURNALS_DIR = os.environ["JOURNALS_DIR"]
+elif sys.platform == "darwin":
     JOURNALS_DIR = "/Volumes/PROMETHEUS/PERSONAL/journals"
 else:
     JOURNALS_DIR = "/srv/mergerfs/PROMETHEUS/PERSONAL/journals"
@@ -85,7 +87,7 @@ def read_goodnotes_db():
             LEFT JOIN pages p ON p.document_id = d.id AND p.deleted = 0
             WHERE d.deleted = 0 AND d.document_type = 0
             GROUP BY d.id
-            HAVING page_count > 1
+            HAVING page_count > 0
             ORDER BY d.updated_at DESC
         """).fetchall()
 
@@ -239,7 +241,6 @@ def save_metadata(notebooks):
     with open(META_FILE, "w") as f:
         json.dump({
             "synced_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-            "icloud_id": "_3bd21be7957b7a056dd7ca10a999e07e",
             "notebooks": notebooks,
         }, f, indent=2)
     print(f"Saved metadata for {len(notebooks)} notebooks to {META_FILE}")

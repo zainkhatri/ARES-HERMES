@@ -1,4 +1,4 @@
-"""Safe command executor for PROMETHEON. Blocks destructive commands, enforces allowlist.
+"""Safe command executor for ARES. Blocks destructive commands, enforces allowlist.
 Commands execute directly on the NAS (no SSH — the app runs locally)."""
 
 import os
@@ -6,7 +6,10 @@ import shlex
 import subprocess
 import re
 
-NAS_CWD = "/srv/mergerfs/PROMETHEUS"
+import os as _os
+# ARES runs in /mnt/data/PROMETHEUS (LXC bind-mount). Fall back to /tmp if absent.
+_CANDIDATES = [_os.getenv("NAS_CWD"), "/mnt/data/PROMETHEUS", "/srv/mergerfs/PROMETHEUS", "/tmp"]
+NAS_CWD = next((p for p in _CANDIDATES if p and _os.path.isdir(p)), "/tmp")
 
 ALLOWED_COMMANDS = {
     "ls", "cat", "df", "du", "ps", "top", "free", "uname", "uptime",
@@ -22,6 +25,11 @@ ALLOWED_COMMANDS = {
     "tree", "basename", "dirname", "realpath", "readlink",
     "lsblk", "blkid", "fdisk", "nproc", "lscpu", "dmidecode",
     "systemctl", "journalctl", "lsattr",
+    # Hardware / homelab introspection
+    "lspci", "lsusb", "nvidia-smi", "nvidia-settings",
+    "qm", "pct", "pveversion", "pvesm", "pvesh",
+    "tailscale", "tailscale0",
+    "bc", "awk", "sed", "cut", "tr", "xargs", "tee",
 }
 
 # Hardcoded block patterns — these NEVER execute, no matter what
@@ -123,7 +131,7 @@ def is_command_safe(command_str: str) -> tuple[bool, str]:
         if re.search(pattern, lowered):
             return False, (
                 f"BLOCKED: Destructive command detected (matched '{pattern}'). "
-                f"PROMETHEON never permanently deletes files. Use the trash_file tool instead."
+                f"ARES never permanently deletes files. Use the trash_file tool instead."
             )
 
     try:
@@ -188,10 +196,10 @@ def execute_command(command_str: str) -> dict:
             "returncode": -1,
             "blocked": False,
         }
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         return {
             "stdout": "",
-            "stderr": f"Command not found: {parts[0]}",
+            "stderr": f"Command or working directory not found: {e}",
             "returncode": -1,
             "blocked": False,
         }
@@ -214,7 +222,7 @@ def safe_shutdown():
 
         # 2. Initiate clean shutdown (1 minute delay so response can be sent)
         subprocess.Popen(
-            ["shutdown", "-h", "+1", "PROMETHEON: Safe shutdown initiated by user"],
+            ["shutdown", "-h", "+1", "ARES: Safe shutdown initiated by user"],
         )
         steps.append("Shutdown scheduled in 1 minute")
 

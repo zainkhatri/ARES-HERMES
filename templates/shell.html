@@ -231,6 +231,11 @@
             <button class="key" data-key="C-l">^L</button>
             <button class="key" data-key="C-r">^R</button>
             <span class="key-sep"></span>
+            <span class="key-lbl">tabs</span>
+            <button class="key" data-tab="new"  title="New tab">^T</button>
+            <button class="key" data-tab="next" title="Next tab">^B</button>
+            <button class="key warn" data-tab="close" title="Close tab">^Z</button>
+            <span class="key-sep"></span>
             <button class="key" data-key="Left">←</button>
             <button class="key" data-key="Up">↑</button>
             <button class="key" data-key="Down">↓</button>
@@ -281,7 +286,10 @@
             });
         }
 
+        var lastWindows = [];  // latest tmux window list, for the ^T/^B/^Z tab keys
+
         function renderTabs(windows) {
+            lastWindows = windows || [];
             Array.prototype.slice.call(tabsEl.querySelectorAll('.tab:not(.tab-add)'))
                 .forEach(function (n) { n.remove(); });
             (windows || []).forEach(function (w) {
@@ -326,6 +334,25 @@
         addAres.addEventListener('click', function () { guard(api('/new', { target: 'ares' })); });
         addNexus.addEventListener('click', function () { guard(api('/new', { target: 'nexus' })); });
 
+        // Phone equivalents of the .tmux.conf tab chords (^T new / ^B next / ^Z close).
+        // tmux `send-keys` bypasses `bind -n`, so these drive the real window ops via the
+        // control service instead of sending the literal chord.
+        function newTab()  { guard(api('/new', { target: 'ares' })); }
+        function nextTab() {
+            if (lastWindows.length < 2) return;
+            var i = -1;
+            lastWindows.forEach(function (w, k) { if (w.active) i = k; });
+            if (i < 0) i = 0;
+            var n = lastWindows[(i + 1) % lastWindows.length];
+            guard(api('/select', { index: String(n.index) }));
+        }
+        function closeTab() {
+            var a = null;
+            lastWindows.forEach(function (w) { if (w.active) a = w; });
+            if (!a) return;
+            if (confirm('Close this tab?')) kill(a.index);
+        }
+
         var form = document.getElementById('inputbar');
         var line = document.getElementById('line');
 
@@ -337,6 +364,12 @@
             if (btn.id === 'kbd-toggle') {
                 if (document.activeElement === line) line.blur();
                 else line.focus();
+                return;
+            }
+            if (btn.dataset.tab) {
+                if (btn.dataset.tab === 'new')   newTab();
+                else if (btn.dataset.tab === 'next')  nextTab();
+                else if (btn.dataset.tab === 'close') closeTab();
                 return;
             }
             if (btn.dataset.key)    api('/key',    { key: btn.dataset.key }).catch(function () {});
