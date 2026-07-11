@@ -9,3 +9,13 @@
 - PC-monitor native mode not yet added to vdd_settings.xml — add a `<resolution>` block when the second client's mode is known (Sunshine dd_resolution auto still needs the mode to exist in the VDD list, or it falls back to nearest).
 
 **2026-07-10 late:** post-reboot the VDD came up at 800x600@30 (first XML entry) → "zoomed in" stream. Removed all sub-1920 modes from vdd_settings.xml (now: 1920x1080, 2560x1440, 3840x2160, 3024x1964). Note: display mode changes via guest-exec run in session 0 and do nothing — use the interactive scheduled-task trampoline (C:\gamemode\cursor-trace.ps1 + Start-ScheduledTask CursorTrace).
+
+**2026-07-11 — display saga resolved, VDD pinning REVERTED.**
+Root causes found the hard way:
+1. `output_name = {VDD-guid}` makes Sunshine CRASH ON STARTUP whenever the VDD isn't an active display path (i.e. any time it's disabled or the OLED is sole) — "Device does not exist in available path source data".
+2. A multiline `global_prep_cmd` (embedded JSON value split across two conf lines) → `boost json_parser_error: expected value` → crash-loop that no config edit could fix because it died before reading config.
+3. Trying to disable the VDD at rest ALSO breaks #1.
+
+**Fix / current known-good config (sunshine.conf):** only `global_prep_cmd = [{...desk-guard...}]` on a SINGLE line. NO `output_name` pin, NO `dd_configuration_option`. Sunshine captures the PRIMARY display. Resting topology = OLED (Odyssey G60SD) primary @ native 2560x1440, VDD present as ignored 800x600 secondary. Streaming = OLED mirror @ 1440p; desk never blacks out; Sunshine starts reliably.
+**Tradeoff accepted:** lost pixel-perfect Mac-native (3024x1964) streaming. To restore later WITH Zain watching the screen: set a clean EXTEND topology, re-pin output_name to the VDD, and verify Sunshine starts — never disable the VDD while output_name points at it.
+Recovery that unwedged it: reinstall Sunshine /S over the top (pairing in sunshine_state.json survives), then single-line guard conf.
