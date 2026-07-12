@@ -579,7 +579,7 @@
 </head>
 <body>
 <!-- NEXUS watchdog banner (2026-07-06): polls /api/alerts; hidden when level=ok -->
-<div id="nexus-alert-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;padding:10px 16px;font:600 14px/1.4 system-ui,sans-serif;color:#fff;text-align:center;"></div>
+<div id="nexus-alert-banner" onclick="this.style.display='none'" title="tap to dismiss" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:10px 16px;font:600 14px/1.4 system-ui,sans-serif;color:#fff;text-align:center;cursor:pointer;"></div>
 <script>
 (function(){
   var el=document.getElementById("nexus-alert-banner");
