@@ -614,6 +614,12 @@ async def console_loop(ws, target):
                         if evs:
                             await _safe_send(ws, json.dumps(
                                 {"claudelog": {"events": evs, "off": st["off"], "src": "ares", "win": win}}))
+                    else:
+                        # A brand-new Claude session has no transcript file until its
+                        # first message. ALWAYS reply — total silence left the phone
+                        # spinning forever ("typed claude, never loaded").
+                        await _safe_send(ws, json.dumps(
+                            {"claudelog": {"waiting": True, "src": "ares", "win": win}}))
             elif c == "blocks":
                 w = d.get("win")
                 idx = w if isinstance(w, int) and 0 <= w <= 999 else None
