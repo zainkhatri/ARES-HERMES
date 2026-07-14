@@ -245,11 +245,98 @@ async def chat_loop(ws):
                 pass
 
 
+import glob as _glob
+
+CLAUDE_PROJECTS = "/root/.claude/projects"
+
+
+def _newest_transcript():
+    """Most-recently-modified Claude Code transcript across all projects = the
+    active conversation. Structured JSONL Claude writes itself — NOT TUI scraping."""
+    try:
+        files = _glob.glob(os.path.join(CLAUDE_PROJECTS, "*", "*.jsonl"))
+    except OSError:
+        return None
+    if not files:
+        return None
+    return max(files, key=lambda f: os.path.getmtime(f))
+
+
+def _tool_summary(name, inp):
+    if not isinstance(inp, dict):
+        return ""
+    if name in ("Edit", "Write", "Read", "NotebookEdit"):
+        return os.path.basename(inp.get("file_path", ""))
+    if name == "Bash":
+        return (inp.get("command", "") or "")[:120]
+    if name in ("Grep", "Glob"):
+        return inp.get("pattern", "")
+    if name == "Task":
+        return inp.get("description", "")
+    for k in ("query", "url", "prompt", "path"):
+        if k in inp:
+            return str(inp[k])[:120]
+    return ""
+
+
+def _parse_transcript(path, off):
+    """Parse JSONL from byte offset `off` into compact chat events. Returns
+    (events, new_off). Whole-line JSONL, so seeking to a line boundary is safe
+    because we always set off to the file size after a full read."""
+    events = []
+    try:
+        with open(path, "rb") as f:
+            f.seek(off)
+            raw = f.read()
+        new_off = off + len(raw)
+    except OSError:
+        return [], off
+    for line in raw.split(b"\n"):
+        if not line.strip():
+            continue
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        typ = d.get("type")
+        msg = d.get("message")
+        if typ == "user" and isinstance(msg, dict):
+            c = msg.get("content")
+            if isinstance(c, str):
+                t = c.strip()
+                # Skip injected context / command plumbing, keep real prompts.
+                if t and not t.startswith(("Caveat:", "<command-", "<local-command",
+                                           "<system-reminder", "[Request interrupted")):
+                    events.append({"role": "user", "text": t[:4000]})
+        elif typ == "assistant" and isinstance(msg, dict):
+            c = msg.get("content")
+            if isinstance(c, list):
+                for b in c:
+                    bt = b.get("type")
+                    if bt == "text" and b.get("text", "").strip():
+                        events.append({"role": "assistant", "text": b["text"][:8000]})
+                    elif bt == "tool_use":
+                        events.append({"role": "tool", "name": b.get("name", "tool"),
+                                       "detail": _tool_summary(b.get("name", ""), b.get("input"))})
+    return events, new_off
+
+
 async def console_loop(ws, target):
     """Command-channel mode: NO pty attach (so the phone never clamps the shared
     window's size). The native console polls `capture` and injects input via
     tmux send-keys — same session the Mac sees, phone-native everything else."""
     last_sent = None
+    log_off = 0
+    log_path = None
+
+    def _win_target(d):
+        """Address a specific window when the client passes `win`, else the
+        session's active window."""
+        w = d.get("win")
+        if isinstance(w, int) and 0 <= w <= 999:
+            return f"{target}:{w}"
+        return target
+
     async for msg in ws:
         if isinstance(msg, (bytes, bytearray)):
             continue
@@ -260,24 +347,34 @@ async def console_loop(ws, target):
         c = str(d.get("ctl", ""))
         try:
             if c == "capture":
-                txt = _capture(target)
+                txt = _capture(_win_target(d))
                 if txt is not None and txt != last_sent:
                     last_sent = txt
                     await _safe_send(ws, json.dumps({"capture": txt}))
                 elif txt is None:
                     await _safe_send(ws, json.dumps({"capture_err": True}))
+            elif c == "claudelog":
+                path = _newest_transcript()
+                if path != log_path:            # active conversation switched → reset
+                    log_path, log_off = path, 0
+                    await _safe_send(ws, json.dumps({"claudelog": {"reset": True, "events": [], "off": 0}}))
+                if path:
+                    evs, log_off = _parse_transcript(path, log_off)
+                    if evs:
+                        await _safe_send(ws, json.dumps({"claudelog": {"events": evs, "off": log_off}}))
             elif c == "sendkeys":
+                tgt = _win_target(d)
                 text = str(d.get("text", ""))[:10000]
                 if text:
-                    subprocess.run(["tmux", "send-keys", "-t", target, "-l", "--", text],
+                    subprocess.run(["tmux", "send-keys", "-t", tgt, "-l", "--", text],
                                    capture_output=True, timeout=4)
                 if d.get("enter"):
-                    subprocess.run(["tmux", "send-keys", "-t", target, "Enter"],
+                    subprocess.run(["tmux", "send-keys", "-t", tgt, "Enter"],
                                    capture_output=True, timeout=4)
             elif c == "key":
                 name = str(d.get("name", ""))
                 if name in CONSOLE_KEYS:
-                    subprocess.run(["tmux", "send-keys", "-t", target, name],
+                    subprocess.run(["tmux", "send-keys", "-t", _win_target(d), name],
                                    capture_output=True, timeout=4)
             elif c == "windows":
                 await _safe_send(ws, json.dumps({"windows": _windows(target)}))
