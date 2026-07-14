@@ -141,19 +141,34 @@ _ANSI_STRIP_NON_SGR = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z](?<!m)")  # keep SGR (
 _BRACKET_PASTE = re.compile(rb"\x1b\[\?2004[hl]")
 
 
+_piped_wids = set()
+
+
 def _ensure_pipe(session, idx):
     """Start streaming a window's raw output to a per-window log (idempotent).
-    pipe-pane taps the pty BEFORE tmux renders it, so OSC 133 markers survive."""
+    pipe-pane taps the pty BEFORE tmux renders it, so OSC 133 markers survive.
+    Logs are keyed by tmux's UNIQUE window id (@N, never reused) — keying by
+    index made a new tab inherit the block history of a dead tab whose index
+    tmux recycled ("+ shows the old ls/^C blocks" bug)."""
     try:
         os.makedirs(_BLOCK_LOG_DIR, exist_ok=True)
     except OSError:
         return None
-    log = os.path.join(_BLOCK_LOG_DIR, f"{idx}.log")
-    # -o toggles: only (re)start if not already piping. tmux has no query, so we
-    # just (re)issue; -o means "only if not already open" is NOT a thing — instead
-    # we stop then start to a fresh log each first-attach. Cheap.
-    subprocess.run(["tmux", "pipe-pane", "-t", f"{session}:{idx}",
-                    f"cat >> {log}"], capture_output=True, timeout=4)
+    try:
+        r = subprocess.run(["tmux", "display-message", "-p", "-t", f"{session}:{idx}",
+                            "#{window_id}"], capture_output=True, text=True, timeout=4)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0 or not r.stdout.strip():
+        return None
+    wid = r.stdout.strip().lstrip("@")
+    log = os.path.join(_BLOCK_LOG_DIR, f"w{wid}.log")
+    # pipe-pane once per window: re-issuing on every poll would churn the pipe
+    # and can drop output in the gaps.
+    if wid not in _piped_wids:
+        subprocess.run(["tmux", "pipe-pane", "-t", f"{session}:{idx}",
+                        f"cat >> {log}"], capture_output=True, timeout=4)
+        _piped_wids.add(wid)
     return log
 
 
@@ -570,6 +585,14 @@ async def console_loop(ws, target):
                 cmd = _window_cmd(c, target, d.get("i", 0))
                 if cmd:
                     subprocess.run(cmd, capture_output=True, timeout=4)
+                if c == "newwin":
+                    # Attach the block pipe at birth — new-window selects the new
+                    # window, so the active index is it. Waiting for the first
+                    # blocks poll could miss a fast first command.
+                    r = subprocess.run(["tmux", "display-message", "-p", "-t", target,
+                                        "#{window_index}"], capture_output=True, text=True, timeout=4)
+                    if r.returncode == 0 and r.stdout.strip().isdigit():
+                        _ensure_pipe(target, int(r.stdout.strip()))
                 await _safe_send(ws, json.dumps({"windows": _windows(target)}))
         except (OSError, subprocess.SubprocessError):
             pass
