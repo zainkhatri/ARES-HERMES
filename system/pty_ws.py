@@ -410,6 +410,55 @@ def _newest_transcript():
     return max(files, key=lambda f: os.path.getmtime(f))
 
 
+def _find_claude_pid(root_pid):
+    """Walk the pane's process tree for the `claude` process (bounded depth)."""
+    frontier = [str(root_pid)]
+    for _ in range(6):
+        if not frontier:
+            return None
+        nxt = []
+        for pid in frontier:
+            try:
+                with open(f"/proc/{pid}/comm") as f:
+                    if f.read().strip() == "claude":
+                        return pid
+                r = subprocess.run(["pgrep", "-P", pid], capture_output=True, text=True, timeout=3)
+                nxt += r.stdout.split()
+            except (OSError, subprocess.SubprocessError):
+                continue
+        frontier = nxt
+    return None
+
+
+def _window_transcript(session, idx):
+    """The transcript file of the Claude RUNNING IN THIS WINDOW: pane pid →
+    claude process → its cwd → that project's transcript dir → newest .jsonl no
+    older than the process. Distinguishes multiple Claudes on the same box —
+    without this, every Claude tab showed the globally-newest conversation."""
+    try:
+        r = subprocess.run(["tmux", "display-message", "-p", "-t", f"{session}:{idx}",
+                            "#{pane_pid}"], capture_output=True, text=True, timeout=4)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0 or not r.stdout.strip().isdigit():
+        return None
+    cpid = _find_claude_pid(r.stdout.strip())
+    if not cpid:
+        return None
+    try:
+        cwd = os.readlink(f"/proc/{cpid}/cwd")
+        started = os.stat(f"/proc/{cpid}").st_mtime
+    except OSError:
+        return None
+    proj = os.path.join(CLAUDE_PROJECTS, re.sub(r"[^A-Za-z0-9]", "-", cwd))
+    try:
+        files = [f for f in _glob.glob(os.path.join(proj, "*.jsonl"))
+                 if os.path.getmtime(f) >= started - 5]
+    except OSError:
+        return None
+    return max(files, key=lambda f: os.path.getmtime(f)) if files else None
+
+
 def _tool_summary(name, inp):
     if not isinstance(inp, dict):
         return ""
@@ -513,9 +562,7 @@ async def console_loop(ws, target):
     window's size). The native console polls `capture` and injects input via
     tmux send-keys — same session the Mac sees, phone-native everything else."""
     last_sent = None
-    log_off = 0
-    log_path = None
-    log_src = "ares"
+    log_state = {}      # per-window transcript tail state: win -> {path, off}
 
     def _win_target(d):
         """Address a specific window when the client passes `win`, else the
@@ -543,23 +590,30 @@ async def console_loop(ws, target):
                     await _safe_send(ws, json.dumps({"capture_err": True}))
             elif c == "claudelog":
                 src = str(d.get("src", "ares"))
+                w = d.get("win")
+                win = w if isinstance(w, int) and 0 <= w <= 999 else -1
                 if src == "nexus":
                     # Full-replace each poll: parse the tail fetched over ssh.
                     raw, err = await asyncio.to_thread(_nexus_transcript_bytes)
                     evs = _parse_transcript_bytes(raw)
-                    if src != log_src:
-                        log_src = src
                     await _safe_send(ws, json.dumps(
-                        {"claudelog": {"reset": True, "events": evs, "off": 0, "err": err, "src": "nexus"}}))
+                        {"claudelog": {"reset": True, "events": evs, "off": 0, "err": err,
+                                       "src": "nexus", "win": win}}))
                 else:
-                    path = _newest_transcript()
-                    if path != log_path or log_src != "ares":  # convo/box switched → reset
-                        log_path, log_off, log_src = path, 0, "ares"
-                        await _safe_send(ws, json.dumps({"claudelog": {"reset": True, "events": [], "off": 0, "src": "ares"}}))
+                    # Resolve THIS window's Claude; fall back to global newest when
+                    # the window isn't specified (or resolution fails at startup).
+                    path = (_window_transcript(target, win) if win >= 0 else None) or \
+                           (None if win >= 0 else _newest_transcript())
+                    st = log_state.setdefault(win, {"path": None, "off": 0})
+                    if path != st["path"]:            # this window's convo (re)started
+                        st["path"], st["off"] = path, 0
+                        await _safe_send(ws, json.dumps(
+                            {"claudelog": {"reset": True, "events": [], "off": 0, "src": "ares", "win": win}}))
                     if path:
-                        evs, log_off = _parse_transcript(path, log_off)
+                        evs, st["off"] = _parse_transcript(path, st["off"])
                         if evs:
-                            await _safe_send(ws, json.dumps({"claudelog": {"events": evs, "off": log_off, "src": "ares"}}))
+                            await _safe_send(ws, json.dumps(
+                                {"claudelog": {"events": evs, "off": st["off"], "src": "ares", "win": win}}))
             elif c == "blocks":
                 w = d.get("win")
                 idx = w if isinstance(w, int) and 0 <= w <= 999 else None
