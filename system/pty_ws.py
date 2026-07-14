@@ -119,6 +119,132 @@ def _capture(session):
     return r.stdout if r.returncode == 0 else None
 
 
+REPL_CWD = "/mnt/nvme/PROMETHEUS"
+CHAT_CWD = "/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD"
+CLAUDE_BIN = "/root/.local/bin/claude"
+
+
+async def repl_loop(ws):
+    """Persistent bash over pipes (no pty): each {"run": cmd} streams {"out": ...}
+    chunks and ends with {"done": exitcode}. State (cwd, env, vars) persists across
+    commands because it's ONE bash. No tty → tools emit plain uncolored text, which
+    is exactly what the phone's command cards want."""
+    import uuid
+    proc = await asyncio.create_subprocess_exec(
+        "bash", "--noprofile", "--norc", "-l",
+        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT, cwd=REPL_CWD,
+        env={**os.environ, "TERM": "dumb", "PS1": ""},
+    )
+    running = False
+
+    async def stream_until(sentinel):
+        nonlocal running
+        buf = b""
+        while True:
+            chunk = await proc.stdout.read(8192)
+            if not chunk:
+                await _safe_send(ws, json.dumps({"done": -1}))
+                break
+            buf += chunk
+            if sentinel in buf:
+                head, tail = buf.split(sentinel, 1)
+                code = tail.split(b"\n", 1)[0].strip().decode() or "-1"
+                if head:
+                    await _safe_send(ws, json.dumps({"out": head.decode("utf-8", "replace")}))
+                await _safe_send(ws, json.dumps({"done": int(code) if code.lstrip("-").isdigit() else -1}))
+                break
+            # flush all-but-last-1KB so a partial sentinel isn't split mid-frame
+            if len(buf) > 1024:
+                flush, buf = buf[:-1024], buf[-1024:]
+                await _safe_send(ws, json.dumps({"out": flush.decode("utf-8", "replace")}))
+        running = False
+
+    try:
+        async for msg in ws:
+            if isinstance(msg, (bytes, bytearray)):
+                continue
+            try:
+                d = json.loads(msg)
+            except ValueError:
+                continue
+            cmd = str(d.get("run", ""))[:20000]
+            if not cmd:
+                continue
+            if running:
+                await _safe_send(ws, json.dumps({"busy": True}))
+                continue
+            running = True
+            uid = uuid.uuid4().hex[:12]
+            sentinel = f"###ARES_EOC:{uid}:".encode()
+            proc.stdin.write(cmd.encode() + b"\nprintf '###ARES_EOC:" + uid.encode() + b":%d\\n' $?\n")
+            await proc.stdin.drain()
+            asyncio.create_task(stream_until(sentinel))
+    finally:
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+
+
+async def chat_loop(ws):
+    """Claude Code bridge: each {"prompt": ..., "session": <id|''>} spawns
+    `claude -p --output-format stream-json` and forwards every NDJSON event line
+    as {"line": <raw json>}. The phone renders structured chat from the events —
+    no TUI interpretation anywhere. {"stop": true} kills the active turn."""
+    proc = None
+
+    async def run_turn(prompt, session):
+        nonlocal proc
+        argv = [CLAUDE_BIN, "-p", prompt, "--output-format", "stream-json",
+                "--verbose", "--dangerously-skip-permissions"]
+        if session:
+            argv += ["--resume", session]
+        proc = await asyncio.create_subprocess_exec(
+            *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            cwd=CHAT_CWD, env={**os.environ, "IS_SANDBOX": "1"},
+        )
+        try:
+            while True:
+                line = await proc.stdout.readline()
+                if not line:
+                    break
+                await _safe_send(ws, json.dumps({"line": line.decode("utf-8", "replace").rstrip()}))
+        finally:
+            rc = await proc.wait()
+            await _safe_send(ws, json.dumps({"turn_done": rc}))
+            proc = None
+
+    try:
+        async for msg in ws:
+            if isinstance(msg, (bytes, bytearray)):
+                continue
+            try:
+                d = json.loads(msg)
+            except ValueError:
+                continue
+            if d.get("stop") and proc:
+                try:
+                    proc.terminate()
+                except ProcessLookupError:
+                    pass
+            elif "prompt" in d:
+                if proc:
+                    await _safe_send(ws, json.dumps({"busy": True}))
+                    continue
+                prompt = str(d["prompt"])[:50000]
+                session = str(d.get("session", ""))[:64]
+                if not re.fullmatch(r"[A-Za-z0-9-]*", session):
+                    session = ""
+                asyncio.create_task(run_turn(prompt, session))
+    finally:
+        if proc:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+
+
 async def console_loop(ws, target):
     """Command-channel mode: NO pty attach (so the phone never clamps the shared
     window's size). The native console polls `capture` and injects input via
@@ -187,6 +313,12 @@ async def handle(ws):
     # Console mode: command channel only, no pty fork / tmux attach.
     if d.get("mode") == "console" and target != "shell":
         await console_loop(ws, target)
+        return
+    if d.get("mode") == "repl":
+        await repl_loop(ws)
+        return
+    if d.get("mode") == "chat":
+        await chat_loop(ws)
         return
 
     shell = _shell_for(target)
