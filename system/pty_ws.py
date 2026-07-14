@@ -114,16 +114,107 @@ def _windows(session):
     return out
 
 
+_BLOCK_RC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "block-shell.rc")
+
+
 def _window_cmd(action, session, idx):
     assert _valid_target(session), "unvalidated session name"
     idx = max(0, min(999, int(idx)))
     if action == "selectwin":
         return ["tmux", "select-window", "-t", f"{session}:{idx}"]
     if action == "newwin":
-        return ["tmux", "new-window", "-t", session]
+        # Launch with the block-shell rcfile so this window emits OSC 133 markers
+        # → the phone renders it as Warp-style command blocks. Scoped to windows
+        # the phone opens; the global shell profile is untouched.
+        return ["tmux", "new-window", "-t", session,
+                f"bash --rcfile {_BLOCK_RC} -i"]
     if action == "killwin":
         return ["tmux", "kill-window", "-t", f"{session}:{idx}"]
     return None
+
+
+_BLOCK_LOG_DIR = "/tmp/ares-blocks"
+_OSC = re.compile(rb"\x1b\]133;([A-D])(?:;(\d+))?\x07")
+_ANSI_STRIP_NON_SGR = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z](?<!m)")  # keep SGR (…m), drop the rest
+_BRACKET_PASTE = re.compile(rb"\x1b\[\?2004[hl]")
+
+
+def _ensure_pipe(session, idx):
+    """Start streaming a window's raw output to a per-window log (idempotent).
+    pipe-pane taps the pty BEFORE tmux renders it, so OSC 133 markers survive."""
+    try:
+        os.makedirs(_BLOCK_LOG_DIR, exist_ok=True)
+    except OSError:
+        return None
+    log = os.path.join(_BLOCK_LOG_DIR, f"{idx}.log")
+    # -o toggles: only (re)start if not already piping. tmux has no query, so we
+    # just (re)issue; -o means "only if not already open" is NOT a thing — instead
+    # we stop then start to a fresh log each first-attach. Cheap.
+    subprocess.run(["tmux", "pipe-pane", "-t", f"{session}:{idx}",
+                    f"cat >> {log}"], capture_output=True, timeout=4)
+    return log
+
+
+def _parse_blocks(raw):
+    """Segment a pipe-pane raw byte stream into command blocks using OSC 133.
+    A→prompt start, C→output start, D;<ec>→done. Returns newest-last block dicts
+    {cmd, out, exit}. Full-screen apps between markers are messy but shells are clean."""
+    blocks = []
+    # Split on the markers, tracking state. Walk marker by marker.
+    pos = 0
+    cur = {"cmd": b"", "out": b"", "exit": None, "phase": None}
+    segments = []
+    last = 0
+    for m in _OSC.finditer(raw):
+        segments.append(("text", raw[last:m.start()]))
+        segments.append(("mark", m.group(1).decode(), m.group(2)))
+        last = m.end()
+    segments.append(("text", raw[last:]))
+
+    def flush():
+        cmd = _clean(cur["cmd"]).strip()
+        # Command echo is "❯ <command>" (minimal PS1 from block-shell.rc) — keep
+        # only the first line after the prompt glyph.
+        cmd = cmd.split("\n", 1)[0]
+        if cmd.startswith("❯"):
+            cmd = cmd[1:].strip()
+        out = _clean(cur["out"]).rstrip()
+        # Require actual command/output — drops the spurious empty block from the
+        # shell's own startup precmd (which has only an exit code).
+        if cmd or out:
+            blocks.append({"cmd": cmd, "out": out, "exit": cur["exit"]})
+
+    phase = None
+    for seg in segments:
+        if seg[0] == "mark":
+            code = seg[1]
+            if code == "A":
+                phase = "prompt"
+            elif code == "C":
+                phase = "output"
+            elif code == "D":
+                cur["exit"] = int(seg[2]) if seg[2] else None
+                flush()
+                cur = {"cmd": b"", "out": b"", "exit": None, "phase": None}
+                phase = None
+        else:
+            txt = seg[1]
+            if phase == "prompt":
+                cur["cmd"] += txt
+            elif phase == "output":
+                cur["out"] += txt
+    return blocks[-60:]  # cap
+
+
+def _clean(b):
+    """Strip bracketed-paste + non-SGR CSI + the prompt echo cruft; keep SGR color;
+    decode. Also drops the leading prompt string up to the last visible ❯/$ on the
+    command line."""
+    b = _BRACKET_PASTE.sub(b"", b)
+    b = _ANSI_STRIP_NON_SGR.sub(b"", b)
+    s = b.decode("utf-8", "replace")
+    s = s.replace("\r", "")
+    return s
 
 
 def _set_winsize(fd, cols, rows):
@@ -437,6 +528,19 @@ async def console_loop(ws, target):
                         evs, log_off = _parse_transcript(path, log_off)
                         if evs:
                             await _safe_send(ws, json.dumps({"claudelog": {"events": evs, "off": log_off}}))
+            elif c == "blocks":
+                w = d.get("win")
+                idx = w if isinstance(w, int) and 0 <= w <= 999 else None
+                if idx is not None:
+                    log = _ensure_pipe(target, idx)
+                    raw = b""
+                    if log:
+                        try:
+                            with open(log, "rb") as f:
+                                raw = f.read()[-200000:]   # cap tail
+                        except OSError:
+                            raw = b""
+                    await _safe_send(ws, json.dumps({"blocks": _parse_blocks(raw)}))
             elif c == "sendkeys":
                 tgt = _win_target(d)
                 text = str(d.get("text", ""))[:10000]
