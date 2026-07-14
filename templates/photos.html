@@ -3517,6 +3517,7 @@ function jumpToYear(year) {
         if (!section) return;
         top = section.getBoundingClientRect().top + window.scrollY - stickyOffset;
     }
+    _markSmoothScroll();
     window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
 }
 
@@ -3704,7 +3705,10 @@ function _refineOffsetEstimate(monthKey) {
 
     /* Update the placeholder min-height to match the refined estimate. */
     var grid = document.getElementById('g-' + monthKey);
-    if (grid && !renderedMonths.has(monthKey)) grid.style.minHeight = newGridH + 'px';
+    if (grid && !renderedMonths.has(monthKey)) {
+        grid.style.minHeight = newGridH + 'px';
+        _anchorCompensate(_monthTopOffsets[idx].top, newSectionH, hDelta);
+    }
 
     /* Propagate height delta forward. */
     for (var j = idx + 1; j < _monthTopOffsets.length; j++) {
@@ -3961,6 +3965,33 @@ function _scheduleTimelineRelayout() {
     });
 }
 
+/* Keep the viewport visually anchored when content at/above it changes
+   height (month mount, placeholder refine). Called BEFORE the frame paints
+   (rAF / same task), so scrollBy makes the displacement invisible — this is
+   what kills the fling/teleport "scrubber bounce" layout shifts.
+   sectTop/sectH are post-change geometry; hDelta is the height change this
+   call introduced (NOT accumulated drift — compensating drift would double-
+   count deltas already compensated by earlier sections' own calls). */
+var _smoothScrollUntil = 0;
+/* Any instant scrollBy cancels an in-flight smooth scroll animation, so the
+   compensator must stand down while one is running (year jump, scroll-to-top).
+   Skipping is just the pre-compensator behavior for those moments. */
+function _markSmoothScroll() { _smoothScrollUntil = performance.now() + 900; }
+
+function _anchorCompensate(sectTop, sectH, hDelta) {
+    if (!hDelta) return;
+    if (performance.now() < _smoothScrollUntil) return;
+    var viewTop = window.scrollY;
+    if (sectTop + sectH <= viewTop) {
+        window.scrollBy(0, hDelta);                 /* fully above viewport */
+    } else if (sectTop < viewTop) {
+        /* Viewport is inside this section: rows above the view edge moved
+           roughly proportionally to how far into the section we are. */
+        var frac = (viewTop - sectTop) / Math.max(1, sectH);
+        window.scrollBy(0, hDelta * Math.min(1, Math.max(0, frac)));
+    }
+}
+
 function _reconcileMonthOffset(monthKey) {
     if (_scrubFreeze) return;   /* never shift offsets while the handle is held */
     if (!_monthTopOffsets.length) return;
@@ -3998,6 +4029,9 @@ function _reconcileMonthOffset(monthKey) {
 
     /* Invalidate the DOM section cache — it holds stale offsetTops. */
     _sectionOffsetCache = null;
+
+    /* Cancel the visual displacement this mount introduced before paint. */
+    _anchorCompensate(realTop, realH, hDelta);
 
     _scheduleTimelineRelayout();
 }
@@ -4049,9 +4083,19 @@ function unrenderMonthGrid(monthKey) {
     renderedMonths.delete(monthKey);
     var grid = document.getElementById('g-' + monthKey);
     if (!grid) return;
+    /* Freeze the MEASURED height as the placeholder before clearing — the
+       estimate can be a row or two off, and an eviction above the viewport
+       with a height error visibly yanks the scroll position. Measured height
+       makes eviction shift-free by construction. Falls back to the estimate
+       if the grid was somehow never laid out (offsetHeight 0). */
+    var realH = grid.offsetHeight;
     grid.innerHTML = '';
-    var m = allMonths.find(function(x) { return x.month_key === monthKey; });
-    if (m) grid.style.minHeight = estimateMonthHeight(m.count, monthKey) + 'px';
+    if (realH >= 1) {
+        grid.style.minHeight = realH + 'px';
+    } else {
+        var m = allMonths.find(function(x) { return x.month_key === monthKey; });
+        if (m) grid.style.minHeight = estimateMonthHeight(m.count, monthKey) + 'px';
+    }
     /* Un-mark eagered so if this month re-enters the viewport it gets
        upgraded again when renderMonthGrid stamps it loading="lazy". */
     var sect = document.getElementById('m-' + monthKey);
@@ -4560,6 +4604,7 @@ function buildMonthlyView() {
             /* scroll to the month */
             requestAnimationFrame(function() {
                 var el = document.getElementById('m-' + mk);
+                _markSmoothScroll();
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
         });
@@ -4609,6 +4654,7 @@ function buildYearlyView() {
                 if (firstMonthOfYear) {
                     var ov2 = document.getElementById('gallery-overview');
                     var tilEl = ov2 && ov2.querySelector('[data-month-key="' + firstMonthOfYear.month_key + '"]');
+                    _markSmoothScroll();
                     if (tilEl) tilEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             });
@@ -6689,22 +6735,26 @@ function syncMobileTabs() {
 mtabPhotos.addEventListener('click', function() {
     showPhotos();
     syncMobileTabs();
+    _markSmoothScroll();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 mtabVideos.addEventListener('click', function() {
     showVideos();
     syncMobileTabs();
+    _markSmoothScroll();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 mtabPeople.addEventListener('click', function() {
     showPeople();
     syncMobileTabs();
+    _markSmoothScroll();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 if (mtabScreenshots) {
     mtabScreenshots.addEventListener('click', function() {
         showScreenshots();
         syncMobileTabs();
+        _markSmoothScroll();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 }
@@ -7994,6 +8044,7 @@ function renderSearchResults(data, q) {
         _dragPct = pct;
         var ty = _pctToTargetY(pct);
         _premountAround(ty);
+        _markSmoothScroll();
         window.scrollTo({ top: ty, behavior: 'smooth' });
         setHandlePos(pct);
         labelYear.textContent = year;
@@ -8575,9 +8626,11 @@ document.addEventListener('keydown', function(e) {
         else if (k === 'PageUp')    step = -(window.innerHeight * 0.85);
         else if (k === 'End')       step = body.scrollHeight;
         else if (k === 'Home')      step = -(body.scrollHeight);
+        _markSmoothScroll();
         body.scrollBy({ top: step, behavior: 'smooth' });
     } else if ((k === ' ' || k === 'Spacebar') && !window.lbOpen) {
         e.preventDefault();
+        _markSmoothScroll();
         _vaultBody.scrollBy({ top: window.innerHeight * 0.85, behavior: 'smooth' });
     }
 }, true); /* capture phase — fires before gallery's scroll listeners */
