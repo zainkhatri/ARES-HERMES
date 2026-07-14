@@ -8743,18 +8743,28 @@ def windows_view():
     return render_template("windows.html", vnc_password=os.getenv("WINDOWS_VNC_PASSWORD", ""))
 
 
-if __name__ == "__main__":
-    print("\n  ╔═══════════════════════════════════════╗")
-    print("  ║       ARES NAS Terminal AI       ║")
-    print("  ║       https://prometheus               ║")
-    print("  ╚═══════════════════════════════════════╝\n")
+def _start_background_threads():
+    """Startup/watchdog threads. Called once per serving process — under
+    gunicorn via ARES_BG=1 (single worker), under dev app.run via __main__."""
     threading.Thread(target=_run_startup_tasks, daemon=True).start()
     threading.Thread(target=_mc_auto_shutdown, daemon=True).start()
     threading.Thread(target=_video_prewarm_loop, daemon=True).start()
     # One-shot: warm the system-info caches in the serving worker so the first
     # dashboard load is instant (caches are stale-while-revalidate thereafter).
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
-        threading.Thread(target=_sysinfo_prewarm, daemon=True).start()
+    threading.Thread(target=_sysinfo_prewarm, daemon=True).start()
+
+
+if os.environ.get("ARES_BG") == "1":
+    _start_background_threads()
+
+
+if __name__ == "__main__":
+    print("\n  ╔═══════════════════════════════════════╗")
+    print("  ║       ARES NAS Terminal AI       ║")
+    print("  ║       https://prometheus               ║")
+    print("  ╚═══════════════════════════════════════╝\n")
+    if os.environ.get("ARES_BG") != "1" and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+        _start_background_threads()
     print("  [mc-auto] Auto-shutdown watchdog started (10min idle → off)")
     import sys
     use_debug = "--no-debug" not in sys.argv
