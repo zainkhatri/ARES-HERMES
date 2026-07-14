@@ -169,6 +169,14 @@ def _ensure_pipe(session, idx):
         subprocess.run(["tmux", "pipe-pane", "-t", f"{session}:{idx}",
                         f"cat >> {log}"], capture_output=True, timeout=4)
         _piped_wids.add(wid)
+        # Seed a prompt-start marker: the shell's own 133;A for the CURRENT prompt
+        # fired before the pipe attached, so without this the first command's echo
+        # has no prompt phase and its block loses the command label.
+        try:
+            with open(log, "ab") as f:
+                f.write(b"\x1b]133;A\x07")
+        except OSError:
+            pass
     return log
 
 
