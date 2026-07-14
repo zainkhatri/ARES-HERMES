@@ -13,6 +13,8 @@ __pycache__/
 ai_data/
 *.log
 photo_index.json
+photo_index.db*
+photo_index.pre-sqlite.json
 content_hashes.json
 gpt_index.json
 .folder_sizes.json

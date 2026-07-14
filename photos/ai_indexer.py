@@ -29,7 +29,9 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
-PHOTO_INDEX = PROJECT_ROOT / "photo_index.json"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+import photo_db  # index lives in photo_index.db
 AI_DIR = PROJECT_ROOT / "ai_data"
 CLIP_HASHES_FILE = AI_DIR / "clip_hashes.json"
 CLIP_EMB_FILE = AI_DIR / "clip_embeddings.npy"
@@ -1173,13 +1175,11 @@ def main():
     parser.add_argument("--classify-screenshots", action="store_true", help="Classify screenshots/documents via CLIP and remove from gallery")
     args = parser.parse_args()
 
-    if not PHOTO_INDEX.exists():
-        print(f"Photo index not found: {PHOTO_INDEX}")
+    photos = photo_db.load_items()
+    if not photos:
+        print(f"Photo index empty: {photo_db.DB_PATH}")
         print("Run photo_scanner.py first.")
         sys.exit(1)
-
-    with open(PHOTO_INDEX) as f:
-        photos = json.load(f)
 
     images = [p for p in photos if p.get("type") != "video"]
     videos = [p for p in photos if p.get("type") == "video"]
