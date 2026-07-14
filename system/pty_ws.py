@@ -408,16 +408,22 @@ NEXUS_SSH = "zain@100.100.29.36"
 def _nexus_transcript_bytes():
     """Newest NEXUS Claude transcript over the tailnet. Full-replace model (no
     byte-offset tailing over ssh): return the last ~500 KB, which covers a long
-    conversation's recent turns. Bounded, one ssh per poll while the tab is open."""
+    conversation's recent turns. Bounded, one ssh per poll while the tab is open.
+    Returns (bytes, err_string)."""
     try:
         r = subprocess.run(
             ["tailscale", "ssh", NEXUS_SSH,
              "f=$(ls -t ~/.claude/projects/*/*.jsonl 2>/dev/null | head -1); "
              "[ -n \"$f\" ] && tail -c 500000 \"$f\""],
-            capture_output=True, timeout=20)
-        return r.stdout if r.returncode == 0 else b""
-    except (OSError, subprocess.SubprocessError):
-        return b""
+            capture_output=True, timeout=20,
+            # systemd services get no $HOME; the tailscale CLI refuses to run
+            # without one ("neither $XDG_CONFIG_HOME nor $HOME are defined").
+            env={**os.environ, "HOME": os.environ.get("HOME", "/root")})
+        if r.returncode != 0:
+            return b"", f"rc={r.returncode} {r.stderr[:200].decode('utf-8', 'replace')}"
+        return r.stdout, ""
+    except (OSError, subprocess.SubprocessError) as e:
+        return b"", f"{type(e).__name__}: {e}"
 
 
 def _parse_transcript_bytes(raw):
@@ -514,11 +520,12 @@ async def console_loop(ws, target):
                 src = str(d.get("src", "ares"))
                 if src == "nexus":
                     # Full-replace each poll: parse the tail fetched over ssh.
-                    raw = await asyncio.to_thread(_nexus_transcript_bytes)
+                    raw, err = await asyncio.to_thread(_nexus_transcript_bytes)
                     evs = _parse_transcript_bytes(raw)
                     if src != log_src:
                         log_src = src
-                    await _safe_send(ws, json.dumps({"claudelog": {"reset": True, "events": evs, "off": 0}}))
+                    await _safe_send(ws, json.dumps(
+                        {"claudelog": {"reset": True, "events": evs, "off": 0, "err": err}}))
                 else:
                     path = _newest_transcript()
                     if path != log_path or log_src != "ares":  # convo/box switched → reset
