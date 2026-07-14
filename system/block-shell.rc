@@ -9,6 +9,10 @@
 # $TMUX (set here), so it won't re-exec tmux.
 [ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc"
 
+# Land where an `ssh ares` login lands — the PROMETHEUS storage root — not
+# wherever tmux happened to spawn the window (was: filesystem root).
+cd /mnt/nvme/PROMETHEUS 2>/dev/null || true
+
 if [[ $- == *i* ]]; then
   # Minimal prompt: the phone draws its own block chrome, so the raw prompt is
   # just a glyph the parser strips. Overrides whatever .bashrc set.
