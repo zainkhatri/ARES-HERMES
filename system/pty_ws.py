@@ -67,8 +67,33 @@ def _list_sessions():
     return [n for n in r.stdout.split() if n] if r.returncode == 0 else []
 
 
+# Claude Code's TUI leaves recognizable marks in a captured pane. Any one is
+# enough to call a window a Claude session (on either box).
+_CLAUDE_SIGNS = ("esc to interrupt", "⏵⏵", "auto-accept edits", "? for shortcuts",
+                 "Context left until", "tokens · esc to interrupt")
+
+
+def _detect_kind(session, idx):
+    """Classify window `idx`: ("claude","ares") | ("claude","nexus") | ("shell",None).
+    Cheap: one capture + one display-message. Remote Claude is inferred from an
+    ssh pane whose content shows the Claude UI."""
+    pane = f"{session}:{idx}"
+    txt = _capture(pane) or ""
+    is_claude = any(s in txt for s in _CLAUDE_SIGNS)
+    if not is_claude:
+        return "shell", None
+    try:
+        cmd = subprocess.run(["tmux", "display-message", "-p", "-t", pane,
+                             "#{pane_current_command}"], capture_output=True, text=True, timeout=3).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        cmd = ""
+    # Claude reached through an ssh pane = the sister box (NEXUS).
+    return ("claude", "nexus") if cmd == "ssh" else ("claude", "ares")
+
+
 def _windows(session):
-    """tmux windows of `session` for the phone's tab strip."""
+    """tmux windows of `session` for the phone's tab strip, each tagged with the
+    kind/src the client renders by."""
     assert _valid_target(session), "unvalidated session name"
     try:
         r = subprocess.run(["tmux", "list-windows", "-t", session,
@@ -82,7 +107,10 @@ def _windows(session):
     for line in r.stdout.splitlines()[:50]:
         parts = line.split("\t")
         if len(parts) == 3 and parts[0].isdigit():
-            out.append({"i": int(parts[0]), "name": parts[1][:32], "active": parts[2] == "1"})
+            idx = int(parts[0])
+            kind, src = _detect_kind(session, idx)
+            out.append({"i": idx, "name": parts[1][:32], "active": parts[2] == "1",
+                        "kind": kind, "src": src})
     return out
 
 
@@ -283,6 +311,34 @@ def _tool_summary(name, inp):
     return ""
 
 
+NEXUS_SSH = "zain@100.100.29.36"
+
+
+def _nexus_transcript_bytes():
+    """Newest NEXUS Claude transcript over the tailnet. Full-replace model (no
+    byte-offset tailing over ssh): return the last ~500 KB, which covers a long
+    conversation's recent turns. Bounded, one ssh per poll while the tab is open."""
+    try:
+        r = subprocess.run(
+            ["tailscale", "ssh", NEXUS_SSH,
+             "f=$(ls -t ~/.claude/projects/*/*.jsonl 2>/dev/null | head -1); "
+             "[ -n \"$f\" ] && tail -c 500000 \"$f\""],
+            capture_output=True, timeout=20)
+        return r.stdout if r.returncode == 0 else b""
+    except (OSError, subprocess.SubprocessError):
+        return b""
+
+
+def _parse_transcript_bytes(raw):
+    """Parse a JSONL byte blob into compact chat events (drops a leading partial
+    line — a mid-file tail may start mid-record)."""
+    events = []
+    lines = raw.split(b"\n")
+    for line in lines[1:] if len(lines) > 1 else lines:
+        _append_event(line, events)
+    return events
+
+
 def _parse_transcript(path, off):
     """Parse JSONL from byte offset `off` into compact chat events. Returns
     (events, new_off). Whole-line JSONL, so seeking to a line boundary is safe
@@ -296,33 +352,38 @@ def _parse_transcript(path, off):
     except OSError:
         return [], off
     for line in raw.split(b"\n"):
-        if not line.strip():
-            continue
-        try:
-            d = json.loads(line)
-        except ValueError:
-            continue
-        typ = d.get("type")
-        msg = d.get("message")
-        if typ == "user" and isinstance(msg, dict):
-            c = msg.get("content")
-            if isinstance(c, str):
-                t = c.strip()
-                # Skip injected context / command plumbing, keep real prompts.
-                if t and not t.startswith(("Caveat:", "<command-", "<local-command",
-                                           "<system-reminder", "[Request interrupted")):
-                    events.append({"role": "user", "text": t[:4000]})
-        elif typ == "assistant" and isinstance(msg, dict):
-            c = msg.get("content")
-            if isinstance(c, list):
-                for b in c:
-                    bt = b.get("type")
-                    if bt == "text" and b.get("text", "").strip():
-                        events.append({"role": "assistant", "text": b["text"][:8000]})
-                    elif bt == "tool_use":
-                        events.append({"role": "tool", "name": b.get("name", "tool"),
-                                       "detail": _tool_summary(b.get("name", ""), b.get("input"))})
+        _append_event(line, events)
     return events, new_off
+
+
+def _append_event(line, events):
+    """Parse one JSONL line and append its chat event(s) to `events`."""
+    if not line.strip():
+        return
+    try:
+        d = json.loads(line)
+    except ValueError:
+        return
+    typ = d.get("type")
+    msg = d.get("message")
+    if typ == "user" and isinstance(msg, dict):
+        c = msg.get("content")
+        if isinstance(c, str):
+            t = c.strip()
+            # Skip injected context / command plumbing, keep real prompts.
+            if t and not t.startswith(("Caveat:", "<command-", "<local-command",
+                                       "<system-reminder", "[Request interrupted")):
+                events.append({"role": "user", "text": t[:4000]})
+    elif typ == "assistant" and isinstance(msg, dict):
+        c = msg.get("content")
+        if isinstance(c, list):
+            for b in c:
+                bt = b.get("type")
+                if bt == "text" and b.get("text", "").strip():
+                    events.append({"role": "assistant", "text": b["text"][:8000]})
+                elif bt == "tool_use":
+                    events.append({"role": "tool", "name": b.get("name", "tool"),
+                                   "detail": _tool_summary(b.get("name", ""), b.get("input"))})
 
 
 async def console_loop(ws, target):
@@ -332,6 +393,7 @@ async def console_loop(ws, target):
     last_sent = None
     log_off = 0
     log_path = None
+    log_src = "ares"
 
     def _win_target(d):
         """Address a specific window when the client passes `win`, else the
@@ -358,14 +420,23 @@ async def console_loop(ws, target):
                 elif txt is None:
                     await _safe_send(ws, json.dumps({"capture_err": True}))
             elif c == "claudelog":
-                path = _newest_transcript()
-                if path != log_path:            # active conversation switched → reset
-                    log_path, log_off = path, 0
-                    await _safe_send(ws, json.dumps({"claudelog": {"reset": True, "events": [], "off": 0}}))
-                if path:
-                    evs, log_off = _parse_transcript(path, log_off)
-                    if evs:
-                        await _safe_send(ws, json.dumps({"claudelog": {"events": evs, "off": log_off}}))
+                src = str(d.get("src", "ares"))
+                if src == "nexus":
+                    # Full-replace each poll: parse the tail fetched over ssh.
+                    raw = await asyncio.to_thread(_nexus_transcript_bytes)
+                    evs = _parse_transcript_bytes(raw)
+                    if src != log_src:
+                        log_src = src
+                    await _safe_send(ws, json.dumps({"claudelog": {"reset": True, "events": evs, "off": 0}}))
+                else:
+                    path = _newest_transcript()
+                    if path != log_path or log_src != "ares":  # convo/box switched → reset
+                        log_path, log_off, log_src = path, 0, "ares"
+                        await _safe_send(ws, json.dumps({"claudelog": {"reset": True, "events": [], "off": 0}}))
+                    if path:
+                        evs, log_off = _parse_transcript(path, log_off)
+                        if evs:
+                            await _safe_send(ws, json.dumps({"claudelog": {"events": evs, "off": log_off}}))
             elif c == "sendkeys":
                 tgt = _win_target(d)
                 text = str(d.get("text", ""))[:10000]
