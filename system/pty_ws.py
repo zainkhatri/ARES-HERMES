@@ -125,9 +125,11 @@ def _window_cmd(action, session, idx):
     if action == "newwin":
         # Launch with the block-shell rcfile so this window emits OSC 133 markers
         # → the phone renders it as Warp-style command blocks. Scoped to windows
-        # the phone opens; the global shell profile is untouched.
-        return ["tmux", "new-window", "-t", session,
-                f"bash --rcfile {_BLOCK_RC} -i"]
+        # the phone opens; the global shell profile is untouched. Named "shell"
+        # with auto-rename off so the tab doesn't read "BASH" (or flip names).
+        return ["tmux", "new-window", "-t", session, "-n", "shell",
+                f"bash --rcfile {_BLOCK_RC} -i",
+                ";", "set-option", "-w", "automatic-rename", "off"]
     if action == "killwin":
         return ["tmux", "kill-window", "-t", f"{session}:{idx}"]
     return None
