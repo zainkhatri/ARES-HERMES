@@ -1,0 +1,39 @@
+# rcfile for phone-created "block" shells (A&N terminal, Warp-style command
+# blocks). Sourced ONLY by windows the phone opens via `+`; the global shell
+# profile is untouched. Behaves like a normal login shell, then adds guarded
+# OSC 133 shell-integration markers so pty_ws can segment output into command
+# blocks. OSC 133 is invisible in normal terminals (a Mac attaching sees nothing).
+
+[ -f /etc/bash.bashrc ] && source /etc/bash.bashrc
+# Safe inside tmux: ~/.bashrc's SSH auto-attach block is guarded by an empty
+# $TMUX (set here), so it won't re-exec tmux.
+[ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc"
+
+if [[ $- == *i* ]]; then
+  # Minimal prompt: the phone draws its own block chrome, so the raw prompt is
+  # just a glyph the parser strips. Overrides whatever .bashrc set.
+  PS1='❯ '
+  __ares_at_prompt=
+
+  # preexec (DEBUG): emit output-start ONCE per real command. The flag stops the
+  # trap firing for each sub-command and during the precmd function itself —
+  # that was the double-marker noise.
+  __ares_preexec() {
+    [[ -n "$__ares_at_prompt" ]] || return
+    __ares_at_prompt=
+    printf '\033]133;C\007'
+  }
+  trap '__ares_preexec' DEBUG
+
+  # precmd: emit done+exit for the finished command, then prompt-start.
+  __ares_precmd() {
+    local ec=$?
+    printf '\033]133;D;%s\007\033]133;A\007' "$ec"
+    __ares_at_prompt=1
+  }
+  case "$PROMPT_COMMAND" in
+    *__ares_precmd*) ;;
+    "") PROMPT_COMMAND='__ares_precmd' ;;
+    *) PROMPT_COMMAND='__ares_precmd;'"$PROMPT_COMMAND" ;;
+  esac
+fi
