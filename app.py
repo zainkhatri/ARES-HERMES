@@ -2943,44 +2943,18 @@ def trash_photo():
 # ─── Photo Gallery ───
 
 
-def _save_photo_index(items, force=False):
-    """Atomically write photo index — temp file + rename prevents corruption.
+import photo_db
 
-    Guards against a buggy caller wiping the library: refuses to shrink the index
-    by more than half in a single save unless force=True. A dedup run clobbered it
-    from 46,906 -> 5 items (Jun 28 2026) and the atomic write happily persisted the
-    near-empty result; this is the floor that would have caught it.
+
+def _save_photo_index(items, force=False):
+    """Persist the photo index via photo_db (SQLite, single transaction).
+
+    photo_db.save_items carries the >50%-shrink guard that would have caught
+    the Jun 2026 dedup run clobbering 46,906 items down to 5.
     """
-    assert isinstance(items, list), "photo index must be a list"
-    if not force and os.path.exists(PHOTO_INDEX_PATH):
-        try:
-            with open(PHOTO_INDEX_PATH) as _cur:
-                prev = len(json.load(_cur))
-        except Exception:
-            prev = 0
-        assert not (prev >= 100 and len(items) < prev * 0.5), (
-            f"_save_photo_index refused: {len(items)} items would shrink the index "
-            f"from {prev} (>50% drop) — pass force=True if this is intentional"
-        )
-    import tempfile
-    tmp = PHOTO_INDEX_PATH + '.tmp'
-    with open(tmp, 'w') as f:
-        json.dump(items, f)
-    # Rotate a valid backup before replacing
-    if os.path.exists(PHOTO_INDEX_PATH):
-        try:
-            # Verify existing file is valid before overwriting bak
-            with open(PHOTO_INDEX_PATH) as _chk:
-                json.load(_chk)
-            import shutil as _shutil
-            _shutil.copy2(PHOTO_INDEX_PATH, PHOTO_INDEX_PATH + '.bak')
-        except Exception:
-            pass  # If current is corrupt, don't overwrite bak with garbage
-    os.replace(tmp, PHOTO_INDEX_PATH)
+    photo_db.save_items(items, force=force)
     # Bust cache
     _photo_cache["data"] = None; _photo_cache["mtime"] = 0
-
-PHOTO_INDEX_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "photo_index.json")
 _photo_cache = {"data": None, "mtime": 0}
 _summary_cache = {"data": None, "mtime": 0}
 _month_cache = {"data": None, "mtime": 0}
@@ -2999,26 +2973,17 @@ def _photo_sort_key(item):
 
 
 def load_photo_index():
-    """Load photo index with simple file-mtime cache."""
-    try:
-        mtime = os.path.getmtime(PHOTO_INDEX_PATH)
-    except OSError:
+    """Load photo index from photo_db with a version-stamp cache."""
+    mtime = photo_db.version()
+    if not mtime:
         return []
     if _photo_cache["data"] is not None and _photo_cache["mtime"] == mtime:
         return _photo_cache["data"]
     try:
-        with open(PHOTO_INDEX_PATH) as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        app.logger.error(f"[index] photo_index.json corrupt/unreadable: {e} — trying .bak")
-        bak = PHOTO_INDEX_PATH + ".bak"
-        try:
-            with open(bak) as f:
-                data = json.load(f)
-            app.logger.warning(f"[index] Loaded {len(data)} items from backup; original is corrupt")
-        except Exception as e2:
-            app.logger.error(f"[index] Backup also failed: {e2}")
-            return _photo_cache["data"] or []
+        data = photo_db.load_items()
+    except Exception as e:
+        app.logger.error(f"[index] photo_index.db unreadable: {e} — serving cached")
+        return _photo_cache["data"] or []
     data.sort(key=_photo_sort_key)
     _photo_cache["data"] = data
     _photo_cache["mtime"] = mtime
@@ -3031,9 +2996,8 @@ def load_photo_index():
 
 def load_month_index():
     """Return dict of month_key -> [items], cached alongside photo index."""
-    try:
-        mtime = os.path.getmtime(PHOTO_INDEX_PATH)
-    except OSError:
+    mtime = photo_db.version()
+    if not mtime:
         return {}
     if _month_cache["data"] is not None and _month_cache["mtime"] == mtime:
         return _month_cache["data"]
@@ -4490,9 +4454,8 @@ def api_photos_all_months():
     """
     import gzip as _gzip
 
-    try:
-        mtime = os.path.getmtime(PHOTO_INDEX_PATH)
-    except OSError:
+    mtime = photo_db.version()
+    if not mtime:
         return jsonify({})
 
     exclude = _get_hidden_hashes() | _get_screenshot_hashes() | _get_duplicate_hashes() | _get_vault_hashes()
@@ -4644,9 +4607,8 @@ def api_photos_summary():
     `?kind=video` returns a videos-only view (months that contain at least
     one video, count = video count, covers picked from video thumbs)."""
     kind = (request.args.get("kind") or "").lower()
-    try:
-        mtime = os.path.getmtime(PHOTO_INDEX_PATH)
-    except OSError:
+    mtime = photo_db.version()
+    if not mtime:
         return jsonify({"months": [], "years": [], "total": 0})
     cache_key = "kind:" + kind
     if (_summary_cache.get("data_" + cache_key) is not None
@@ -8511,10 +8473,7 @@ def _build_dupes_components_internal():
 
 def _get_dupes_components(force_rebuild=False):
     with _DUPES_LOCK:
-        try:
-            mtime = os.path.getmtime(PHOTO_INDEX_PATH)
-        except OSError:
-            mtime = 0
+        mtime = photo_db.version()
         if force_rebuild or _DUPES_STATE["components"] is None or _DUPES_STATE["index_mtime"] != mtime:
             _DUPES_STATE["components"] = _build_dupes_components_internal()
             _DUPES_STATE["index_mtime"] = mtime

@@ -127,8 +127,11 @@ def _resolve_disk_path(index_path):
     return None
 THUMB_DIR = os.path.join(PROJECT_ROOT, "static", "thumbs")
 THUMB_HQ_DIR = os.path.join(PROJECT_ROOT, "static", "thumbs_hq")
-INDEX_FILE = os.path.join(PROJECT_ROOT, "photo_index.json")
 CONTENT_HASH_FILE = os.path.join(PROJECT_ROOT, "content_hashes.json")
+
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+import photo_db  # index lives in photo_index.db — photo_db is the only writer
 
 WORKERS = 8
 
@@ -459,12 +462,13 @@ def scan():
 
     entries.sort(key=lambda x: x["date"], reverse=True)
 
-    _atomic_write_json(INDEX_FILE, entries)
+    # Full rebuild is this function's explicit job — force past the shrink guard.
+    photo_db.save_items(entries, force=True)
 
     elapsed = time.time() - start
     print(f"\nDone in {elapsed:.1f}s ({elapsed/60:.1f}m)")
     print(f"  Indexed: {done}  Failed: {failed}")
-    print(f"  -> {INDEX_FILE}")
+    print(f"  -> {photo_db.DB_PATH}")
 
 
 def scan_incremental():
@@ -479,16 +483,13 @@ def scan_incremental():
     SKIP_DIRS = {"takeouts", "RECYCLE_BIN", "_inbox-snapchat"}
 
     # Load existing index
-    existing = []
-    if os.path.exists(INDEX_FILE):
-        try:
-            with open(INDEX_FILE) as f:
-                existing = json.load(f)
-            print(f"[incremental] Loaded {len(existing)} existing entries.")
-        except Exception as e:
-            print(f"[incremental] Could not load existing index: {e} — doing full scan.")
-            scan()
-            return
+    try:
+        existing = photo_db.load_items()
+        print(f"[incremental] Loaded {len(existing)} existing entries.")
+    except Exception as e:
+        print(f"[incremental] Could not load existing index: {e} — doing full scan.")
+        scan()
+        return
 
     # Resolve every index path to its real on-disk location so comparisons work
     # regardless of which prefix form an entry uses.
@@ -528,7 +529,7 @@ def scan_incremental():
     if not all_files:
         if removed:
             still_exist.sort(key=lambda x: x["date"], reverse=True)
-            _atomic_write_json(INDEX_FILE, still_exist)
+            photo_db.save_items(still_exist)
             print(f"[incremental] Index updated (deletions only). Done in {time.time()-start:.1f}s")
         else:
             print(f"[incremental] No new files found. Done in {time.time()-start:.1f}s")
@@ -558,15 +559,14 @@ def scan_incremental():
     merged = still_exist + new_entries
     merged.sort(key=lambda x: x["date"], reverse=True)
 
-    _atomic_write_json(INDEX_FILE, merged)
+    photo_db.save_items(merged)
 
     # Fill `ar` (aspect ratio) for any entries that don't have it yet —
     # reads thumb headers only, so it's cheap. Entries whose thumbs aren't
     # generated yet are skipped and picked up on the next run.
     try:
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         from backfill_ar import backfill as _backfill_ar
-        _backfill_ar(INDEX_FILE)
+        _backfill_ar()
     except Exception as e:
         print(f"[incremental] ar backfill skipped: {e}")
 
