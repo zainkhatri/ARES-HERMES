@@ -50,8 +50,12 @@ def _shell_for(target):
 
 
 def _valid_target(name):
-    # argv (not a shell), but still whitelist to a sane tmux session name.
-    return bool(name) and len(name) <= 64 and re.fullmatch(r"[A-Za-z0-9._-]+", name) is not None
+    # argv (not a shell), but still whitelist. Accepts a bare session name OR a
+    # `session:window` pane address (the per-window capture/send target) — the
+    # colon form is what _win_target builds; rejecting it here 1011-crashed the
+    # connection on every non-active window (blank ssh tab).
+    return (bool(name) and len(name) <= 68
+            and re.fullmatch(r"[A-Za-z0-9._-]+(:\d+)?", name) is not None)
 
 
 def _list_sessions():
