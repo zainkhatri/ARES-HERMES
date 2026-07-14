@@ -101,6 +101,69 @@ def _set_winsize(fd, cols, rows):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
 
 
+# Named keys the console may inject — tmux send-keys names, whitelisted.
+CONSOLE_KEYS = {"Escape", "Tab", "Enter", "Up", "Down", "Left", "Right",
+                "C-c", "C-d", "C-l", "C-r", "C-u", "PPage", "NPage", "BSpace"}
+
+
+def _capture(session):
+    """Pane text incl. ~300 lines of scrollback, SGR colors kept, wrapped lines
+    joined (-J) so the phone re-wraps at its own width."""
+    assert _valid_target(session), "unvalidated session name"
+    try:
+        r = subprocess.run(["tmux", "capture-pane", "-p", "-e", "-J", "-S", "-300",
+                            "-t", session],
+                           capture_output=True, text=True, timeout=4)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+async def console_loop(ws, target):
+    """Command-channel mode: NO pty attach (so the phone never clamps the shared
+    window's size). The native console polls `capture` and injects input via
+    tmux send-keys — same session the Mac sees, phone-native everything else."""
+    last_sent = None
+    async for msg in ws:
+        if isinstance(msg, (bytes, bytearray)):
+            continue
+        try:
+            d = json.loads(msg)
+        except ValueError:
+            continue
+        c = str(d.get("ctl", ""))
+        try:
+            if c == "capture":
+                txt = _capture(target)
+                if txt is not None and txt != last_sent:
+                    last_sent = txt
+                    await _safe_send(ws, json.dumps({"capture": txt}))
+                elif txt is None:
+                    await _safe_send(ws, json.dumps({"capture_err": True}))
+            elif c == "sendkeys":
+                text = str(d.get("text", ""))[:10000]
+                if text:
+                    subprocess.run(["tmux", "send-keys", "-t", target, "-l", "--", text],
+                                   capture_output=True, timeout=4)
+                if d.get("enter"):
+                    subprocess.run(["tmux", "send-keys", "-t", target, "Enter"],
+                                   capture_output=True, timeout=4)
+            elif c == "key":
+                name = str(d.get("name", ""))
+                if name in CONSOLE_KEYS:
+                    subprocess.run(["tmux", "send-keys", "-t", target, name],
+                                   capture_output=True, timeout=4)
+            elif c == "windows":
+                await _safe_send(ws, json.dumps({"windows": _windows(target)}))
+            elif c in ("selectwin", "newwin", "killwin"):
+                cmd = _window_cmd(c, target, d.get("i", 0))
+                if cmd:
+                    subprocess.run(cmd, capture_output=True, timeout=4)
+                await _safe_send(ws, json.dumps({"windows": _windows(target)}))
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+
 async def handle(ws):
     """One connection = one session. The first frame ({"list"} or {"open"}) decides which."""
     # Wait for the opening control frame.
@@ -120,6 +183,12 @@ async def handle(ws):
     target = str(d.get("open", "shell"))
     if target != "shell" and not _valid_target(target):
         target = "shell"
+
+    # Console mode: command channel only, no pty fork / tmux attach.
+    if d.get("mode") == "console" and target != "shell":
+        await console_loop(ws, target)
+        return
+
     shell = _shell_for(target)
 
     pid, master = pty.fork()
