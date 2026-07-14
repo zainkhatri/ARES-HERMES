@@ -4,14 +4,21 @@
 # OSC 133 shell-integration markers so pty_ws can segment output into command
 # blocks. OSC 133 is invisible in normal terminals (a Mac attaching sees nothing).
 
-[ -f /etc/bash.bashrc ] && source /etc/bash.bashrc
-# Safe inside tmux: ~/.bashrc's SSH auto-attach block is guarded by an empty
-# $TMUX (set here), so it won't re-exec tmux.
-[ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc"
+# Source the normal environment SILENTLY — the login banner/MOTD is ceremony
+# for ssh sessions; on a phone tab it's noise that also tricks the app into
+# showing the raw mirror instead of the clean block interface.
+# (Safe inside tmux: ~/.bashrc's SSH auto-attach is guarded by $TMUX being set.)
+{
+  [ -f /etc/bash.bashrc ] && source /etc/bash.bashrc
+  [ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc"
+} >/dev/null 2>&1
 
 # Land where an `ssh ares` login lands — the PROMETHEUS storage root — not
 # wherever tmux happened to spawn the window (was: filesystem root).
 cd /mnt/nvme/PROMETHEUS 2>/dev/null || true
+
+# Open onto a clean screen — no spawn/leftover output behind the block UI.
+printf '\033[2J\033[H'
 
 if [[ $- == *i* ]]; then
   # Minimal prompt: the phone draws its own block chrome, so the raw prompt is
