@@ -4459,6 +4459,18 @@ def api_photos_all_months():
         return jsonify({})
 
     exclude = _get_hidden_hashes() | _get_screenshot_hashes() | _get_duplicate_hashes() | _get_vault_hashes()
+
+    # ETag over (index version, exclude-set) so unchanged libraries revalidate as an
+    # empty 304 instead of a ~12 MB body — the iOS app refetches this on every open.
+    # Python's set hash is per-process-random: stable for this worker's lifetime,
+    # so a service restart costs each client exactly one full re-download.
+    tag = f"am-{mtime}-{hash(frozenset(exclude)) & 0xffffffff:x}"
+    etag = f'"{tag}"'
+    # request.if_none_match holds UNQUOTED tags — compare the bare tag, not the
+    # quoted header form, or every revalidation silently misses.
+    if request.if_none_match.contains(tag):
+        return Response(status=304, headers={"ETag": etag, "Cache-Control": "public, max-age=120"})
+
     if _month_json_cache["data"] is not None and _month_json_cache["mtime"] == mtime and not exclude:
         raw = _month_json_cache["data"]
     else:
@@ -4475,9 +4487,11 @@ def api_photos_all_months():
         return Response(compressed, mimetype="application/json", headers={
             "Content-Encoding": "gzip",
             "Cache-Control": "public, max-age=120",
+            "ETag": etag,
         })
     return Response(raw, mimetype="application/json", headers={
         "Cache-Control": "public, max-age=120",
+        "ETag": etag,
     })
 
 
