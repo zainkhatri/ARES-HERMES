@@ -525,16 +525,16 @@ async def console_loop(ws, target):
                     if src != log_src:
                         log_src = src
                     await _safe_send(ws, json.dumps(
-                        {"claudelog": {"reset": True, "events": evs, "off": 0, "err": err}}))
+                        {"claudelog": {"reset": True, "events": evs, "off": 0, "err": err, "src": "nexus"}}))
                 else:
                     path = _newest_transcript()
                     if path != log_path or log_src != "ares":  # convo/box switched → reset
                         log_path, log_off, log_src = path, 0, "ares"
-                        await _safe_send(ws, json.dumps({"claudelog": {"reset": True, "events": [], "off": 0}}))
+                        await _safe_send(ws, json.dumps({"claudelog": {"reset": True, "events": [], "off": 0, "src": "ares"}}))
                     if path:
                         evs, log_off = _parse_transcript(path, log_off)
                         if evs:
-                            await _safe_send(ws, json.dumps({"claudelog": {"events": evs, "off": log_off}}))
+                            await _safe_send(ws, json.dumps({"claudelog": {"events": evs, "off": log_off, "src": "ares"}}))
             elif c == "blocks":
                 w = d.get("win")
                 idx = w if isinstance(w, int) and 0 <= w <= 999 else None
