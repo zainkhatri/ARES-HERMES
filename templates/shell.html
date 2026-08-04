@@ -55,11 +55,11 @@
             border:1px solid; font-weight:800; font-size:14px; line-height:1;
         }
         .nbr-mark.m-a { border-color:var(--nav-ares); color:var(--nav-ares); }
-        .nbr-mark.m-n { border-color:var(--nav-blue); color:var(--nav-blue); }
+        .nbr-mark.m-h { border-color:var(--nav-blue); color:var(--nav-blue); }
         .nbr-id { display:flex; align-items:baseline; gap:8px; min-width:0; }
         .nbr-name { font-weight:700; font-size:14px; letter-spacing:0.02em; white-space:nowrap; }
         .nbr-name.n-a { color:var(--nav-ares); }
-        .nbr-name.n-n { color:var(--nav-blue); }
+        .nbr-name.n-h { color:var(--nav-blue); }
         .nbr-sep { color:var(--nav-text-3); font-size:11px; }
         .nbr-tag { font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--nav-text-2); letter-spacing:0.1em; text-transform:uppercase; white-space:nowrap; }
         .back-chip {
@@ -113,8 +113,8 @@
         .tab-add .plus { font-size:15px; line-height:1; margin-right:1px; opacity:0.85; }
         .tab-add.t-ares  { color:var(--nav-ares); border-color:var(--nav-ares); }
         .tab-add.t-ares:active  { background:rgba(239,68,68,0.12); }
-        .tab-add.t-nexus { color:var(--nav-blue); border-color:rgba(100,149,237,0.5); }
-        .tab-add.t-nexus:active { background:rgba(100,149,237,0.12); }
+        .tab-add.t-hermes { color:var(--nav-blue); border-color:rgba(100,149,237,0.5); }
+        .tab-add.t-hermes:active { background:rgba(100,149,237,0.12); }
 
         /* === Terminal === */
         #term { flex:1 1 auto; width:100%; border:0; display:block; background:var(--bg-0); min-height:0; }
@@ -149,6 +149,7 @@
         .key-grow { flex:1 1 auto; }
         .key-kbd { color:var(--nav-text-2); }
 
+
         /* === Native input bar (bottom; rides above the soft keyboard) === */
         .inputbar {
             flex:0 0 auto;
@@ -175,6 +176,72 @@
             transition:opacity .12s;
         }
         .send:active { opacity:0.7; }
+
+        /* ── Block view ─────────────────────────────────────────────────── */
+        #block-view, #claude-view {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            background: var(--bg-0);
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            padding: 8px 10px;
+            min-height: 0;
+        }
+        .block-card {
+            background: var(--bg-1);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 4px;
+            overflow: hidden;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .block-cmd {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .block-cmd-empty { border-bottom: none; }
+        .block-prompt { color: var(--nav-ares); font-weight: 700; font-size: 13px; flex-shrink: 0; }
+        .block-cmd-text { flex: 1; color: #e2e8f0; font-size: 12px; word-break: break-all; }
+        .block-exit { font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: 700; flex-shrink: 0; }
+        .exit-ok  { background: rgba(34,197,94,0.15); color: #4ade80; }
+        .exit-err { background: rgba(239,68,68,0.15); color: #f87171; }
+        .block-out {
+            padding: 6px 10px; margin: 0;
+            color: #8ba3c0; font-size: 11px;
+            white-space: pre-wrap; word-break: break-all;
+            max-height: 280px; overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* ── Claude view ─────────────────────────────────────────────────── */
+        .claude-waiting {
+            color: #4a5d78; font-family: 'JetBrains Mono', monospace;
+            font-size: 11px; padding: 24px; text-align: center;
+        }
+        .claude-user, .claude-assistant {
+            background: var(--bg-1); border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 4px; padding: 8px 10px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .claude-role {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em;
+            margin-bottom: 5px;
+        }
+        .claude-user .claude-role   { color: var(--nav-blue); }
+        .claude-assistant .claude-role { color: var(--nav-ares); }
+        .claude-text {
+            color: #c4d4e4; font-size: 12px;
+            white-space: pre-wrap; word-break: break-word; line-height: 1.55;
+            font-family: 'Bricolage Grotesque', sans-serif;
+        }
+        .claude-user .claude-text { font-size: 11px; color: #8ba3c0; }
+        .claude-tool {
+            color: #4a5d78; font-size: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            padding: 2px 4px; word-break: break-all;
+        }
     </style>
 </head>
 <body>
@@ -194,12 +261,12 @@
                     <span>Home</span>
                 </a>
             </div>
-            <a href="/jump/nexus" class="nbr nbr-other">
-                <div class="nbr-mark m-n">N</div>
+            <a href="/jump/hermes" class="nbr nbr-other">
+                <div class="nbr-mark m-h">H</div>
                 <div class="nbr-id">
-                    <span class="nbr-name n-n">NEXUS</span>
+                    <span class="nbr-name n-h">HERMES</span>
                     <span class="nbr-sep">/</span>
-                    <span class="nbr-tag">MINI-NAS</span>
+                    <span class="nbr-tag">MID-NAS</span>
                 </div>
             </a>
         </header>
@@ -207,13 +274,16 @@
         <!-- Session tabs (= tmux windows). Hidden while the keyboard is open. -->
         <div class="ctl-tabs" id="tabs">
             <button class="tab tab-add t-ares" id="tab-add-ares" title="New ARES shell"><span class="plus">+</span>ARES</button>
-            <button class="tab tab-add t-nexus" id="tab-add-nexus" title="SSH into NEXUS"><span class="plus">+</span>NEXUS</button>
+            <button class="tab tab-add t-hermes" id="tab-add-hermes" title="SSH into HERMES"><span class="plus">+</span>HERMES</button>
         </div>
 
-        <!-- Live PTY into the ARES host's persistent tmux session "web" (ttyd). The src is
-             set in JS: direct host IP over HTTP, or the same-origin /shell serve path over
-             HTTPS (avoids mixed-content). -->
+        <!-- Live PTY into the ARES host's persistent tmux session "web" (ttyd). -->
         <iframe id="term" title="ARES shell" allow="clipboard-read; clipboard-write"></iframe>
+        <!-- Block view: Warp-style command cards for shell-kind windows -->
+        <div id="block-view"></div>
+        <!-- Claude view: chat feed for claude-kind windows -->
+        <div id="claude-view"></div>
+
 
         <!-- Accessory bar: scroll + the keys a phone keyboard lacks. Sits directly above
              the soft keyboard (it's the bottom child of the viewport-tracking #app). -->
@@ -242,7 +312,13 @@
             <button class="key" data-key="Right">→</button>
             <span class="key-sep"></span>
             <button class="key" data-key="Enter">⏎</button>
+            <span class="key-sep"></span>
+            <button class="key key-kbd" id="kbd-copy" title="Copy pane to clipboard">copy</button>
         </div>
+        <div id="img-banner" style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+             background:rgba(239,68,68,0.78);color:#fff;font-family:'JetBrains Mono',monospace;
+             font-size:12px;padding:7px 14px;border-radius:4px;opacity:0;transition:opacity 0.4s;
+             pointer-events:none;white-space:nowrap;z-index:999;"></div>
 
         <!-- Native input box. Typing into a real same-origin <input> is rock-solid on
              iOS (unlike xterm's hidden textarea inside the iframe), so this is the
@@ -258,26 +334,74 @@
 
     <script>
     (function () {
-        // `tailscale serve` already exposes everything under ONE https origin:
-        //   /shell -> ttyd:7681   /ctl -> control:7683   (prefix is stripped)
-        // Use those same-origin paths over HTTPS: no mixed-content, and crucially it
-        // works inside an installed HTTPS PWA on iOS/Android, where the old trick of
-        // bouncing to a plain http://<ip> URL silently fails (that's the "cooked on
-        // mobile" bug). Over plain HTTP (opened at :8080 directly) tailscale serve isn't
-        // in play, so fall back to the host IP ports.
         var onHttps = location.protocol === 'https:';
+        // Over HTTPS (Tailscale): use same-origin /ctl and /shell/ paths.
+        // Over HTTP (iOS app, direct LAN): use host IPs directly.
         var CTL  = onHttps ? '/ctl' : 'http://100.77.42.110:7683';
+        var DASH = onHttps ? '' : 'http://192.168.20.213:8080';  // for /api/ routes
+        var PTY_WS_URL = onHttps
+            ? 'wss://' + location.host + '/pty-ws/'
+            : 'ws://100.77.42.110:7686';
+        var SESSION_NAME = 'web';
         var term = document.getElementById('term');
         term.src = onHttps ? '/shell/' : 'http://100.77.42.110:7681/';
 
-        var tabsEl = document.getElementById('tabs');
-        var addAres = document.getElementById('tab-add-ares');
-        var addNexus = document.getElementById('tab-add-nexus');
-        var busy = false;
+        // Per-window kind map populated from pty_ws windows responses.
+        var _windowKinds = {};   // index (int) → "shell" | "claude" | null
+        var _currentView = 'raw';
+        var _blockPollTimer = null;
+        var _claudePollTimer = null;
+        var _ptyWs = null;
+        var _ptyWsReady = false;
 
+        function _activeWin() {
+            var w = lastWindows.find(function (w) { return w.active; });
+            if (!w) return null;
+            return w.index !== undefined ? w.index : w.i;
+        }
+
+        function _winKind(idx) {
+            return (idx !== null && idx !== undefined) ? (_windowKinds[idx] || 'raw') : 'raw';
+        }
+
+        function _stripAnsi(s) {
+            return s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+        }
+
+        function _escHtml(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        /* ── Reconnect: reload iframe if ttyd goes dark ─────────────────── */
+        var _termSrc = term.src;
+        var _disconnected = false;
+        var _reconnTimer = null;
+
+        function _termHealth() {
+            // If the iframe content is blank/error, reload it.
+            try {
+                var doc = term.contentDocument;
+                if (doc && (doc.readyState === 'complete') &&
+                    (!doc.body || doc.body.innerHTML.trim() === '' ||
+                     doc.title === '')) {
+                    _scheduleReconnect();
+                }
+            } catch (e) { /* cross-origin: can't inspect — that's fine, ttyd is live */ }
+        }
+        function _scheduleReconnect() {
+            if (_reconnTimer) return;
+            _reconnTimer = setTimeout(function () {
+                _reconnTimer = null;
+                term.src = _termSrc + '?' + Date.now();  // cache-bust
+            }, 1500);
+        }
+        term.addEventListener('error', _scheduleReconnect);
+        setInterval(_termHealth, 8000);
+
+        /* ── CTL API ─────────────────────────────────────────────────────── */
         function api(path, body) {
-            var opts = { method: body ? 'POST' : 'GET' };
-            if (body) {
+            var opts = { method: body !== undefined ? 'POST' : 'GET' };
+            if (body !== undefined) {
                 opts.headers = { 'Content-Type': 'application/json' };
                 opts.body = JSON.stringify(body);
             }
@@ -286,28 +410,94 @@
             });
         }
 
-        var lastWindows = [];  // latest tmux window list, for the ^T/^B/^Z tab keys
+        /* ── Tab strip ──────────────────────────────────────────────────── */
+        var tabsEl  = document.getElementById('tabs');
+        var addAres = document.getElementById('tab-add-ares');
+        var addHermes= document.getElementById('tab-add-hermes');
+        var busy    = false;
+        var lastWindows = [];
+
+        function setView(kind) {
+            clearInterval(_blockPollTimer);
+            clearInterval(_claudePollTimer);
+            _blockPollTimer = null;
+            _claudePollTimer = null;
+            _currentView = kind;
+            var termEl   = document.getElementById('term');
+            var blockEl  = document.getElementById('block-view');
+            var claudeEl = document.getElementById('claude-view');
+            termEl.style.display   = kind === 'raw'    ? 'block' : 'none';
+            blockEl.style.display  = kind === 'shell'  ? 'flex'  : 'none';
+            claudeEl.style.display = kind === 'claude' ? 'flex'  : 'none';
+            if (kind === 'shell') {
+                _pollBlocks();
+                _blockPollTimer = setInterval(_pollBlocks, 800);
+            }
+            if (kind === 'claude') {
+                _pollClaudelog();
+                _claudePollTimer = setInterval(_pollClaudelog, 1000);
+            }
+        }
+
+        function _openPtyWs() {
+            try { if (_ptyWs) _ptyWs.close(); } catch (e) {}
+            _ptyWs = new WebSocket(PTY_WS_URL);
+            _ptyWs.onopen = function () {
+                _ptyWsReady = true;
+                _ptyWs.send(JSON.stringify({ open: SESSION_NAME, mode: 'console' }));
+                _ptyWs.send(JSON.stringify({ ctl: 'windows' }));
+            };
+            _ptyWs.onmessage = function (e) {
+                var d;
+                try { d = JSON.parse(e.data); } catch (_) { return; }
+                if (d.windows) {
+                    // Merge kind info into _windowKinds; update tab strip.
+                    d.windows.forEach(function (w) {
+                        var idx = w.i !== undefined ? w.i : w.index;
+                        if (idx !== undefined && w.kind) _windowKinds[idx] = w.kind;
+                    });
+                    renderTabs(d.windows);
+                }
+                if (d.blocks)    _renderBlocks(d.blocks);
+                if (d.claudelog) _renderClaudelog(d.claudelog);
+            };
+            _ptyWs.onclose = function () {
+                _ptyWsReady = false;
+                setTimeout(_openPtyWs, 2000);
+            };
+        }
+
+        function _ptyCtl(msg) {
+            if (_ptyWsReady && _ptyWs && _ptyWs.readyState === 1) {
+                _ptyWs.send(JSON.stringify(msg));
+            }
+        }
 
         function renderTabs(windows) {
             lastWindows = windows || [];
             Array.prototype.slice.call(tabsEl.querySelectorAll('.tab:not(.tab-add)'))
                 .forEach(function (n) { n.remove(); });
             (windows || []).forEach(function (w) {
-                var chip = document.createElement('button');
+                // pty_ws uses {i, kind} shape; shell_ctl uses {index} shape.
+                var idx = w.index !== undefined ? w.index : w.i;
+                if (w.kind) _windowKinds[idx] = w.kind;
+                var chip  = document.createElement('button');
                 chip.className = 'tab' + (w.active ? ' active' : '');
                 var label = document.createElement('span');
-                label.textContent = (w.name && w.name.length ? w.name : 'sh') + ' ' + w.index;
+                label.textContent = (w.name || 'sh') + ' ' + idx;
                 chip.appendChild(label);
                 chip.addEventListener('click', function (e) {
                     if (e.target.classList.contains('x')) return;
-                    select(w.index);
+                    guard(api('/select', { index: String(idx) }));
+                    setView(_winKind(idx));
                 });
-                if ((windows || []).length > 1) {
+                if (windows.length > 1) {
                     var x = document.createElement('span');
                     x.className = 'x'; x.textContent = '×';
                     x.addEventListener('click', function (e) {
                         e.stopPropagation();
-                        if (confirm('Close session ' + w.index + '?')) kill(w.index);
+                        if (confirm('Close session ' + idx + '?'))
+                            guard(api('/kill', { index: String(idx) }));
                     });
                     chip.appendChild(x);
                 }
@@ -317,7 +507,7 @@
 
         function refresh() {
             return api('/windows').then(function (d) { renderTabs(d.windows); })
-                                  .catch(function () { /* control service offline — leave "+" only */ });
+                                  .catch(function () {});
         }
 
         function guard(p) {
@@ -328,67 +518,110 @@
              .finally(function () { busy = false; });
         }
 
-        function select(i) { guard(api('/select', { index: String(i) })); }
-        function kill(i)    { guard(api('/kill',   { index: String(i) })); }
-
         addAres.addEventListener('click', function () { guard(api('/new', { target: 'ares' })); });
-        addNexus.addEventListener('click', function () { guard(api('/new', { target: 'nexus' })); });
+        addHermes.addEventListener('click',function () { guard(api('/new', { target: 'hermes'})); });
 
-        // Phone equivalents of the .tmux.conf tab chords (^T new / ^B next / ^Z close).
-        // tmux `send-keys` bypasses `bind -n`, so these drive the real window ops via the
-        // control service instead of sending the literal chord.
-        function newTab()  { guard(api('/new', { target: 'ares' })); }
         function nextTab() {
             if (lastWindows.length < 2) return;
-            var i = -1;
-            lastWindows.forEach(function (w, k) { if (w.active) i = k; });
-            if (i < 0) i = 0;
-            var n = lastWindows[(i + 1) % lastWindows.length];
+            var i = lastWindows.findIndex(function (w) { return w.active; });
+            var n = lastWindows[(Math.max(i, 0) + 1) % lastWindows.length];
             guard(api('/select', { index: String(n.index) }));
         }
         function closeTab() {
-            var a = null;
-            lastWindows.forEach(function (w) { if (w.active) a = w; });
-            if (!a) return;
-            if (confirm('Close this tab?')) kill(a.index);
+            var a = lastWindows.find(function (w) { return w.active; });
+            if (a && confirm('Close this tab?'))
+                guard(api('/kill', { index: String(a.index) }));
         }
 
-        var form = document.getElementById('inputbar');
+        /* ── Keybar ─────────────────────────────────────────────────────── */
         var line = document.getElementById('line');
-
         document.getElementById('keys').addEventListener('click', function (e) {
             var btn = e.target.closest('.key');
             if (!btn) return;
-            // Show/hide the soft keyboard by toggling focus on the native input. Focusing
-            // must happen synchronously inside this user gesture or iOS won't raise it.
             if (btn.id === 'kbd-toggle') {
-                if (document.activeElement === line) line.blur();
-                else line.focus();
+                if (document.activeElement === line) line.blur(); else line.focus();
                 return;
             }
-            if (btn.dataset.tab) {
-                if (btn.dataset.tab === 'new')   newTab();
-                else if (btn.dataset.tab === 'next')  nextTab();
-                else if (btn.dataset.tab === 'close') closeTab();
-                return;
-            }
-            if (btn.dataset.key)    api('/key',    { key: btn.dataset.key }).catch(function () {});
-            if (btn.dataset.scroll) api('/scroll', { dir: btn.dataset.scroll }).catch(function () {});
+            if (btn.dataset.tab === 'new')   { guard(api('/new', { target: 'ares' })); return; }
+            if (btn.dataset.tab === 'next')  { nextTab(); return; }
+            if (btn.dataset.tab === 'close') { closeTab(); return; }
+            if (btn.dataset.key)    api('/key',    { key: btn.dataset.key }).catch(function(){});
+            if (btn.dataset.scroll) api('/scroll', { dir: btn.dataset.scroll }).catch(function(){});
         });
 
-        // ── Native input box → inject into the terminal (reliable iOS typing) ──
+        /* ── Copy pane button ───────────────────────────────────────────── */
+        var copyBtn = document.getElementById('kbd-copy');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', function () {
+                api('/capture').then(function (d) {
+                    var text = (d.text || '').trim();
+                    if (!text) return;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(text).then(function () {
+                            copyBtn.textContent = '✓';
+                            setTimeout(function () { copyBtn.textContent = 'copy'; }, 1200);
+                        }).catch(function () {
+                            prompt('Pane content (select all, copy):', text);
+                        });
+                    } else {
+                        prompt('Pane content (select all, copy):', text);
+                    }
+                }).catch(function () {});
+            });
+        }
+
+        /* ── Native input → inject ──────────────────────────────────────── */
+        var form = document.getElementById('inputbar');
         form.addEventListener('submit', function (e) {
             e.preventDefault();
-            var text = line.value;
+            var text = line.value.trim();
             if (!text) return;
             line.value = '';
-            line.focus();  // keep the keyboard up for the next line
+            line.focus();
             api('/text', { text: text, enter: true }).catch(function () {
-                // On failure, restore what was typed so it isn't lost.
-                if (!line.value) line.value = text;
+                if (!line.value) line.value = text;  // restore on failure
             });
         });
 
+        /* ── Image paste → upload → inject path ─────────────────────────── */
+        // Works in the page (not inside the cross-origin iframe). User pastes
+        // an image anywhere on the terminal page; we upload it to _scratch and
+        // inject the host path into the terminal for Claude Code to read.
+        document.addEventListener('paste', function (e) {
+            var items = (e.clipboardData || {}).items || [];
+            var imgItem = null;
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image/') === 0) { imgItem = items[i]; break; }
+            }
+            if (!imgItem) return;
+            e.preventDefault();
+            var file = imgItem.getAsFile();
+            if (!file) return;
+            var fd = new FormData();
+            fd.append('file', file, 'paste.png');
+            fetch(DASH + '/api/scratch-upload', { method: 'POST', body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.path) {
+                        api('/text', { text: d.path, enter: false }).catch(function(){});
+                        _showBanner('Image saved → ' + d.path);
+                    }
+                })
+                .catch(function () { _showBanner('Image upload failed', true); });
+        });
+
+        function _showBanner(msg, err) {
+            var b = document.getElementById('img-banner');
+            if (!b) return;
+            b.textContent = msg;
+            b.style.background = err ? 'rgba(239,68,68,0.9)' : 'rgba(239,68,68,0.78)';
+            b.style.opacity = '1';
+            setTimeout(function () { b.style.opacity = '0'; }, 2800);
+        }
+
+        /* ── Poll tabs ──────────────────────────────────────────────────── */
+        _openPtyWs();
+        setView('raw');
         refresh();
         setInterval(refresh, 3000);
     })();
