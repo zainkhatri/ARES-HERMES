@@ -60,8 +60,8 @@ struct SetupView: View {
         ZStack {
             Color(red: 0.024, green: 0.039, blue: 0.071).ignoresSafeArea()
             VStack(spacing: 24) {
-                BlockP(size: 80)
-                Text("PROMETHEON")
+                BlockAH(size: 80)
+                Text("A&H")
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
                     .tracking(6)
                     .foregroundColor(Color(red: 0.494, green: 0.722, blue: 0.941).opacity(0.5))
