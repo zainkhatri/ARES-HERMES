@@ -62,6 +62,14 @@
 		}
 	}
 
+	handle_path /pty-ws/* {
+		route {
+			@notts not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
+			respond @notts "Forbidden" 403
+			reverse_proxy 100.77.42.110:7686
+		}
+	}
+
 	# Static photo media off disk (must precede the catch-all reverse_proxy).
 	import static_media
 
@@ -94,6 +102,14 @@
 			@notts not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
 			respond @notts "Forbidden" 403
 			reverse_proxy 100.77.42.110:7683
+		}
+	}
+
+	handle_path /pty-ws/* {
+		route {
+			@notts not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
+			respond @notts "Forbidden" 403
+			reverse_proxy 100.77.42.110:7686
 		}
 	}
 
