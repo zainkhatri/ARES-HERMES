@@ -473,6 +473,59 @@
             }
         }
 
+        var _userScrolledBlocks = false;
+
+        function _pollBlocks() {
+            var win = _activeWin();
+            if (win === null || _currentView !== 'shell') return;
+            _ptyCtl({ ctl: 'blocks', win: win });
+        }
+
+        function _renderBlocks(blocks) {
+            var el = document.getElementById('block-view');
+            if (!el) return;
+            var atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 20;
+            el.innerHTML = '';
+            (blocks || []).forEach(function (b) {
+                var hasOut = b.out && b.out.trim();
+                var card = document.createElement('div');
+                card.className = 'block-card';
+
+                var hdr = document.createElement('div');
+                hdr.className = 'block-cmd' + (hasOut ? '' : ' block-cmd-empty');
+
+                var prompt = document.createElement('span');
+                prompt.className = 'block-prompt';
+                prompt.textContent = '❯';
+                hdr.appendChild(prompt);
+
+                var cmdText = document.createElement('span');
+                cmdText.className = 'block-cmd-text';
+                cmdText.textContent = _stripAnsi(b.cmd || '');
+                hdr.appendChild(cmdText);
+
+                if (b.exit !== null && b.exit !== undefined) {
+                    var badge = document.createElement('span');
+                    badge.className = 'block-exit ' + (b.exit === 0 ? 'exit-ok' : 'exit-err');
+                    badge.textContent = String(b.exit);
+                    hdr.appendChild(badge);
+                }
+
+                card.appendChild(hdr);
+
+                if (hasOut) {
+                    var pre = document.createElement('pre');
+                    pre.className = 'block-out';
+                    pre.textContent = _stripAnsi(b.out);
+                    card.appendChild(pre);
+                }
+
+                el.appendChild(card);
+            });
+
+            if (!_userScrolledBlocks || atBottom) el.scrollTop = el.scrollHeight;
+        }
+
         function renderTabs(windows) {
             lastWindows = windows || [];
             Array.prototype.slice.call(tabsEl.querySelectorAll('.tab:not(.tab-add)'))
@@ -624,6 +677,12 @@
         setView('raw');
         refresh();
         setInterval(refresh, 3000);
+
+        // Track manual upward scroll so auto-scroll doesn't fight the user.
+        document.getElementById('block-view').addEventListener('scroll', function () {
+            var el = this;
+            _userScrolledBlocks = el.scrollHeight - el.scrollTop > el.clientHeight + 40;
+        });
     })();
     </script>
 </body>
