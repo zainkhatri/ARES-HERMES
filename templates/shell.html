@@ -683,6 +683,71 @@
             var el = this;
             _userScrolledBlocks = el.scrollHeight - el.scrollTop > el.clientHeight + 40;
         });
+
+        var _claudeEvents = [];
+        var _userScrolledClaude = false;
+
+        function _pollClaudelog() {
+            var win = _activeWin();
+            if (win === null || _currentView !== 'claude') return;
+            _ptyCtl({ ctl: 'claudelog', src: 'ares', win: win });
+        }
+
+        function _renderClaudelog(data) {
+            var el = document.getElementById('claude-view');
+            if (!el) return;
+            var atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 20;
+
+            if (data.reset) {
+                _claudeEvents = [];
+                el.innerHTML = '';
+            }
+
+            if (data.waiting) {
+                el.innerHTML = '<div class="claude-waiting">Waiting for Claude…</div>';
+                return;
+            }
+
+            if (data.events && data.events.length) {
+                _claudeEvents = _claudeEvents.concat(data.events);
+                _rebuildClaudeView(el);
+            }
+
+            if (!_userScrolledClaude || atBottom) el.scrollTop = el.scrollHeight;
+        }
+
+        function _rebuildClaudeView(el) {
+            el.innerHTML = '';
+            _claudeEvents.forEach(function (ev) {
+                var div = document.createElement('div');
+                if (ev.role === 'user') {
+                    div.className = 'claude-user';
+                    div.innerHTML =
+                        '<div class="claude-role">YOU</div>' +
+                        '<div class="claude-text">' + _escHtml(ev.text || '') + '</div>';
+                } else if (ev.role === 'assistant') {
+                    var txt = (ev.text || '');
+                    var truncated = txt.length > 2000;
+                    div.className = 'claude-assistant';
+                    div.innerHTML =
+                        '<div class="claude-role">CLAUDE</div>' +
+                        '<div class="claude-text">' +
+                        _escHtml(truncated ? txt.slice(0, 2000) + '…' : txt) +
+                        '</div>';
+                } else if (ev.role === 'tool') {
+                    div.className = 'claude-tool';
+                    div.textContent = '[' + (ev.name || 'tool') + '] ' + (ev.detail || '');
+                } else {
+                    return;
+                }
+                el.appendChild(div);
+            });
+        }
+
+        document.getElementById('claude-view').addEventListener('scroll', function () {
+            var el = this;
+            _userScrolledClaude = el.scrollHeight - el.scrollTop > el.clientHeight + 40;
+        });
     })();
     </script>
 </body>
