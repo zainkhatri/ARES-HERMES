@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>PROMETHEON</string>
+	<string>A&amp;H</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIcons</key>
@@ -54,9 +54,9 @@
 		<true/>
 	</dict>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>PROMETHEON needs access to save downloaded photos to your Camera Roll.</string>
+	<string>A&amp;H needs access to save downloaded photos to your Camera Roll.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>PROMETHEON needs access to upload photos to the photosNAS.</string>
+	<string>A&amp;H needs access to upload photos to the homelab.</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
