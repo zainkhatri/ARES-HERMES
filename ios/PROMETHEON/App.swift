@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct PROMETHEONApp: App {
+struct AHApp: App {
     @State private var showLaunch = true
 
     var body: some Scene {
@@ -37,15 +37,14 @@ struct LaunchScreen: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 20) {
-                BlockP(size: 90)
+                BlockAH(size: 90)
                     .shadow(color: Color(red: 0.494, green: 0.722, blue: 0.941).opacity(glowOpacity), radius: 20)
 
-                Text("PROMETHEON")
+                Text("A&H")
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .tracking(8)
                     .foregroundColor(Color(red: 0.494, green: 0.722, blue: 0.941).opacity(0.4))
 
-                // Loading bar
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(Color.white.opacity(0.05))
@@ -70,34 +69,49 @@ struct LaunchScreen: View {
     }
 }
 
-/// Block-character style "P" built from rectangles
-struct BlockP: View {
+/// Block-character "AH" — two letter forms built from rounded rectangles.
+/// `size` is the cap height; total width is ~1.6× size to fit both letters.
+struct BlockAH: View {
     let size: CGFloat
     private let accent = Color(red: 0.494, green: 0.722, blue: 0.941)
 
     var body: some View {
-        let u = size / 7
+        let u = size / 7   // unit — same grid as the old BlockP
         let r: CGFloat = size / 30
+        let gap: CGFloat = u * 1.2  // space between A and H
+
         ZStack(alignment: .topLeading) {
-            // Vertical stem
-            RoundedRectangle(cornerRadius: r)
-                .fill(accent)
-                .frame(width: u * 2, height: u * 7)
-            // Top bar
-            RoundedRectangle(cornerRadius: r)
-                .fill(accent)
-                .frame(width: u * 5.5, height: u * 1.4)
-            // Right arm
-            RoundedRectangle(cornerRadius: r)
-                .fill(accent)
-                .frame(width: u * 1.7, height: u * 3.8)
-                .offset(x: u * 3.8)
-            // Middle bar
-            RoundedRectangle(cornerRadius: r)
-                .fill(accent)
-                .frame(width: u * 5.5, height: u * 1.2)
-                .offset(y: u * 2.8)
+            // ── A ──
+            // Left stem
+            RoundedRectangle(cornerRadius: r).fill(accent)
+                .frame(width: u * 1.6, height: u * 7)
+            // Right stem
+            RoundedRectangle(cornerRadius: r).fill(accent)
+                .frame(width: u * 1.6, height: u * 7)
+                .offset(x: u * 2.8)
+            // Top bar (joins the stems)
+            RoundedRectangle(cornerRadius: r).fill(accent)
+                .frame(width: u * 4.4, height: u * 1.3)
+            // Crossbar (mid-height)
+            RoundedRectangle(cornerRadius: r).fill(accent)
+                .frame(width: u * 4.4, height: u * 1.1)
+                .offset(y: u * 2.9)
+
+            // ── H (offset right by A-width + gap) ──
+            let hx = u * 4.4 + gap
+            // Left stem
+            RoundedRectangle(cornerRadius: r).fill(accent)
+                .frame(width: u * 1.6, height: u * 7)
+                .offset(x: hx)
+            // Right stem
+            RoundedRectangle(cornerRadius: r).fill(accent)
+                .frame(width: u * 1.6, height: u * 7)
+                .offset(x: hx + u * 2.8)
+            // Crossbar (mid-height)
+            RoundedRectangle(cornerRadius: r).fill(accent)
+                .frame(width: u * 4.4, height: u * 1.1)
+                .offset(x: hx, y: u * 2.9)
         }
-        .frame(width: size * 0.79, height: size)
+        .frame(width: u * 4.4 + gap + u * 4.4, height: size)
     }
 }
