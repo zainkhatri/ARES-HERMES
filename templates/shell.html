@@ -440,7 +440,9 @@
         }
 
         function _openPtyWs() {
-            try { if (_ptyWs) _ptyWs.close(); } catch (e) {}
+            try {
+                if (_ptyWs) { _ptyWs.onclose = null; _ptyWs.onmessage = null; _ptyWs.close(); }
+            } catch (e) {}
             _ptyWs = new WebSocket(PTY_WS_URL);
             _ptyWs.onopen = function () {
                 _ptyWsReady = true;

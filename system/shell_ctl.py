@@ -123,13 +123,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                      "ssh", HERMES_SSH],
                     capture_output=True)
             else:
-                subprocess.run(
-                    ["tmux", "new-window", "-t", SESSION, "-n", "shell",
+                result = subprocess.run(
+                    ["tmux", "new-window", "-P", "-F", "#{window_index}",
+                     "-t", SESSION, "-n", "shell",
                      f"bash --rcfile {BLOCK_RC} -i"],
-                    capture_output=True)
-                subprocess.run(
-                    ["tmux", "set-option", "-w", "-t", f"{SESSION}:shell", "automatic-rename", "off"],
-                    capture_output=True)
+                    capture_output=True, text=True)
+                new_idx = (result.stdout or "").strip()
+                if new_idx.isdigit():
+                    subprocess.run(
+                        ["tmux", "set-option", "-w", "-t", f"{SESSION}:{new_idx}", "automatic-rename", "off"],
+                        capture_output=True)
             self._json({"windows": _windows()})
 
         elif self.path == "/select":
