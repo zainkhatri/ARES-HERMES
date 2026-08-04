@@ -13,7 +13,7 @@ from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, redirect, url_for, send_file, abort, make_response
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, redirect, url_for, send_file, abort, make_response, send_from_directory
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 
@@ -421,7 +421,7 @@ def _authz():
 
 
 # ─── Cross-node SSO handoff ─────────────────────────────────────────────────
-# ARES and NEXUS are twin apps with a shared SSO_SECRET. Clicking the other
+# ARES and HERMES are twin apps with a shared SSO_SECRET. Clicking the other
 # node's tab issues a short-lived signed token, which the target node validates
 # and uses to bootstrap its own session. No second login prompt.
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -433,7 +433,9 @@ SSO_MAX_AGE = 60  # seconds — the handoff token is one-shot, tight window
 # Hostnames we're willing to redirect to after consuming a token. Anything else
 # gets rejected — prevents open-redirect abuse of the SSO endpoint.
 SSO_ALLOWED_HOSTS = {
+    "ares.tail3045df.ts.net",
     "pve.tail3045df.ts.net",
+    "hermes.tail3045df.ts.net",
     "192.168.20.213",
     "ares.local",
     "100.100.29.36",
@@ -485,16 +487,22 @@ def sso_consume():
     return redirect(url_for("home"))
 
 
-@app.route("/jump/nexus")
+@app.route("/jump/hermes")
 @require_auth
-def jump_nexus():
-    """Hand off to NEXUS with a one-shot SSO token, skipping its login."""
-    target_base = "http://100.100.29.36:8888"
+def jump_hermes():
+    """Hand off to HERMES with a one-shot SSO token, skipping its login."""
+    target_base = "https://hermes.tail3045df.ts.net"
     s = _sso_serializer()
     if s is None:
         return redirect(target_base)
     token = s.dumps({"u": session.get("username", "zain")})
     return redirect(f"{target_base}/api/sso/consume?t={token}")
+
+
+@app.route("/girlfriend")
+def girlfriend_day():
+    """Public — National Girlfriend Day page for Fiza."""
+    return send_from_directory("websites/friends/girlfriend", "index.html")
 
 
 @app.route("/")
@@ -508,6 +516,37 @@ def home():
 @require_auth
 def drives_page():
     return render_template("drives.html")
+
+@app.route("/sigma")
+@require_auth
+def sigma_page():
+    return render_template("sigma.html")
+
+@app.route("/panel")
+@require_auth
+def panel_page():
+    return render_template("panel.html")
+
+@app.route("/final")
+@require_auth
+def final_page():
+    return render_template("final.html")
+
+@app.route("/adam")
+@require_auth
+def adam_page():
+    return render_template("adam.html")
+
+@app.route("/tech")
+@require_auth
+def tech_page():
+    return render_template("tech.html")
+
+@app.route("/kayla")
+@require_auth
+def kayla_page():
+    return render_template("kayla.html")
+
 
 @app.route("/terminal")
 @require_auth
@@ -539,7 +578,7 @@ def breakdown_page():
 
 # Candidate roots where the FAI/business data tree might live. Each box
 # has it in a slightly different place — ARES sees /mnt/data/PROMETHEUS/WORK,
-# NEXUS sees the mergerfs union plus a backup dir. We probe these in order
+# HERMES sees the mergerfs union plus a backup dir. We probe these in order
 # and use the first path that exists per-file, so the same module works
 # on every box without environment-specific config.
 _WORK_CANDIDATES = [
@@ -2085,11 +2124,11 @@ def journal_page_image(name, page):
 
 @app.route("/api/alerts")
 @require_auth
-def nexus_alerts():
-    """NEXUS health, pulled by the nexus-watchdog cron on the PVE host
-    (/usr/local/bin/nexus-watchdog.sh) every 2 min. A stale file means the
+def hermes_alerts():
+    """HERMES health, pulled by the hermes-watchdog cron on the PVE host
+    (/usr/local/bin/hermes-watchdog.sh) every 2 min. A stale file means the
     watchdog/ARES side is dead, which is itself critical."""
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_data", "nexus_health.json")
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_data", "hermes_health.json")
     try:
         with open(path) as f:
             d = json.load(f)
@@ -2105,7 +2144,7 @@ def nexus_alerts():
     if age > 300:
         worse("red"); reasons.append("watchdog stale (%ds old) — ARES probe not running" % int(age))
     if not d.get("ssh_ok"):
-        worse("red"); reasons.append("NEXUS unreachable over SSH")
+        worse("red"); reasons.append("HERMES unreachable over SSH")
     else:
         l1 = d.get("load1") or 0
         if l1 > 20: worse("red"); reasons.append("load %s" % l1)
@@ -3099,7 +3138,7 @@ _VAULT_PATH      = os.path.join(_APP_DIR, "ai_data", "vault.json")
 
 # Original files vault dir — dot-dir inside PHOTOS_ROOT so:
 #  (a) invisible to SMB/Finder  (b) stays on same fs → atomic rename
-#  (c) inside PHOTOS tree → nightly rsync to NEXUS still backs it up
+#  (c) inside PHOTOS tree → nightly rsync to HERMES still backs it up
 _VAULT_ORIGINALS_DIR = os.path.join(PHOTOS_ROOT, ".vault")
 os.makedirs(_VAULT_ORIGINALS_DIR, exist_ok=True)
 
@@ -3224,6 +3263,235 @@ def _vault_touch():
     """Refresh vault inactivity timer."""
     session["vault_last_active"] = time.time()
     session.modified = True
+
+
+# ── My Eyes Only: encryption at rest ────────────────────────────────────────
+# New vault items are stored as AES-256-GCM ciphertext. The key is derived from
+# the PIN (PBKDF2) at unlock and held ONLY in this worker's memory for the live
+# session — never on disk, never in the signed-not-encrypted Flask cookie. The
+# dashboard runs a single gunicorn worker, so this in-memory map is shared across
+# its threads. Result: even filesystem/root access yields unreadable blobs.
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM as _AESGCM
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC as _PBKDF2
+from cryptography.hazmat.primitives import hashes as _cry_hashes
+import secrets as _cry_secrets
+
+_vault_keys = {}                       # kid -> 32-byte key (memory only)
+_vault_keys_lock = threading.Lock()
+
+def _vault_derive_key(pin, salt_hex):
+    kdf = _PBKDF2(algorithm=_cry_hashes.SHA256(), length=32,
+                  salt=bytes.fromhex(salt_hex), iterations=200_000)
+    return kdf.derive(pin.encode())
+
+def _vault_set_session_key(key):
+    kid = _cry_secrets.token_hex(16)
+    with _vault_keys_lock:
+        _vault_keys[kid] = key
+    session["vault_kid"] = kid
+    return kid
+
+def _vault_session_key():
+    kid = session.get("vault_kid")
+    if not kid:
+        return None
+    with _vault_keys_lock:
+        return _vault_keys.get(kid)
+
+def _vault_clear_session_key():
+    kid = session.pop("vault_kid", None)
+    if kid:
+        with _vault_keys_lock:
+            _vault_keys.pop(kid, None)
+
+_vault_token_ser = None  # ponytail: lazy-init avoids import-time app.secret_key dependency
+
+def _vault_token_key(vt):
+    """Validate a signed vault token from ?vt= and return the decryption key, or None."""
+    assert isinstance(vt, str) and len(vt) <= 512, "bad vt param"
+    global _vault_token_ser
+    if _vault_token_ser is None:
+        _vault_token_ser = URLSafeTimedSerializer(app.secret_key, salt="vault-token")
+    try:
+        payload = _vault_token_ser.loads(vt, max_age=3600)
+    except Exception:
+        return None
+    kid = payload.get("kid") if isinstance(payload, dict) else None
+    if not kid:
+        return None
+    with _vault_keys_lock:
+        return _vault_keys.get(kid)
+
+def _vault_encrypt(key, plaintext):
+    nonce = _cry_secrets.token_bytes(12)
+    return nonce + _AESGCM(key).encrypt(nonce, plaintext, None)
+
+def _vault_decrypt(key, blob):
+    return _AESGCM(key).decrypt(blob[:12], blob[12:], None)
+
+# Encrypted vault items are self-contained under vault_enc/<key>/ (orig.enc, thumb.enc,
+# hq.enc) — kept separate from the legacy plaintext vault dirs.
+_VAULT_ENC_DIR = os.path.join(_APP_DIR, "vault_enc")
+
+
+def _vault_gen_video_thumb(data, write_enc_fn, thumb_key):
+    """Extract a frame from video bytes and write thumb.enc + hq.enc. Returns True on success."""
+    import subprocess, tempfile, os as _os
+    tmp = tempfile.NamedTemporaryFile(suffix=".tmp", delete=False)
+    try:
+        tmp.write(data); tmp.flush(); tmp.close()
+        for size, name in [(400, "thumb.enc"), (1600, "hq.enc")]:
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", tmp.name,
+                 "-vf", f"thumbnail=300,scale={size}:{size}:force_original_aspect_ratio=decrease",
+                 "-frames:v", "1", "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1"],
+                capture_output=True, timeout=30)
+            if result.returncode == 0 and result.stdout:
+                write_enc_fn(name, result.stdout)
+        return True
+    except Exception as e:
+        app.logger.warning("[vault] video thumb gen failed %s: %s", thumb_key, e)
+        return False
+    finally:
+        try: _os.unlink(tmp.name)
+        except OSError: pass
+
+
+@app.route("/api/vault/regen_thumbs")
+@require_auth
+def vault_regen_thumbs():
+    """Backfill thumb.enc/hq.enc for existing vault items that lack them (videos mostly)."""
+    vt_param = request.args.get("vt", "")
+    if vt_param:
+        assert len(vt_param) <= 512, "bad vt"
+        key = _vault_token_key(vt_param)
+        if key is None:
+            return jsonify({"error": "vault_key_expired"}), 401
+    else:
+        if not _vault_session_active():
+            abort(403)
+        key = _vault_session_key()
+        if key is None:
+            abort(403)
+        _vault_touch()
+    _load_vault()
+    with _vault_state_lock:
+        keys = list(_vault_state["items"].keys())
+    done = skipped = errors = 0
+    for tk in keys:
+        item_dir = os.path.join(_VAULT_ENC_DIR, tk)
+        thumb_path = os.path.join(item_dir, "thumb.enc")
+        orig_path = os.path.join(item_dir, "orig.enc")
+        if os.path.exists(thumb_path) or not os.path.exists(orig_path):
+            skipped += 1
+            continue
+        try:
+            with open(orig_path, "rb") as fh:
+                plain = _vault_decrypt(key, fh.read())
+        except Exception:
+            errors += 1
+            continue
+        def _write_enc(name, data_bytes, _dir=item_dir, _key=key):
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM as _AESGCM
+            import os as _os2
+            tmp = _dir + "/" + name + ".tmp"
+            with open(tmp, "wb") as fh:
+                fh.write(_vault_encrypt(_key, data_bytes))
+            _os2.replace(tmp, os.path.join(_dir, name))
+        ok = _vault_gen_video_thumb(plain, _write_enc, tk)
+        if ok:
+            done += 1
+            with _vault_state_lock:
+                if tk in _vault_state["items"]:
+                    _vault_state["items"][tk]["has_thumb"] = True
+        else:
+            errors += 1
+    _save_vault()
+    return jsonify({"done": done, "skipped": skipped, "errors": errors})
+
+
+@app.route("/api/vault/upload", methods=["POST"])
+@require_auth
+def vault_upload():
+    """Direct ENCRYPTED ingest into My Eyes Only.
+
+    Photos go straight in as AES-GCM ciphertext, NEVER touching photo_db / the
+    index — so they are never listed in the gallery and never seen by the face
+    scan. Used to import the iPhone Hidden album. Requires an unlocked vault
+    (holds the in-memory encryption key).
+    """
+    vt_param = request.args.get("vt", "")
+    if vt_param:
+        assert len(vt_param) <= 512, "bad vt"
+        key = _vault_token_key(vt_param)
+        if key is None:
+            return jsonify({"error": "vault_key_expired"}), 401
+    else:
+        if not _vault_session_active():
+            return jsonify({"error": "Vault locked"}), 403
+        key = _vault_session_key()
+        if key is None:
+            return jsonify({"error": "No session key — re-unlock"}), 403
+        _vault_touch()
+
+    f = request.files.get("file")
+    if f is None:
+        return jsonify({"error": "No file"}), 400
+    data = f.read()
+    if not data or len(data) > 1024 * 1024 * 1024:
+        return jsonify({"error": "Bad file"}), 400
+
+    import hashlib as _hl, io as _io, time as _t
+    thumb_key = _hl.sha256(data).hexdigest()
+
+    _load_vault()
+    with _vault_state_lock:
+        if thumb_key in _vault_state["items"]:
+            return jsonify({"ok": True, "dup": True, "key": thumb_key})
+
+    ext = (f.filename or "").lower().rsplit(".", 1)[-1]
+    is_video = (f.mimetype or "").startswith("video") or ext in ("mov", "mp4", "m4v")
+
+    item_dir = os.path.join(_VAULT_ENC_DIR, thumb_key)
+    os.makedirs(item_dir, exist_ok=True)
+
+    def _write_enc(name, plain):
+        tmp = os.path.join(item_dir, name + ".tmp")
+        with open(tmp, "wb") as out:
+            out.write(_vault_encrypt(key, plain))
+        os.replace(tmp, os.path.join(item_dir, name))
+
+    _write_enc("orig.enc", data)          # original always (ciphertext)
+
+    made_thumb = False
+    if not is_video:
+        try:
+            from PIL import Image, ImageOps
+            def _thumb(px):
+                im = ImageOps.exif_transpose(Image.open(_io.BytesIO(data))).convert("RGB")
+                im.thumbnail((px, px), Image.LANCZOS)
+                buf = _io.BytesIO(); im.save(buf, "JPEG", quality=82); return buf.getvalue()
+            _write_enc("thumb.enc", _thumb(400))
+            _write_enc("hq.enc", _thumb(1600))
+            made_thumb = True
+        except Exception as e:
+            app.logger.warning("[vault/upload] thumb gen failed %s: %s", thumb_key, e)
+    else:
+        made_thumb = _vault_gen_video_thumb(data, _write_enc, thumb_key)
+
+    entry = {
+        "enc": True,
+        "path": f.filename or thumb_key,
+        "thumb": f"/api/vault/thumb/{thumb_key}",
+        "thumb_hq": f"/api/vault/thumb_hq/{thumb_key}",
+        "date": float(request.form.get("date") or _t.time()),
+        "type": "video" if is_video else "image",
+        "has_thumb": made_thumb,
+    }
+    with _vault_state_lock:
+        _vault_state["items"][thumb_key] = entry
+    _save_vault()
+    return jsonify({"ok": True, "key": thumb_key})
 
 
 def _vault_thumb_dirs_for_key(thumb_key):
@@ -3557,7 +3825,12 @@ def vault_unlock():
         session["vault_unlocked_at"] = time.time()
         session["vault_last_active"] = time.time()
         session.modified = True
-        return jsonify({"success": True})
+        # Derive the at-rest encryption key from the PIN; hold it in memory only
+        # for this session (enables encrypted upload + decrypt-on-view).
+        key = _vault_derive_key(pin, auth["salt"])
+        kid = _vault_set_session_key(key)
+        token = URLSafeTimedSerializer(app.secret_key, salt="vault-token").dumps({"kid": kid})
+        return jsonify({"success": True, "vault_token": token})
     else:
         auth["fails"] = auth.get("fails", 0) + 1
         if auth["fails"] >= _VAULT_PIN_FAILS:
@@ -3576,6 +3849,7 @@ def vault_lock():
     """Explicitly lock the vault."""
     session.pop("vault_unlocked_at", None)
     session.pop("vault_last_active", None)
+    _vault_clear_session_key()          # drop the in-memory encryption key
     session.modified = True
     return jsonify({"success": True})
 
@@ -3588,8 +3862,8 @@ def vault_lock():
 # Challenge state lives in Flask session only (single-use, short TTL via _WEBAUTHN_CHALLENGE_TTL).
 # Auth failures are rate-limited via the same fails/lockout fields as PIN.
 
-_WEBAUTHN_RP_ID     = "pve.tail3045df.ts.net"
-_WEBAUTHN_ORIGIN    = "https://pve.tail3045df.ts.net"
+_WEBAUTHN_RP_ID     = "ares.tail3045df.ts.net"
+_WEBAUTHN_ORIGIN    = "https://ares.tail3045df.ts.net"
 _WEBAUTHN_CHALLENGE_TTL = 120  # seconds — challenge expires if not consumed
 
 try:
@@ -3988,10 +4262,16 @@ def _vault_auth_fail_tick(auth):
 @app.route("/api/vault/items")
 @require_auth
 def vault_items():
-    """Return vault contents. Requires vault session."""
-    if not _vault_session_active():
-        return jsonify({"error": "Vault locked"}), 403
-    _vault_touch()
+    """Return vault contents. Requires vault session or ?vt= token."""
+    vt_param = request.args.get("vt", "")
+    if vt_param:
+        assert len(vt_param) <= 512, "bad vt"
+        if _vault_token_key(vt_param) is None:
+            return jsonify({"error": "vault_key_expired"}), 401
+    else:
+        if not _vault_session_active():
+            return jsonify({"error": "Vault locked"}), 403
+        _vault_touch()
 
     _load_vault()
     with _vault_state_lock:
@@ -4002,6 +4282,7 @@ def vault_items():
         if not entry:
             continue  # v1 not-yet-migrated; skip (migration runs at startup)
         out = dict(entry)
+        out["key"]      = tk
         out["thumb"]    = f"/api/vault/thumb/{tk}"
         out["thumb_hq"] = f"/api/vault/thumb_hq/{tk}"
         out["_in_vault"] = True
@@ -4149,18 +4430,44 @@ def vault_remove():
 
 
 def _serve_vault_thumb(tier, thumb_key):
-    """Generic vault thumb server — requires vault session."""
-    if not _vault_session_active():
-        abort(403)
-    _vault_touch()
+    """Generic vault thumb server — requires vault session or ?vt= token."""
+    vt_param = request.args.get("vt", "")
+    if vt_param:
+        assert len(vt_param) <= 512, "bad vt"
+        enc_key = _vault_token_key(vt_param)
+        if enc_key is None:
+            return jsonify({"error": "vault_key_expired"}), 401
+    else:
+        if not _vault_session_active():
+            return jsonify({"error": "vault_key_expired"}), 401
+        _vault_touch()
+        enc_key = _vault_session_key()
+        if enc_key is None:
+            return jsonify({"error": "vault_key_expired"}), 401
 
     if not thumb_key or len(thumb_key) > 64:
         abort(400)
 
     _load_vault()
     with _vault_state_lock:
-        if thumb_key not in _vault_state["items"]:
+        entry = _vault_state["items"].get(thumb_key)
+    if not entry:
+        abort(404)
+
+    # Encrypted items: decrypt the requested tier in memory with session or token key.
+    if entry.get("enc"):
+        fmap = {"thumb": "thumb.enc", "thumb_hq": "hq.enc",
+                "thumb_preview": "thumb.enc", "thumb_max": "hq.enc"}
+        encfile = os.path.join(_VAULT_ENC_DIR, thumb_key, fmap.get(tier, "thumb.enc"))
+        if not os.path.exists(encfile):
             abort(404)
+        try:
+            with open(encfile, "rb") as fh:
+                plain = _vault_decrypt(enc_key, fh.read())
+        except Exception:
+            abort(403)
+        import io as _io2
+        return send_file(_io2.BytesIO(plain), mimetype="image/jpeg", max_age=0)
 
     if tier == "thumb":
         path = os.path.join(_VAULT_THUMB_DIR, thumb_key + ".jpg")
@@ -4310,6 +4617,49 @@ def vault_video():
     resp = send_file(real_path, mimetype=mime, as_attachment=False, conditional=True,
                      download_name=os.path.basename(real_path))
     resp.headers["Accept-Ranges"] = "bytes"
+    return resp
+
+
+@app.route("/api/vault/stream/<thumb_key>")
+@require_auth
+def vault_stream(thumb_key):
+    """Decrypt and stream an encrypted vault video by thumb_key."""
+    vt_param = request.args.get("vt", "")
+    if vt_param:
+        assert len(vt_param) <= 512, "bad vt"
+        key = _vault_token_key(vt_param)
+        if key is None:
+            return jsonify({"error": "vault_key_expired"}), 401
+    else:
+        if not _vault_session_active():
+            return jsonify({"error": "vault_key_expired"}), 401
+        _vault_touch()
+        key = _vault_session_key()
+        if key is None:
+            return jsonify({"error": "vault_key_expired"}), 401
+    if not thumb_key or len(thumb_key) > 64:
+        abort(400)
+    _load_vault()
+    with _vault_state_lock:
+        entry = _vault_state["items"].get(thumb_key)
+    if not entry or not entry.get("enc"):
+        abort(404)
+    enc_path = os.path.join(_VAULT_ENC_DIR, thumb_key, "orig.enc")
+    if not os.path.isfile(enc_path):
+        abort(404)
+    try:
+        with open(enc_path, "rb") as fh:
+            plain = _vault_decrypt(key, fh.read())
+    except Exception:
+        abort(403)
+    ext = (entry.get("path") or "").rsplit(".", 1)[-1].lower()
+    mime = _VIDEO_MIMES.get(ext, "video/mp4")
+    import io as _io
+    resp = send_file(_io.BytesIO(plain), mimetype=mime, as_attachment=False,
+                     conditional=True,
+                     download_name=os.path.basename(entry.get("path") or thumb_key))
+    resp.headers["Accept-Ranges"] = "bytes"
+    resp.headers["Content-Length"] = len(plain)
     return resp
 
 
@@ -5730,6 +6080,21 @@ def photo_ios_ids():
         return jsonify(list(_ios_ids.keys()))
 
 
+@app.route("/api/photos/ios-id-map")
+@require_auth
+def photo_ios_id_map():
+    """Reverse of _ios_ids: {content_sha: ios_id}.
+
+    Photos are named by content SHA (the thumbnail filename), so the iOS app can
+    join each gallery item (thumb-sha) to the on-device PHAsset localIdentifier —
+    used for offline full-res from the device and safe "free up space" dedupe.
+    If several localIdentifiers map to one SHA, last one wins (any is fine).
+    """
+    with _ios_ids_lock:
+        rev = {sha: ios for ios, sha in _ios_ids.items()}
+    return jsonify(rev)
+
+
 @app.route("/api/photos/register-ios-ids", methods=["POST"])
 @require_auth
 def register_ios_ids():
@@ -5757,6 +6122,34 @@ def register_ios_ids():
     if added:
         threading.Thread(target=_save_ios_ids, daemon=True).start()
     return jsonify({"registered": added, "total_known": len(_ios_ids)})
+
+
+_SCRATCH_DIR = os.path.join(_APP_DIR, "..", "..", "PROJECTS", "_scratch")
+
+@app.route("/api/scratch-upload", methods=["POST"])
+@require_auth
+def scratch_upload():
+    """Save a pasted image to _scratch/ and return its host path for Claude Code."""
+    if "file" not in request.files:
+        return jsonify({"error": "No file"}), 400
+    f = request.files["file"]
+    import time as _time, hashlib as _hl
+    data = f.read(20 * 1024 * 1024)  # 20 MB cap
+    if not data:
+        return jsonify({"error": "Empty"}), 400
+    ext = os.path.splitext(f.filename or "")[1].lower() or ".png"
+    if ext not in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic"}:
+        return jsonify({"error": "Unsupported type"}), 400
+    name = "paste-" + _hl.md5(data).hexdigest()[:8] + ext
+    scratch = os.path.realpath(os.path.join(_APP_DIR, "..", "..", "PROJECTS", "_scratch"))
+    assert scratch.endswith(os.sep + "_scratch") or "_scratch" in scratch, "bad path"
+    os.makedirs(scratch, exist_ok=True)
+    dest = os.path.join(scratch, name)
+    with open(dest, "wb") as fp:
+        fp.write(data)
+    # Return the host-side path Claude Code sees (LXC mount rewrite)
+    host_path = dest.replace("/mnt/data/PROMETHEUS", "/mnt/nvme/PROMETHEUS")
+    return jsonify({"path": host_path, "name": name})
 
 
 @app.route("/api/upload", methods=["POST"])
