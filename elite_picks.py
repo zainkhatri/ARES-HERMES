@@ -170,6 +170,7 @@ def _analyst_upside(sym):
 def _llm_scores(candidates):
     """Batched llama rating. Returns {TICKER: {'score':int, 'reason':str}}, or {} on failure."""
     assert isinstance(candidates, list), "candidates must be a list"
+    assert all(isinstance(c, dict) and "ticker" in c for c in candidates), "each candidate needs a ticker"
     if not candidates:
         return {}
     items = [{"ticker": c["ticker"], "name": c["name"], "elite_buyers": c["buyers"],
@@ -212,7 +213,7 @@ def _attach_llm_scores(picks, llm_map):
         hit = llm_map.get(p["ticker"])
         p["llm_score"] = hit["score"] if hit else p["data_score"]
         p["llm_reason"] = hit["reason"] if hit else ""
-    picks.sort(key=lambda p: (bool(llm_map.get(p["ticker"])), p["llm_score"]), reverse=True)
+    picks.sort(key=lambda p: p["llm_score"], reverse=True)
     for i, p in enumerate(picks):
         p["rank"] = i + 1
     return picks
