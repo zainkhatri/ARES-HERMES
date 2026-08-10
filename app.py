@@ -537,6 +537,11 @@ def final_page():
 def adam_page():
     return render_template("adam.html")
 
+@app.route("/script")
+@require_auth
+def script_page():
+    return render_template("script.html")
+
 @app.route("/tech")
 @require_auth
 def tech_page():
@@ -982,28 +987,108 @@ def api_business_all():
     return jsonify(_all_ventures_payload())
 
 
-# ── Portfolio / Investments ──
+# ── Elite Picks — what superinvestors & institutions are buying ──
+# Replaces the old personal-portfolio page. Engine lives in elite_picks.py
+# (standalone, no Flask/CLIP deps) so the weekly refresh cron can import it
+# cheaply. See ops/refresh-elite-picks.sh + ares-elite-picks.timer (Mon 06:00).
+from elite_picks import compute_elite_picks
 
-FINNHUB_KEY = os.getenv("FINNHUB_KEY", "")
 
-@app.route("/api/portfolio", methods=["GET"])
+@app.route("/api/elite-picks")
 @require_auth
-def get_portfolio():
-    path = os.path.join(_APP_DIR, "portfolio.json")
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            return jsonify(json.load(f))
-    return jsonify({"holdings": []})
+def elite_picks_api():
+    return jsonify(compute_elite_picks(force=request.args.get("refresh") == "1"))
 
 
-@app.route("/api/portfolio", methods=["POST"])
+_DEEP_DIR = os.path.join(_APP_DIR, "ai_data", "deep_research")
+_DEEP_TTL = 300            # running-marker staleness (s)
+_DEEP_SEM = threading.Semaphore(2)   # cap concurrent claude jobs
+
+
+def _deep_cache_paths(ticker, quarter):
+    assert ticker, "ticker required"
+    base = re.sub(r"[^A-Z0-9.]", "", str(ticker).upper())[:6]
+    q = re.sub(r"[^0-9A-Za-z]", "", str(quarter or "na"))
+    stem = os.path.join(_DEEP_DIR, f"{base}_{q}")
+    return stem + ".json", stem + ".running"
+
+
+def _deep_lookup(ticker, quarter):
+    """FS-only state: ready (cached brief), running (fresh marker), or None."""
+    js, mk = _deep_cache_paths(ticker, quarter)
+    if os.path.exists(js):
+        try:
+            return {"status": "ready", "brief": json.load(open(js))}
+        except Exception:
+            pass
+    if os.path.exists(mk):
+        try:
+            if time.time() - float(open(mk).read().strip() or 0) < _DEEP_TTL:
+                return {"status": "running"}
+        except Exception:
+            pass
+    return None
+
+
+def _deep_generate(ticker, quarter, signals):
+    """Run `claude -p` for a one-stock brief; write JSON cache; always clear the marker."""
+    js, mk = _deep_cache_paths(ticker, quarter)
+    prompt = (
+        f"Research the stock {ticker} ({signals.get('name','')}). Context (do not just "
+        f"repeat it): {json.dumps(signals)}. Write a concise investor brief. Use general "
+        f"knowledge and web search; DO NOT invent specific prices, earnings, or dates. "
+        f'Return ONLY JSON: {{"summary": "2-3 sentences on the business and why elite '
+        f'investors may be accumulating it", "bull": ["...","..."], "bear": ["...","..."]}}'
+    )
+    with _DEEP_SEM:
+        try:
+            proc = subprocess.run(
+                ["claude", "-p", prompt, "--output-format", "json",
+                 "--allowedTools", "WebSearch", "WebFetch"],
+                capture_output=True, text=True, timeout=180, cwd="/root")
+            data = json.loads(proc.stdout or "{}")
+            if data.get("is_error") or not data.get("result"):
+                raise RuntimeError("claude cli error")
+            brief = json.loads(data["result"])
+            brief["used_web"] = bool(
+                (data.get("usage") or {}).get("server_tool_use", {}).get("web_search_requests"))
+            brief["generated_ts"] = time.time()
+            os.makedirs(_DEEP_DIR, exist_ok=True)
+            json.dump(brief, open(js, "w"))
+        except Exception:
+            pass
+        finally:
+            try:
+                os.remove(mk)
+            except OSError:
+                pass
+
+
+@app.route("/api/elite-picks/deep/<ticker>")
 @require_auth
-def save_portfolio():
-    path = os.path.join(_APP_DIR, "portfolio.json")
-    data = request.json
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
-    return jsonify({"success": True})
+def elite_deep(ticker):
+    if not re.fullmatch(r"[A-Za-z.]{1,6}", ticker):
+        return jsonify({"status": "error", "msg": "bad ticker"}), 400
+    data = compute_elite_picks(force=False)
+    quarter = data.get("quarter", "")
+    pick = next((p for p in data.get("picks", []) if p["ticker"].upper() == ticker.upper()), None)
+    if not pick:
+        return jsonify({"status": "error", "msg": "unknown ticker"}), 404
+    if request.args.get("refresh") != "1":
+        cur = _deep_lookup(ticker, quarter)
+        if cur:
+            return jsonify(cur)
+    os.makedirs(_DEEP_DIR, exist_ok=True)
+    js, mk = _deep_cache_paths(ticker, quarter)
+    if request.args.get("refresh") == "1":
+        try:
+            os.remove(js)
+        except OSError:
+            pass
+    open(mk, "w").write(str(time.time()))
+    signals = {k: pick.get(k) for k in ("name", "buyers", "heavies", "momentum", "upside", "llm_reason")}
+    threading.Thread(target=_deep_generate, args=(ticker, quarter, signals), daemon=True).start()
+    return jsonify({"status": "running"})
 
 
 CRYPTO_MAP = {"BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana", "DOGE": "dogecoin"}

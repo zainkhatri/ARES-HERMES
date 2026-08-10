@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ARES & NEXUS · Finance</title>
+    <title>ARES & HERMES · Finance</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="apple-touch-icon" href="/static/icon-180.png">
@@ -559,11 +559,11 @@
         .nbr-other:hover { opacity:1; }
         .nbr-mark { width:26px; height:26px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border:1px solid; font-family:'Bricolage Grotesque', sans-serif; font-weight:800; font-size:14px; line-height:1; }
         .nbr-mark.m-a { border-color:#ef4444; color:#ef4444; }
-        .nbr-mark.m-n { border-color:#6495ed; color:#6495ed; }
+        .nbr-mark.m-h { border-color:#6495ed; color:#6495ed; }
         .nbr-id { display:flex; align-items:baseline; gap:8px; min-width:0; }
         .nbr-name { font-family:'Bricolage Grotesque', sans-serif; font-weight:700; font-size:14px; letter-spacing:0.02em; white-space:nowrap; }
         .nbr-name.n-a { color:#ef4444; }
-        .nbr-name.n-n { color:#6495ed; }
+        .nbr-name.n-h { color:#6495ed; }
         .nbr-sep { color:var(--text-3); font-size:11px; }
         .nbr-tag { font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--text-2); letter-spacing:0.1em; text-transform:uppercase; white-space:nowrap; }
         .back-chip { display:inline-flex; align-items:center; gap:6px; font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--text-2); text-decoration:none; letter-spacing:0.15em; text-transform:uppercase; padding:5px 11px; border:1px solid var(--line-2); transition:color 0.15s, border-color 0.15s, background 0.15s, gap 0.15s; }
@@ -595,12 +595,12 @@
                 <span>Home</span>
             </a>
         </div>
-        <a href="/jump/nexus" class="nbr nbr-other">
-            <div class="nbr-mark m-n">N</div>
+        <a href="/jump/hermes" class="nbr nbr-other">
+            <div class="nbr-mark m-h">H</div>
             <div class="nbr-id">
-                <span class="nbr-name n-n">NEXUS</span>
+                <span class="nbr-name n-h">HERMES</span>
                 <span class="nbr-sep">/</span>
-                <span class="nbr-tag">MINI-NAS</span>
+                <span class="nbr-tag">MID-NAS</span>
             </div>
         </a>
     </header>
@@ -711,35 +711,114 @@
     }
     </style>
 
+    <style>
+    /* Elite Picks — ranked conviction list, same component language as home. */
+    .ep-list { border:1px solid var(--line-1); background:var(--line-1); display:flex; flex-direction:column; gap:1px; }
+    .ep-row { background:var(--bg-1); display:grid; grid-template-columns:auto 1fr auto; grid-template-rows:auto auto;
+        column-gap:16px; row-gap:12px; align-items:start; padding:15px 18px 13px; position:relative; }
+    .ep-row::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--ares); opacity:.35; }
+    .ep-row:first-child::before { opacity:1; }
+    .ep-rank { font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:22px; color:var(--text-3); font-variant-numeric:tabular-nums; min-width:30px; text-align:center; line-height:1.05; }
+    .ep-row:first-child .ep-rank { color:var(--ares); }
+    .ep-id { min-width:0; }
+    .ep-tk { font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:16px; letter-spacing:.02em; color:var(--text-1); text-decoration:none; }
+    .ep-tk:hover { color:var(--ares); }
+    .ep-nm { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ep-firms { margin-top:7px; font-family:'JetBrains Mono',monospace; font-size:10.5px; line-height:1.6; color:var(--text-3); letter-spacing:.01em; }
+    .ep-reason { margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:11px; font-style:italic; color:var(--text-2); line-height:1.5; }
+    .ep-firm.hh { color:var(--ares-bright); font-weight:500; text-decoration:underline; text-decoration-color:var(--ares); text-underline-offset:2px; }
+    .ep-chips { display:flex; gap:6px; margin-top:9px; flex-wrap:wrap; }
+    .ep-chip.hh { color:var(--ares); border-color:var(--ares); }
+    .ep-chip { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.08em; text-transform:uppercase; padding:2px 7px; border:1px solid var(--line-2); color:var(--text-2); white-space:nowrap; }
+    .ep-chip.mom { color:var(--up); border-color:rgba(16,185,129,.3); }
+    .ep-chip.mom.dn { color:var(--down); border-color:rgba(248,113,113,.3); }
+
+    /* right column — recommended buy is the headline metric */
+    .ep-metrics { text-align:right; white-space:nowrap; }
+    .ep-alloc { font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:22px; color:var(--ares-bright); font-variant-numeric:tabular-nums; line-height:1; letter-spacing:-.02em; }
+    .ep-alloc-u { margin-top:5px; font-family:'JetBrains Mono',monospace; font-size:8.5px; color:var(--text-3); text-transform:uppercase; letter-spacing:.14em; }
+    .ep-elites { margin-top:8px; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-2); font-variant-numeric:tabular-nums; }
+    .ep-elites b { color:var(--text-1); font-weight:500; }
+
+    /* per-row weighted-conviction meter (echoes home's segmented level bars) */
+    .ep-bar { grid-column:1 / -1; height:6px; background:var(--bg-3); position:relative; overflow:hidden; border:1px solid var(--line-1); }
+    .ep-bar > span { display:block; height:100%; background:linear-gradient(90deg, var(--ares) 0%, var(--ares-bright) 100%); }
+    .ep-bar::after { content:''; position:absolute; inset:0; pointer-events:none;
+        background:repeating-linear-gradient(to right, transparent 0 9px, var(--bg-1) 9px 10px); }
+
+    /* positions selector — how many picks to actually fund */
+    .ep-seg { display:inline-flex; height:34px; border:1px solid var(--line-2); }
+    .ep-seg button { background:var(--bg-1); border:none; border-left:1px solid var(--line-2); color:var(--text-2);
+        font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+        padding:0 11px; min-width:34px; transition:color .15s, background .15s; }
+    .ep-seg button:first-child { border-left:none; }
+    .ep-seg button:hover { color:var(--ares); }
+    .ep-seg button.on { background:var(--ares); color:var(--bg-0); font-weight:700; }
+
+    /* unfunded rows: keep the ranking + roster, mute the money column */
+    .ep-alloc.off { color:var(--text-4); font-weight:600; }
+    .ep-row.off .ep-bar > span { background:var(--text-4); opacity:.5; }
+
+    /* budget control in the section head */
+    .ep-budget { display:inline-flex; align-items:center; height:34px; border:1px solid var(--line-2); background:var(--bg-1); padding:0 4px 0 11px; transition:border-color .15s; }
+    .ep-budget:focus-within { border-color:var(--ares); }
+    .ep-budget .cur { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-3); }
+    .ep-budget input { width:78px; height:100%; background:none; border:none; color:var(--text-1); font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:14px; font-variant-numeric:tabular-nums; text-align:left; padding:0 6px; outline:none; }
+    .ep-budget input::-webkit-outer-spin-button, .ep-budget input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+    .ep-budget input { -moz-appearance:textfield; }
+
+    .ep-note { margin:16px 2px 0; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-4); letter-spacing:.04em; }
+
+    .ep-deep-wrap { margin-top:9px; }
+    .ep-deep-btn { background:none; border:1px solid var(--line-2); color:var(--text-3); font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; padding:3px 9px; transition:color .15s,border-color .15s; }
+    .ep-deep-btn:hover:not(:disabled) { color:var(--ares); border-color:var(--ares); }
+    .ep-deep-btn:disabled { opacity:.6; }
+    .ep-deep { }
+    .ep-deep-load, .ep-deep-err { margin-top:8px; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-3); }
+    .ep-deep-err { color:var(--down); }
+    .ep-deep-card { margin-top:10px; border:1px solid var(--line-2); background:var(--bg-2); padding:12px 14px; }
+    .ep-deep-sum { font-family:'JetBrains Mono',monospace; font-size:11px; line-height:1.6; color:var(--text-1); }
+    .ep-deep-cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:10px; }
+    .ep-deep-h { font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:11px; letter-spacing:.06em; text-transform:uppercase; margin-bottom:4px; }
+    .ep-deep-h.up { color:var(--up); } .ep-deep-h.dn { color:var(--down); }
+    .ep-deep-cols ul { list-style:none; display:flex; flex-direction:column; gap:5px; }
+    .ep-deep-cols li { font-family:'JetBrains Mono',monospace; font-size:10.5px; line-height:1.5; color:var(--text-2); padding-left:11px; position:relative; }
+    .ep-deep-cols li::before { content:'·'; position:absolute; left:0; color:var(--text-3); }
+    .ep-deep-foot { margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text-4); letter-spacing:.06em; }
+
+    @media (max-width:560px) {
+        .ep-row { column-gap:12px; padding:14px 14px 12px; }
+        .ep-alloc { font-size:19px; } .ep-rank { font-size:19px; min-width:22px; }
+        .ep-nm { white-space:normal; }
+        .ep-deep-cols { grid-template-columns:1fr; }
+    }
+    </style>
+
     <main>
         <div class="fx">
-            <h1 class="fx-vh">Finance</h1>
+            <h1 class="fx-vh">Elite Picks</h1>
 
             <section class="fx-hero fx-in">
                 <div>
-                    <div class="fx-hero-label">Total Net Worth</div>
-                    <div class="fx-hero-net" id="fx-net">••••</div>
-                    <div class="fx-hero-gain" id="fx-gain"><span class="span">Loading…</span></div>
+                    <div class="fx-hero-label">This Week's Top Conviction</div>
+                    <div class="fx-hero-net" id="ep-top">••••</div>
+                    <div class="fx-hero-gain" id="ep-topsub"><span class="span">Loading…</span></div>
                 </div>
-                <div class="fx-hero-meta" id="fx-meta"></div>
+                <div class="fx-hero-meta" id="ep-sources"></div>
             </section>
 
-            <div class="fx-alloc fx-in" style="animation-delay:.06s">
-                <div class="fx-sh"><span class="fx-sh-title">Allocation</span><span class="fx-sh-meta" id="fx-alloc-meta">—</span></div>
-                <div class="fx-seg" id="fx-bar" role="img" aria-label="Asset allocation"></div>
-                <div class="fx-legend" id="fx-legend"></div>
-            </div>
-
             <div class="fx-sh fx-in" style="animation-delay:.1s">
-                <span class="fx-sh-title">Accounts</span>
+                <span class="fx-sh-title">Ranked by Conviction</span>
                 <div class="fx-tools">
-                    <button class="fx-btn" id="reveal-btn" onclick="toggleMoney()">Hide</button>
-                    <button class="fx-btn" onclick="openHoldingModal()">+ Holding</button>
-                    <button class="fx-btn" onclick="openCashModal()">+ Cash</button>
-                    <button class="fx-btn" id="refresh-btn" onclick="refresh()">Refresh</button>
+                    <label class="ep-budget" title="Total you want to invest — split across the funded picks by weighted conviction">
+                        <span class="cur">$</span>
+                        <input type="number" id="ep-budget-in" inputmode="numeric" min="0" step="100" value="1000" aria-label="Total budget to invest">
+                    </label>
+                    <button class="fx-btn" id="ep-refresh" onclick="refresh()">Refresh</button>
                 </div>
             </div>
-            <div class="fx-accts fx-in" id="accounts" style="animation-delay:.14s"></div>
+            <div class="ep-list fx-in" id="ep-list" style="animation-delay:.14s"></div>
+            <p class="ep-note">Suggested amounts split your budget by weighted conviction (heavy hitters count 3×). Ranked from public 13F filings. Not financial advice.</p>
         </div>
     </main>
 
@@ -749,67 +828,10 @@
     </footer>
 </div>
 
-<!-- Holding Modal -->
-<div class="modal" id="holding-modal">
-    <div class="modal-box">
-        <div class="modal-head" id="holding-title">Add Holding</div>
-        <div class="modal-body">
-            <div><label class="modal-label" for="h-inst">Institution</label>
-                <input type="text" class="modal-input" id="h-inst" name="institution" placeholder="Fidelity" autocomplete="off" spellcheck="false"></div>
-            <div><label class="modal-label" for="h-ticker">Ticker</label>
-                <input type="text" class="modal-input upper" id="h-ticker" name="ticker" placeholder="VOO" autocomplete="off" spellcheck="false"></div>
-            <div><label class="modal-label" for="h-shares">Shares</label>
-                <input type="number" class="modal-input" id="h-shares" name="shares" placeholder="0" inputmode="decimal" step="any"></div>
-            <div><label class="modal-label" for="h-cost">Cost Basis (per share)</label>
-                <input type="number" class="modal-input" id="h-cost" name="cost" placeholder="0" inputmode="decimal" step="any"></div>
-        </div>
-        <div class="modal-foot">
-            <button class="modal-btn" onclick="closeHoldingModal()">Cancel</button>
-            <button class="modal-btn primary" onclick="saveHolding()">Save</button>
-        </div>
-    </div>
-</div>
-
-<!-- Cash Modal -->
-<div class="modal" id="cash-modal">
-    <div class="modal-box">
-        <div class="modal-head" id="cash-title">Add Cash</div>
-        <div class="modal-body">
-            <div><label class="modal-label" for="c-inst">Institution</label>
-                <input type="text" class="modal-input" id="c-inst" name="institution" placeholder="High-Yield Savings" autocomplete="off" spellcheck="false"></div>
-            <div><label class="modal-label" for="c-name">Label</label>
-                <input type="text" class="modal-input" id="c-name" name="label" placeholder="Cash" autocomplete="off" spellcheck="false"></div>
-            <div><label class="modal-label" for="c-balance">Balance</label>
-                <input type="number" class="modal-input" id="c-balance" name="balance" placeholder="0" inputmode="decimal" step="any"></div>
-            <div><label class="modal-label" for="c-apy">APY % (optional)</label>
-                <input type="number" class="modal-input" id="c-apy" name="apy" placeholder="3.40" inputmode="decimal" step="any"></div>
-        </div>
-        <div class="modal-foot">
-            <button class="modal-btn" onclick="closeCashModal()">Cancel</button>
-            <button class="modal-btn primary" onclick="saveCash()">Save</button>
-        </div>
-    </div>
-</div>
-
+<script src="/static/elite_alloc.js"></script>
 <script>
-const CRYPTO = new Set(['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'XRP', 'LTC']);
-const CLASS_COLOR = { cash: 'var(--acc-cash)', crypto: 'var(--acc-crypto)', equity: 'var(--acc-eq)' };
-const CLASS_NAME = { cash: 'Cash', crypto: 'Crypto', equity: 'Equities' };
-const USD0 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-const USD2 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-let data = { cash: [], holdings: [] };
-let prices = {};
-let moneyHidden = false;
-let editHoldingId = null, editCashId = null;
-
-function money(v, cents) { return moneyHidden ? '••••' : (cents ? USD2 : USD0).format(v || 0); }
-function pctStr(v) { return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '%'; }
-function signed(v) { return (v >= 0 ? '+' : '−') + USD0.format(Math.abs(Math.round(v))); }
-function shares(n) { return n.toLocaleString('en-US', { maximumFractionDigits: n < 1 ? 8 : 3 }); }
-function uid() { return (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'x' + Math.round(performance.now() * 1e3); }
-function assetClass(h) { return CRYPTO.has(h.ticker) ? 'crypto' : 'equity'; }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function pct1(v) { return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '%'; }
 
 function tick() {
     const t = new Date().toLocaleTimeString('en-US', { hour12: false });
@@ -819,181 +841,135 @@ function tick() {
 tick(); setInterval(tick, 30000);
 (function () { const y = document.getElementById('t-year'); if (y) y.textContent = new Date().getFullYear(); })();
 
-function toggleMoney() {
-    moneyHidden = !moneyHidden;
-    document.getElementById('reveal-btn').textContent = moneyHidden ? 'Show' : 'Hide';
-    render();
+const SOURCE_LABEL = { superinvestor: 'Superinvestors', momentum: 'Momentum', congress: 'Congress', analyst: 'Analyst' };
+const USD0 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+let DATA = { picks: [], sources: {}, quarter: '' };
+let budget = Math.max(0, parseInt(localStorage.getItem('ep-budget') || '1000', 10) || 0);
+
+function momChip(m) {
+    if (m == null) return '';
+    return `<span class="ep-chip mom ${m < 0 ? 'dn' : ''}">${pct1(m)} 3mo</span>`;
 }
 
-async function load() {
-    try { const r = await fetch('/api/portfolio'); if (r.ok) { const j = await r.json(); data.cash = j.cash || []; data.holdings = j.holdings || []; } } catch (e) {}
-}
-async function save() {
-    try { await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); } catch (e) {}
-}
-async function fetchPrices() {
-    const ts = [...new Set(data.holdings.map(h => h.ticker))];
-    await Promise.all(ts.map(async t => {
-        try { const r = await fetch('/api/stock-quote/' + encodeURIComponent(t)); if (r.ok) { const q = await r.json(); if (q.c) prices[t] = q; } } catch (e) {}
-    }));
+function allocate(picks) {
+    return allocateBudget(picks, budget, { BAR: 65, GAMMA: 2, MAX_FUNDED: 10 });
 }
 
-function hVal(h) { const p = prices[h.ticker]; return (p && p.c) ? h.shares * p.c : 0; }
-function hCost(h) { return h.shares * (h.costBasis || 0); }
-function hDay(h) { const p = prices[h.ticker]; return (p && p.c && p.dp != null) ? h.shares * p.c * (p.dp / 100) : 0; }
-function groupClass(hs) {
-    if (hs.some(h => assetClass(h) === 'equity')) return 'equity';
-    if (hs.some(h => assetClass(h) === 'crypto')) return 'crypto';
-    return 'cash';
-}
-function groupType(hs, cs) {
-    if (hs.some(h => assetClass(h) === 'equity')) return 'Brokerage';
-    if (hs.some(h => assetClass(h) === 'crypto')) return 'Crypto';
-    if (cs.some(c => c.apy)) return 'Savings';
-    return 'Cash';
-}
-function metaRow(k, v, cls) { return `<div class="fx-hm-row"><span class="fx-hm-key">${k}</span><span class="fx-hm-val ${cls || ''}">${v}</span></div>`; }
-
-function holdingRow(h) {
-    const p = prices[h.ticker], v = hVal(h), cost = hCost(h), g = v - cost;
-    const gp = cost > 0 ? g / cost * 100 : 0, up = g >= 0;
-    const px = (p && p.c) ? USD2.format(p.c) : '—';
-    return `<div class="fx-rowwrap">
-        <button class="fx-row" onclick="openHoldingModal('${h.id}')" aria-label="Edit ${esc(h.ticker)}">
-            <span class="fx-rl"><span class="fx-tk">${esc(h.ticker)}</span><span class="fx-rs">${shares(h.shares)} × ${px}</span></span>
-            <span class="fx-rr"><span class="fx-rv">${money(v)}</span>${cost > 0 ? `<span class="fx-rg ${up ? 'up' : 'down'}">${pctStr(gp)}</span>` : ''}</span>
-        </button>
-        <button class="fx-rm" onclick="removeHolding('${h.id}')" aria-label="Remove ${esc(h.ticker)}">✕</button>
-    </div>`;
-}
-function cashRow(c) {
-    const sub = c.apy ? `${c.apy}% APY · ${money((c.balance || 0) * c.apy / 100)}/yr` : 'Cash balance';
-    return `<div class="fx-rowwrap">
-        <button class="fx-row" onclick="openCashModal('${c.id}')" aria-label="Edit ${esc(c.name || 'cash')}">
-            <span class="fx-rl"><span class="fx-tk cash">${esc(c.name || 'Cash')}</span><span class="fx-rs">${sub}</span></span>
-            <span class="fx-rr"><span class="fx-rv">${money(c.balance || 0, true)}</span></span>
-        </button>
-        <button class="fx-rm" onclick="removeCash('${c.id}')" aria-label="Remove ${esc(c.name || 'cash')}">✕</button>
+function rowHtml(p, a) {
+    const chips = [];
+    if (p.heavies) chips.push(`<span class="ep-chip hh">${p.heavies} heavyweight${p.heavies > 1 ? 's' : ''}</span>`);
+    if (p.congress) chips.push(`<span class="ep-chip">${p.congress} congress</span>`);
+    if (p.upside != null && p.upside > 0) chips.push(`<span class="ep-chip">+${p.upside.toFixed(0)}% target</span>`);
+    chips.push(momChip(p.momentum));
+    const chipHtml = chips.filter(Boolean).join('');
+    const firms = (p.firms || [])
+        .map(f => `<span class="ep-firm${f.heavy ? ' hh' : ''}">${esc(f.name)}</span>`)
+        .join(' · ');
+    const reason = p.llm_reason ? `<div class="ep-reason">"${esc(p.llm_reason)}"</div>` : '';
+    const dr = 'https://www.dataroma.com/m/activity.php?sym=' + encodeURIComponent(p.ticker) + '&typ=a';
+    const alloc = a.funded
+        ? `<div class="ep-alloc">${USD0.format(a.amount)}</div><div class="ep-alloc-u">conviction ${p.llm_score}</div>`
+        : `<div class="ep-alloc off">—</div><div class="ep-alloc-u">below bar · ${p.llm_score}</div>`;
+    return `<div class="ep-row${a.funded ? '' : ' off'}">
+        <div class="ep-rank">${p.rank}</div>
+        <div class="ep-id">
+            <a class="ep-tk" href="${dr}" target="_blank" rel="noopener">${esc(p.ticker)}</a>
+            <div class="ep-nm">${esc(p.name)}</div>
+            ${reason}
+            <div class="ep-firms">${firms || '—'}</div>
+            ${chipHtml ? `<div class="ep-chips">${chipHtml}</div>` : ''}
+            <div class="ep-deep-wrap"><button class="ep-deep-btn" onclick="deepResearch('${esc(p.ticker)}', this)">Deep research ↗</button><div class="ep-deep" id="deep-${esc(p.ticker)}"></div></div>
+        </div>
+        <div class="ep-metrics">${alloc}
+            <div class="ep-elites"><b>${p.buyers}</b> elites${p.heavies ? ` · <b>${p.heavies}</b> heavy` : ''}</div>
+        </div>
+        <div class="ep-bar" role="img" aria-label="Conviction ${a.barPct.toFixed(0)} of 100"><span style="width:${a.barPct.toFixed(1)}%"></span></div>
     </div>`;
 }
 
-function render() {
-    let mkt = 0, cost = 0, day = 0;
-    const byClass = { cash: 0, crypto: 0, equity: 0 };
-    for (const h of data.holdings) { const v = hVal(h); mkt += v; cost += hCost(h); day += hDay(h); byClass[assetClass(h)] += v; }
-    const cashTot = data.cash.reduce((s, c) => s + (c.balance || 0), 0);
-    byClass.cash = cashTot;
-    const net = mkt + cashTot, gain = mkt - cost, gp = cost > 0 ? gain / cost * 100 : 0, up = gain >= 0;
-    const dayPct = (net - day) > 0 ? day / (net - day) * 100 : 0;
-
-    document.getElementById('fx-net').textContent = money(net, true);
-    const gEl = document.getElementById('fx-gain');
-    gEl.className = 'fx-hero-gain ' + (up ? 'up' : 'down');
-    gEl.innerHTML = (up ? '▲ ' : '▼ ') + (moneyHidden ? pctStr(gp) : signed(gain) + ' · ' + pctStr(gp)) + '<span class="span">all-time</span>';
-
-    document.getElementById('fx-meta').innerHTML =
-        metaRow('Invested', money(mkt)) +
-        metaRow('Cash', money(cashTot)) +
-        metaRow('Today', moneyHidden ? pctStr(dayPct) : signed(day), day >= 0 ? 'up' : 'down') +
-        metaRow('Positions', String(data.holdings.length));
-
-    const order = ['cash', 'equity', 'crypto'];
-    let bar = '', legend = '';
-    for (const k of order) {
-        const share = net > 0 ? byClass[k] / net * 100 : 0;
-        if (share <= 0) continue;
-        bar += `<span style="width:${share.toFixed(2)}%;background:${CLASS_COLOR[k]}"></span>`;
-        legend += `<span class="fx-leg"><span class="sw" style="background:${CLASS_COLOR[k]}"></span>${CLASS_NAME[k]}<span class="lv">${share.toFixed(0)}%</span></span>`;
-    }
-    document.getElementById('fx-bar').innerHTML = bar || '<span style="width:100%;background:var(--line-2)"></span>';
-    document.getElementById('fx-legend').innerHTML = legend;
-    document.getElementById('fx-alloc-meta').textContent = moneyHidden ? '3 classes' : `invested ${(net > 0 ? mkt / net * 100 : 0).toFixed(0)}%`;
-
-    const insts = [];
-    for (const h of data.holdings) if (!insts.includes(h.institution)) insts.push(h.institution);
-    for (const c of data.cash) if (!insts.includes(c.institution)) insts.push(c.institution);
-    const box = document.getElementById('accounts');
-    if (!insts.length) { box.innerHTML = '<div class="fx-empty">No accounts yet — add a holding or cash balance.</div>'; return; }
-    box.innerHTML = insts.map(inst => {
-        const hs = data.holdings.filter(h => h.institution === inst);
-        const cs = data.cash.filter(c => c.institution === inst);
-        const sub = hs.reduce((s, h) => s + hVal(h), 0) + cs.reduce((s, c) => s + (c.balance || 0), 0);
-        const cls = groupClass(hs);
-        return `<section class="fx-acct" style="--acc:${CLASS_COLOR[cls]}">
-            <div class="fx-acct-head">
-                <div><div class="fx-acct-name">${esc(inst || 'Account')}</div><div class="fx-acct-type">${groupType(hs, cs)}</div></div>
-                <div class="fx-acct-val">${money(sub)}</div>
-            </div>
-            ${hs.map(holdingRow).join('')}${cs.map(cashRow).join('')}
-        </section>`;
-    }).join('');
-}
-
-async function refresh() {
-    const b = document.getElementById('refresh-btn'); b.textContent = 'Refreshing…';
-    await fetchPrices(); render(); b.textContent = 'Refresh';
-}
-
-function openHoldingModal(id) {
-    editHoldingId = id || null;
-    const h = id ? data.holdings.find(x => x.id === id) : null;
-    document.getElementById('holding-title').textContent = h ? 'Edit Holding' : 'Add Holding';
-    document.getElementById('h-inst').value = h ? h.institution : '';
-    document.getElementById('h-ticker').value = h ? h.ticker : '';
-    document.getElementById('h-shares').value = h ? h.shares : '';
-    document.getElementById('h-cost').value = h ? h.costBasis : '';
-    document.getElementById('holding-modal').classList.add('show');
-}
-function closeHoldingModal() { document.getElementById('holding-modal').classList.remove('show'); }
-async function saveHolding() {
-    const inst = document.getElementById('h-inst').value.trim() || 'Account';
-    const ticker = document.getElementById('h-ticker').value.trim().toUpperCase();
-    const sh = parseFloat(document.getElementById('h-shares').value);
-    const costBasis = parseFloat(document.getElementById('h-cost').value) || 0;
-    if (!ticker || !(sh > 0)) return;
-    if (editHoldingId) Object.assign(data.holdings.find(x => x.id === editHoldingId), { institution: inst, ticker, shares: sh, costBasis });
-    else data.holdings.push({ id: uid(), institution: inst, ticker, shares: sh, costBasis });
-    closeHoldingModal(); await save(); await fetchPrices(); render();
-}
-async function removeHolding(id) { data.holdings = data.holdings.filter(h => h.id !== id); await save(); render(); }
-
-function openCashModal(id) {
-    editCashId = id || null;
-    const c = id ? data.cash.find(x => x.id === id) : null;
-    document.getElementById('cash-title').textContent = c ? 'Edit Cash' : 'Add Cash';
-    document.getElementById('c-inst').value = c ? c.institution : '';
-    document.getElementById('c-name').value = c ? (c.name || '') : '';
-    document.getElementById('c-balance').value = c ? c.balance : '';
-    document.getElementById('c-apy').value = (c && c.apy) ? c.apy : '';
-    document.getElementById('cash-modal').classList.add('show');
-}
-function closeCashModal() { document.getElementById('cash-modal').classList.remove('show'); }
-async function saveCash() {
-    const inst = document.getElementById('c-inst').value.trim() || 'Account';
-    const name = document.getElementById('c-name').value.trim() || 'Cash';
-    const balance = parseFloat(document.getElementById('c-balance').value) || 0;
-    const raw = document.getElementById('c-apy').value; const apy = raw === '' ? undefined : parseFloat(raw);
-    if (editCashId) {
-        const c = data.cash.find(x => x.id === editCashId);
-        c.institution = inst; c.name = name; c.balance = balance;
-        if (apy === undefined) delete c.apy; else c.apy = apy;
+function draw() {
+    const picks = DATA.picks || [], sources = DATA.sources || {}, top = picks[0];
+    document.getElementById('ep-top').textContent = top ? top.ticker : '—';
+    const sub = document.getElementById('ep-topsub');
+    if (top) {
+        sub.className = 'fx-hero-gain up';
+        const hh = top.heavies ? ` · ${top.heavies} heavyweight${top.heavies > 1 ? 's' : ''}` : '';
+        sub.innerHTML = '▲ ' + top.buyers + ' elites buying' + hh + '<span class="span">top conviction</span>';
     } else {
-        const e = { id: uid(), institution: inst, name, balance }; if (apy !== undefined) e.apy = apy; data.cash.push(e);
+        sub.className = 'fx-hero-gain';
+        sub.innerHTML = '<span class="span">' + (DATA.error ? 'Source unavailable — try Refresh' : 'No data') + '</span>';
     }
-    closeCashModal(); await save(); render();
+    document.getElementById('ep-sources').innerHTML =
+        `<div class="fx-hm-row"><span class="fx-hm-key">Budget</span><span class="fx-hm-val">${USD0.format(budget)}</span></div>`
+        + `<div class="fx-hm-row"><span class="fx-hm-key">Scoring</span><span class="fx-hm-val ${sources.llm ? 'up' : ''}"${sources.llm ? '' : ' style="color:var(--text-4)"'}>${sources.llm ? 'LLAMA' : 'DATA-ONLY'}</span></div>`
+        + Object.keys(SOURCE_LABEL).map(k => {
+            const on = !!sources[k];
+            return `<div class="fx-hm-row"><span class="fx-hm-key">${SOURCE_LABEL[k]}</span>`
+                + `<span class="fx-hm-val ${on ? 'up' : ''}"${on ? '' : ' style="color:var(--text-4)"'}>${on ? 'ON' : '—'}</span></div>`;
+        }).join('')
+        + `<div class="fx-hm-row"><span class="fx-hm-key">As of</span><span class="fx-hm-val">${esc(DATA.quarter || '—')}</span></div>`;
+
+    const allocs = allocate(picks);
+    document.getElementById('ep-list').innerHTML = picks.length
+        ? picks.map((p, i) => rowHtml(p, allocs[i])).join('')
+        : '<div class="fx-empty">No picks available — try Refresh.</div>';
 }
-async function removeCash(id) { data.cash = data.cash.filter(c => c.id !== id); await save(); render(); }
 
-document.getElementById('holding-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeHoldingModal(); });
-document.getElementById('cash-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeCashModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeHoldingModal(); closeCashModal(); } });
+const budgetIn = document.getElementById('ep-budget-in');
+budgetIn.value = budget;
+budgetIn.addEventListener('input', () => {
+    budget = Math.max(0, parseInt(budgetIn.value, 10) || 0);
+    localStorage.setItem('ep-budget', String(budget));
+    draw();
+});
 
-(async () => {
-    await load();
-    render();
-    await fetchPrices();
-    render();
-})();
+async function load(force) {
+    const b = document.getElementById('ep-refresh');
+    if (force) b.textContent = 'Refreshing…';
+    try {
+        const r = await fetch('/api/elite-picks' + (force ? '?refresh=1' : ''));
+        DATA = await r.json();
+        draw();
+    } catch (e) {
+        document.getElementById('ep-list').innerHTML = '<div class="fx-empty">Failed to load.</div>';
+    }
+    b.textContent = 'Refresh';
+}
+function refresh() { load(true); }
+const deepTimers = {};
+async function deepResearch(ticker, btn) {
+    const box = document.getElementById('deep-' + ticker);
+    if (deepTimers[ticker]) return;                       // already polling
+    btn.disabled = true; btn.textContent = 'Researching…';
+    box.innerHTML = '<div class="ep-deep-load">querying claude · web search…</div>';
+    let tries = 0;                                        // bounded: ~2 min
+    const poll = async () => {
+        tries++;
+        try {
+            const r = await fetch('/api/elite-picks/deep/' + encodeURIComponent(ticker));
+            const d = await r.json();
+            if (d.status === 'ready') { stop(); renderBrief(box, d.brief); btn.textContent = 'Deep research ↗'; btn.disabled = false; return; }
+            if (d.status === 'error') { stop(); box.innerHTML = `<div class="ep-deep-err">${esc(d.msg || 'unavailable')}</div>`; btn.textContent = 'Retry'; btn.disabled = false; return; }
+        } catch (e) { /* keep polling */ }
+        if (tries > 40) { stop(); box.innerHTML = '<div class="ep-deep-err">timed out — try again</div>'; btn.textContent = 'Retry'; btn.disabled = false; }
+    };
+    const stop = () => { clearInterval(deepTimers[ticker]); delete deepTimers[ticker]; };
+    deepTimers[ticker] = setInterval(poll, 3000); poll();
+}
+function renderBrief(box, b) {
+    if (!b) { box.innerHTML = '<div class="ep-deep-err">no data</div>'; return; }
+    const li = xs => (xs || []).map(x => `<li>${esc(x)}</li>`).join('');
+    box.innerHTML = `<div class="ep-deep-card">
+        <p class="ep-deep-sum">${esc(b.summary || '')}</p>
+        <div class="ep-deep-cols">
+            <div><div class="ep-deep-h up">Bull</div><ul>${li(b.bull)}</ul></div>
+            <div><div class="ep-deep-h dn">Bear</div><ul>${li(b.bear)}</ul></div>
+        </div>
+        <div class="ep-deep-foot">${b.used_web ? 'web-researched' : 'from model knowledge'} · not financial advice</div>
+    </div>`;
+}
+load(false);
 </script>
 </body>
 </html>
