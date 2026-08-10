@@ -725,6 +725,7 @@
     .ep-tk:hover { color:var(--ares); }
     .ep-nm { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .ep-firms { margin-top:7px; font-family:'JetBrains Mono',monospace; font-size:10.5px; line-height:1.6; color:var(--text-3); letter-spacing:.01em; }
+    .ep-reason { margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:11px; font-style:italic; color:var(--text-2); line-height:1.5; }
     .ep-firm.hh { color:var(--ares-bright); font-weight:500; text-decoration:underline; text-decoration-color:var(--ares); text-underline-offset:2px; }
     .ep-chips { display:flex; gap:6px; margin-top:9px; flex-wrap:wrap; }
     .ep-chip.hh { color:var(--ares); border-color:var(--ares); }
@@ -791,9 +792,6 @@
             <div class="fx-sh fx-in" style="animation-delay:.1s">
                 <span class="fx-sh-title">Ranked by Conviction</span>
                 <div class="fx-tools">
-                    <div class="ep-seg" id="ep-pos" role="group" aria-label="How many picks to fund">
-                        <button data-n="3">3</button><button data-n="5">5</button><button data-n="10">10</button><button data-n="all">All</button>
-                    </div>
                     <label class="ep-budget" title="Total you want to invest — split across the funded picks by weighted conviction">
                         <span class="cur">$</span>
                         <input type="number" id="ep-budget-in" inputmode="numeric" min="0" step="100" value="1000" aria-label="Total budget to invest">
@@ -812,6 +810,7 @@
     </footer>
 </div>
 
+<script src="/static/elite_alloc.js"></script>
 <script>
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function pct1(v) { return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '%'; }
@@ -829,25 +828,14 @@ const USD0 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD'
 
 let DATA = { picks: [], sources: {}, quarter: '' };
 let budget = Math.max(0, parseInt(localStorage.getItem('ep-budget') || '1000', 10) || 0);
-let positions = localStorage.getItem('ep-positions') || '5';   // '3' | '5' | '10' | 'all'
 
 function momChip(m) {
     if (m == null) return '';
     return `<span class="ep-chip mom ${m < 0 ? 'dn' : ''}">${pct1(m)} 3mo</span>`;
 }
 
-// fund only the top N picks; split the budget across THOSE in proportion to
-// weighted conviction. Meter bar stays relative to the top pick for all rows.
 function allocate(picks) {
-    const n = positions === 'all' ? picks.length : Math.min(parseInt(positions, 10) || 5, picks.length);
-    const total = picks.slice(0, n).reduce((s, p) => s + (p.score || 0), 0) || 1;
-    const maxScore = Math.max(1, ...picks.map(p => p.score || 0));
-    return picks.map((p, i) => ({
-        funded: i < n,
-        amount: i < n ? Math.round(budget * (p.score || 0) / total) : 0,
-        share: i < n ? (p.score || 0) / total * 100 : 0,
-        barPct: (p.score || 0) / maxScore * 100,
-    }));
+    return allocateBudget(picks, budget, { BAR: 65, GAMMA: 2, MAX_FUNDED: 10 });
 }
 
 function rowHtml(p, a) {
@@ -860,23 +848,24 @@ function rowHtml(p, a) {
     const firms = (p.firms || [])
         .map(f => `<span class="ep-firm${f.heavy ? ' hh' : ''}">${esc(f.name)}</span>`)
         .join(' · ');
+    const reason = p.llm_reason ? `<div class="ep-reason">"${esc(p.llm_reason)}"</div>` : '';
     const dr = 'https://www.dataroma.com/m/activity.php?sym=' + encodeURIComponent(p.ticker) + '&typ=a';
     const alloc = a.funded
-        ? `<div class="ep-alloc">${USD0.format(a.amount)}</div><div class="ep-alloc-u">suggested · ${a.share.toFixed(0)}%</div>`
-        : `<div class="ep-alloc off">—</div><div class="ep-alloc-u">not funded</div>`;
+        ? `<div class="ep-alloc">${USD0.format(a.amount)}</div><div class="ep-alloc-u">conviction ${p.llm_score}</div>`
+        : `<div class="ep-alloc off">—</div><div class="ep-alloc-u">below bar · ${p.llm_score}</div>`;
     return `<div class="ep-row${a.funded ? '' : ' off'}">
         <div class="ep-rank">${p.rank}</div>
         <div class="ep-id">
             <a class="ep-tk" href="${dr}" target="_blank" rel="noopener">${esc(p.ticker)}</a>
             <div class="ep-nm">${esc(p.name)}</div>
+            ${reason}
             <div class="ep-firms">${firms || '—'}</div>
             ${chipHtml ? `<div class="ep-chips">${chipHtml}</div>` : ''}
         </div>
-        <div class="ep-metrics">
-            ${alloc}
+        <div class="ep-metrics">${alloc}
             <div class="ep-elites"><b>${p.buyers}</b> elites${p.heavies ? ` · <b>${p.heavies}</b> heavy` : ''}</div>
         </div>
-        <div class="ep-bar" role="img" aria-label="Weighted conviction ${a.barPct.toFixed(0)} percent of top pick"><span style="width:${a.barPct.toFixed(1)}%"></span></div>
+        <div class="ep-bar" role="img" aria-label="Conviction ${a.barPct.toFixed(0)} of 100"><span style="width:${a.barPct.toFixed(1)}%"></span></div>
     </div>`;
 }
 
@@ -892,9 +881,9 @@ function draw() {
         sub.className = 'fx-hero-gain';
         sub.innerHTML = '<span class="span">' + (DATA.error ? 'Source unavailable — try Refresh' : 'No data') + '</span>';
     }
-    const fundedN = positions === 'all' ? picks.length : Math.min(parseInt(positions, 10) || 5, picks.length);
     document.getElementById('ep-sources').innerHTML =
-        `<div class="fx-hm-row"><span class="fx-hm-key">Budget</span><span class="fx-hm-val">${USD0.format(budget)}<span style="color:var(--text-3);font-size:11px"> · top ${fundedN}</span></span></div>`
+        `<div class="fx-hm-row"><span class="fx-hm-key">Budget</span><span class="fx-hm-val">${USD0.format(budget)}</span></div>`
+        + `<div class="fx-hm-row"><span class="fx-hm-key">Scoring</span><span class="fx-hm-val ${sources.llm ? 'up' : ''}"${sources.llm ? '' : ' style="color:var(--text-4)"'}>${sources.llm ? 'LLAMA' : 'DATA-ONLY'}</span></div>`
         + Object.keys(SOURCE_LABEL).map(k => {
             const on = !!sources[k];
             return `<div class="fx-hm-row"><span class="fx-hm-key">${SOURCE_LABEL[k]}</span>`
@@ -915,19 +904,6 @@ budgetIn.addEventListener('input', () => {
     localStorage.setItem('ep-budget', String(budget));
     draw();
 });
-
-const posBox = document.getElementById('ep-pos');
-function syncPosButtons() {
-    posBox.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.n === positions));
-}
-posBox.addEventListener('click', e => {
-    const b = e.target.closest('button'); if (!b) return;
-    positions = b.dataset.n;
-    localStorage.setItem('ep-positions', positions);
-    syncPosButtons();
-    draw();
-});
-syncPosButtons();
 
 async function load(force) {
     const b = document.getElementById('ep-refresh');

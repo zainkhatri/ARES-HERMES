@@ -32,4 +32,3 @@ function allocateBudget(picks, budget, opts) {
 }
 if (typeof module !== 'undefined' && module.exports) module.exports = { allocateBudget };
 if (typeof window !== 'undefined') window.allocateBudget = allocateBudget;
-export { allocateBudget };
