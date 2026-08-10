@@ -537,6 +537,11 @@ def final_page():
 def adam_page():
     return render_template("adam.html")
 
+@app.route("/script")
+@require_auth
+def script_page():
+    return render_template("script.html")
+
 @app.route("/tech")
 @require_auth
 def tech_page():
@@ -982,28 +987,17 @@ def api_business_all():
     return jsonify(_all_ventures_payload())
 
 
-# ── Portfolio / Investments ──
+# ── Elite Picks — what superinvestors & institutions are buying ──
+# Replaces the old personal-portfolio page. Engine lives in elite_picks.py
+# (standalone, no Flask/CLIP deps) so the weekly refresh cron can import it
+# cheaply. See ops/refresh-elite-picks.sh + ares-elite-picks.timer (Mon 06:00).
+from elite_picks import compute_elite_picks
 
-FINNHUB_KEY = os.getenv("FINNHUB_KEY", "")
 
-@app.route("/api/portfolio", methods=["GET"])
+@app.route("/api/elite-picks")
 @require_auth
-def get_portfolio():
-    path = os.path.join(_APP_DIR, "portfolio.json")
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            return jsonify(json.load(f))
-    return jsonify({"holdings": []})
-
-
-@app.route("/api/portfolio", methods=["POST"])
-@require_auth
-def save_portfolio():
-    path = os.path.join(_APP_DIR, "portfolio.json")
-    data = request.json
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
-    return jsonify({"success": True})
+def elite_picks_api():
+    return jsonify(compute_elite_picks(force=request.args.get("refresh") == "1"))
 
 
 CRYPTO_MAP = {"BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana", "DOGE": "dogecoin"}
