@@ -769,10 +769,28 @@
 
     .ep-note { margin:16px 2px 0; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-4); letter-spacing:.04em; }
 
+    .ep-deep-wrap { margin-top:9px; }
+    .ep-deep-btn { background:none; border:1px solid var(--line-2); color:var(--text-3); font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; padding:3px 9px; transition:color .15s,border-color .15s; }
+    .ep-deep-btn:hover:not(:disabled) { color:var(--ares); border-color:var(--ares); }
+    .ep-deep-btn:disabled { opacity:.6; }
+    .ep-deep { }
+    .ep-deep-load, .ep-deep-err { margin-top:8px; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-3); }
+    .ep-deep-err { color:var(--down); }
+    .ep-deep-card { margin-top:10px; border:1px solid var(--line-2); background:var(--bg-2); padding:12px 14px; }
+    .ep-deep-sum { font-family:'JetBrains Mono',monospace; font-size:11px; line-height:1.6; color:var(--text-1); }
+    .ep-deep-cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:10px; }
+    .ep-deep-h { font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:11px; letter-spacing:.06em; text-transform:uppercase; margin-bottom:4px; }
+    .ep-deep-h.up { color:var(--up); } .ep-deep-h.dn { color:var(--down); }
+    .ep-deep-cols ul { list-style:none; display:flex; flex-direction:column; gap:5px; }
+    .ep-deep-cols li { font-family:'JetBrains Mono',monospace; font-size:10.5px; line-height:1.5; color:var(--text-2); padding-left:11px; position:relative; }
+    .ep-deep-cols li::before { content:'·'; position:absolute; left:0; color:var(--text-3); }
+    .ep-deep-foot { margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text-4); letter-spacing:.06em; }
+
     @media (max-width:560px) {
         .ep-row { column-gap:12px; padding:14px 14px 12px; }
         .ep-alloc { font-size:19px; } .ep-rank { font-size:19px; min-width:22px; }
         .ep-nm { white-space:normal; }
+        .ep-deep-cols { grid-template-columns:1fr; }
     }
     </style>
 
@@ -861,6 +879,7 @@ function rowHtml(p, a) {
             ${reason}
             <div class="ep-firms">${firms || '—'}</div>
             ${chipHtml ? `<div class="ep-chips">${chipHtml}</div>` : ''}
+            <div class="ep-deep-wrap"><button class="ep-deep-btn" onclick="deepResearch('${esc(p.ticker)}', this)">Deep research ↗</button><div class="ep-deep" id="deep-${esc(p.ticker)}"></div></div>
         </div>
         <div class="ep-metrics">${alloc}
             <div class="ep-elites"><b>${p.buyers}</b> elites${p.heavies ? ` · <b>${p.heavies}</b> heavy` : ''}</div>
@@ -918,6 +937,38 @@ async function load(force) {
     b.textContent = 'Refresh';
 }
 function refresh() { load(true); }
+const deepTimers = {};
+async function deepResearch(ticker, btn) {
+    const box = document.getElementById('deep-' + ticker);
+    if (deepTimers[ticker]) return;                       // already polling
+    btn.disabled = true; btn.textContent = 'Researching…';
+    box.innerHTML = '<div class="ep-deep-load">querying claude · web search…</div>';
+    let tries = 0;                                        // bounded: ~2 min
+    const poll = async () => {
+        tries++;
+        try {
+            const r = await fetch('/api/elite-picks/deep/' + encodeURIComponent(ticker));
+            const d = await r.json();
+            if (d.status === 'ready') { stop(); renderBrief(box, d.brief); btn.textContent = 'Deep research ↗'; btn.disabled = false; return; }
+            if (d.status === 'error') { stop(); box.innerHTML = `<div class="ep-deep-err">${esc(d.msg || 'unavailable')}</div>`; btn.textContent = 'Retry'; btn.disabled = false; return; }
+        } catch (e) { /* keep polling */ }
+        if (tries > 40) { stop(); box.innerHTML = '<div class="ep-deep-err">timed out — try again</div>'; btn.textContent = 'Retry'; btn.disabled = false; }
+    };
+    const stop = () => { clearInterval(deepTimers[ticker]); delete deepTimers[ticker]; };
+    deepTimers[ticker] = setInterval(poll, 3000); poll();
+}
+function renderBrief(box, b) {
+    if (!b) { box.innerHTML = '<div class="ep-deep-err">no data</div>'; return; }
+    const li = xs => (xs || []).map(x => `<li>${esc(x)}</li>`).join('');
+    box.innerHTML = `<div class="ep-deep-card">
+        <p class="ep-deep-sum">${esc(b.summary || '')}</p>
+        <div class="ep-deep-cols">
+            <div><div class="ep-deep-h up">Bull</div><ul>${li(b.bull)}</ul></div>
+            <div><div class="ep-deep-h dn">Bear</div><ul>${li(b.bear)}</ul></div>
+        </div>
+        <div class="ep-deep-foot">${b.used_web ? 'web-researched' : 'from model knowledge'} · not financial advice</div>
+    </div>`;
+}
 load(false);
 </script>
 </body>
