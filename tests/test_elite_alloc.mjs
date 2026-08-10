@@ -8,8 +8,11 @@ eq(a.reduce((s,x)=>s+x.amount,0), 1000, 'sum==budget');
 // below-bar (61) unfunded, others funded
 eq(a[4].funded, false, '61 below bar');
 eq(a[0].funded, true, '92 funded');
-// monotonic: higher score -> >= amount among funded
-if (!(a[0].amount >= a[1].amount && a[1].amount >= a[2].amount)) { console.error('FAIL monotonic'); process.exit(1); }
+// monotonic: higher score -> >= amount among all funded picks
+const funded = a.filter(x => x.funded);
+for (let i = 0; i < funded.length - 1; i++) {
+  if (funded[i].amount < funded[i+1].amount) { console.error(`FAIL monotonic: funded[${i}].amount (${funded[i].amount}) < funded[${i+1}].amount (${funded[i+1].amount})`); process.exit(1); }
+}
 // barPct is the absolute score
 eq(a[0].barPct, 92, 'barPct==score');
 // empty-funded edge: nothing clears BAR -> fund single top
