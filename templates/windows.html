@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Windows · ARES</title>
+<style>
+  :root { --bg:#04070d; --panel:#070c16; --line:rgba(239,68,68,0.18); --text:#e8f0f8; --text-2:#8ba3c0; --green:#10b981; --red:#ef4444; --blue:#67e8f9; --ares:#ef4444; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { height:100%; background:var(--bg); color:var(--text); font-family:'JetBrains Mono', monospace; overflow:hidden; }
+  .top { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--line); background:var(--panel); padding-top:calc(8px + env(safe-area-inset-top)); }
+  .top h1 { font-size:13px; letter-spacing:0.08em; color:var(--text-2); margin-right:6px; }
+  .pill { padding:3px 10px; border:1px solid var(--line); border-radius:99px; font-size:11px; }
+  .pill.on { color:var(--green); border-color:var(--green); }
+  .pill.off { color:var(--text-2); }
+  button { background:transparent; color:var(--text); border:1px solid var(--line); padding:5px 10px; border-radius:6px; font-family:inherit; font-size:11px; cursor:pointer; }
+  button:hover { border-color:var(--blue); color:var(--blue); }
+  button.primary { border-color:var(--green); color:var(--green); }
+  button.danger:hover { border-color:var(--red); color:var(--red); }
+  .spacer { flex:1; }
+  .stage { position:relative; height:calc(100vh - 47px - env(safe-area-inset-top));
+           display:flex; align-items:center; justify-content:center; background:#000; }
+  /* aspect-locked viewer: the Windows desktop is 16:9 (1080p, 1440p, any) —
+     hold that ratio exactly, centered, never stretched or cropped */
+  iframe.vnc { aspect-ratio:16/9;
+               width:min(100%, calc((100vh - 47px - env(safe-area-inset-top)) * 16 / 9));
+               height:auto; max-height:100%;
+               border:0; background:#000; display:block; }
+  .placeholder { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-2); flex-direction:column; gap:14px; text-align:center; padding:30px; }
+  .placeholder .big { font-size:18px; color:var(--text); letter-spacing:0.04em; }
+  .placeholder small { color:var(--text-2); max-width:520px; line-height:1.55; font-size:12px; }
+  #boot-overlay { position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:12px; background:var(--bg); z-index:10; }
+  #boot-overlay .boot-msg { font-size:14px; color:var(--text-2); }
+  #boot-overlay .boot-sub { font-size:11px; color:#4a6080; }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>WIN · VM 200</h1>
+  <span id="status-pill" class="pill off">checking…</span>
+  <div class="spacer"></div>
+  <button id="btn-start" class="primary" onclick="startVM()" style="display:none">Start</button>
+  <button id="btn-stop"  class="danger"  onclick="stopVM()"  style="display:none">Stop</button>
+  <button onclick="enterFullscreen()">⤢</button>
+  <a href="/" style="text-decoration:none"><button>← Home</button></a>
+</div>
+
+<div class="stage" id="stage">
+  <div id="placeholder" class="placeholder">
+    <div class="big" id="ph-big">Windows VM is stopped.</div>
+    <small id="ph-small">Tap <b>Start</b> above. Once boot finishes, the desktop appears here.</small>
+  </div>
+  <iframe id="vnc-frame" class="vnc" style="display:none" allow="fullscreen" allowfullscreen></iframe>
+  <div id="boot-overlay">
+    <div class="boot-msg" id="boot-msg">Sending start command…</div>
+    <div class="boot-sub" id="boot-sub">VM 200 · win11-gaming</div>
+  </div>
+</div>
+
+<script>
+let winRunning = false;
+let isStarting = false;
+const VNC_HOST = '100.77.42.110';
+const VNC_PORT = '6080';
+// noVNC autoconnect URL — password baked in (autoconnect to TightVNC inside Windows)
+// quality=9 + compression=0: the 1440p framebuffer over LAN — crisp, no artifacts
+const VNC_URL = `http://${VNC_HOST}:${VNC_PORT}/vnc.html?autoconnect=1&resize=scale&reconnect=1&quality=9&compression=0&password={{ vnc_password }}`;
+
+const statusPill = document.getElementById('status-pill');
+const btnStart = document.getElementById('btn-start');
+const btnStop  = document.getElementById('btn-stop');
+const placeholder = document.getElementById('placeholder');
+const phBig = document.getElementById('ph-big');
+const phSmall = document.getElementById('ph-small');
+const frame = document.getElementById('vnc-frame');
+
+let desktopShown = false;
+let gating = false;
+
+function showFrame() {
+  if (frame.src !== VNC_URL) frame.src = VNC_URL;
+  frame.style.display = 'block';
+  placeholder.style.display = 'none';
+  document.getElementById('boot-overlay').style.display = 'none';
+  desktopShown = true;
+}
+
+// `qm status` says "running" the moment QEMU starts — but TightVNC inside
+// Windows isn't accepting connections yet, so showing the iframe then gives
+// a black/broken desktop. Gate the reveal on a real TCP probe of the VNC
+// server; hold the boot overlay ("Waiting for desktop…") until it answers.
+async function requestDesktop() {
+  if (desktopShown || gating) return;
+  gating = true;
+  const overlay = document.getElementById('boot-overlay');
+  const bootMsg = document.getElementById('boot-msg');
+  const bootSub = document.getElementById('boot-sub');
+  placeholder.style.display = 'none';
+  frame.style.display = 'none';
+  overlay.style.display = 'flex';
+  bootMsg.textContent = 'Waiting for Windows desktop…';
+  for (let i = 0; i < 90; i++) {
+    bootSub.textContent = `VM is up — desktop loading… (${(i + 1) * 2}s)`;
+    try {
+      const r = await fetch('/api/vm/vnc-ready', { method: 'POST' });
+      if (r.status === 401) { location.href = '/login'; return; }
+      const d = await r.json();
+      if (d.ready) { gating = false; showFrame(); return; }
+    } catch(e) {}
+    if (!winRunning) { gating = false; overlay.style.display = 'none'; return; }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  // Probe never answered — show the frame anyway, noVNC reconnect will retry.
+  gating = false;
+  showFrame();
+}
+function showPlaceholder(big, small) {
+  phBig.textContent = big;
+  phSmall.innerHTML = small;
+  placeholder.style.display = 'flex';
+  frame.style.display = 'none';
+  frame.src = '';
+  desktopShown = false;
+}
+
+function render() {
+  if (winRunning) {
+    statusPill.className = 'pill on'; statusPill.textContent = 'running';
+    btnStart.style.display = 'none'; btnStop.style.display = '';
+    requestDesktop();
+  } else if (!isStarting) {
+    statusPill.className = 'pill off'; statusPill.textContent = 'stopped';
+    btnStart.style.display = ''; btnStop.style.display = 'none';
+    showPlaceholder('Windows VM is stopped.', 'Tap <b>Start</b> above. Boot ~30 sec, then desktop appears here.');
+  }
+}
+
+async function refresh() {
+  try {
+    const r = await fetch('/api/vm/status', { method: 'POST' });
+    if (r.status === 401) { location.href = '/login'; return; }
+    const d = await r.json();
+    winRunning = !!d.running;
+    render();
+  } catch(e) { /* leave previous state */ }
+}
+
+async function startVM() {
+  isStarting = true;
+  btnStart.disabled = true; btnStart.textContent = 'starting…';
+  btnStart.style.display = 'none'; btnStop.style.display = '';
+  btnStop.disabled = true;
+  statusPill.className = 'pill'; statusPill.textContent = 'starting…';
+
+  // Hide placeholder immediately, show boot overlay
+  placeholder.style.display = 'none';
+  const overlay = document.getElementById('boot-overlay');
+  const bootMsg = document.getElementById('boot-msg');
+  const bootSub = document.getElementById('boot-sub');
+  overlay.style.display = 'flex';
+  bootMsg.textContent = 'Sending start command…';
+
+  try { await fetch('/api/vm/start', { method: 'POST' }); } catch(e) {}
+
+  bootMsg.textContent = 'Waiting for VM to boot…';
+  bootSub.textContent = 'Usually takes 30–60 seconds';
+
+  // Poll for up to 3 min
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 3000));
+    bootSub.textContent = `Checking… (${(i + 1) * 3}s)`;
+    try {
+      const r = await fetch('/api/vm/status', { method: 'POST' });
+      if (r.status === 401) { location.href = '/login'; return; }
+      const d = await r.json();
+      if (d.running) {
+        winRunning = true;
+        isStarting = false;
+        statusPill.className = 'pill on'; statusPill.textContent = 'running';
+        btnStop.disabled = false; btnStop.textContent = 'Stop';
+        // VM is up but Windows/TightVNC may still be booting — gate the
+        // desktop reveal on the VNC probe (keeps the boot overlay up).
+        requestDesktop();
+        return;
+      }
+    } catch(e) {}
+  }
+  // Poll exhausted — hand off to the desktop gate, let noVNC reconnect handle it
+  isStarting = false;
+  btnStop.disabled = false; btnStop.textContent = 'Stop';
+  statusPill.textContent = 'checking…';
+  requestDesktop();
+}
+async function stopVM() {
+  if (!confirm('Stop the Windows VM?')) return;
+  btnStop.disabled = true; btnStop.textContent = 'stopping…';
+  try { await fetch('/api/vm/stop', { method: 'POST' }); } catch(e) {}
+  for (let i = 0; i < 30; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    await refresh();
+    if (!winRunning) break;
+  }
+  btnStop.disabled = false; btnStop.textContent = 'Stop';
+}
+function enterFullscreen() {
+  const el = frame.style.display === 'block' ? frame : document.getElementById('stage');
+  if (el.requestFullscreen) el.requestFullscreen();
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  else if (el.webkitEnterFullscreen) el.webkitEnterFullscreen();
+}
+
+refresh();
+setInterval(refresh, 8000);
+</script>
+</body>
+</html>

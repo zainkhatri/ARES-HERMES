@@ -1,0 +1,5 @@
+# ARES — nightly people / face scan
+# CRON_TZ makes the schedule Pacific time and auto-adjusts for PST/PDT (container
+# clock is UTC). Runs 03:30 America/Los_Angeles. Logic lives in run-facescan.sh.
+CRON_TZ=America/Los_Angeles
+30 3 * * * /bin/bash /mnt/data/PROJECTS/ARES-DASHBOARD/ops/run-facescan.sh >> /var/log/ares-facescan.log 2>&1

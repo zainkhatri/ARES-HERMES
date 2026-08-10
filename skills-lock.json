@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "gws-sheets": {
+      "source": "googleworkspace/cli",
+      "sourceType": "github",
+      "skillPath": "skills/gws-sheets/SKILL.md",
+      "computedHash": "21c951f8bf399bb941740ab8b048157b43088ad96b743976e88abb0046d263d2"
+    },
+    "playwright-best-practices": {
+      "source": "currents-dev/playwright-best-practices-skill",
+      "sourceType": "github",
+      "skillPath": "playwright-best-practices/SKILL.md",
+      "computedHash": "7eb144f734450fee649dc1d209114775ddda07cbf45be84fe969d3d4f3971dce"
+    },
+    "playwright-cli": {
+      "source": "microsoft/playwright-cli",
+      "sourceType": "github",
+      "skillPath": "skills/playwright-cli/SKILL.md",
+      "computedHash": "f602822b51bcb6d033749c60731b8f1e80f308222fcb2e4af551905a817c6e08"
+    }
+  }
+}

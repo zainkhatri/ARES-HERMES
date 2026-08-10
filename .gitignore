@@ -37,12 +37,30 @@ config/
 static/thumbs/
 static/thumbs_hq/
 static/thumbs_preview/
+static/thumbs_max/
 static/faces/
 static/face_avatars/
+static/hls/
+static/video_cache/
+
+# Runtime / generated / sensitive data dirs
+graphify-out/
+vault_enc/
+vault_thumbs/
+vault_thumbs_hq/
+vault_thumbs_max/
+vault_thumbs_preview/
+.agents/
+.gpu-on-loan
+websites/
 
 # OS / IDE
 .DS_Store
 *.bak
+*.bak-*
+*.bak.*
+photo_index.json.*
+.trash/
 
 # Firebase credentials
 autoemail-*.json
@@ -50,5 +68,8 @@ autoemail-*.json
 # Local data files
 breakdown_data.json
 portfolio.json
+ios_photo_ids.json
+.host_drives.json
+data/
 xcuserdata/
 ._*

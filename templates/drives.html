@@ -1,0 +1,600 @@
+{# ARES · Storage — what's eating space on AirDisk + EVO-970. Navbar matches home.html. #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ARES & HERMES · Storage</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icon-180.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#04070d">
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-0:#04070d; --bg-1:#070c16; --bg-2:#0a121f; --bg-3:#0d1726;
+            --line-1:rgba(239,68,68,0.08); --line-2:rgba(239,68,68,0.18);
+            --text-1:#e8f0f8; --text-2:#8ba3c0; --text-3:#4a5d78; --text-4:#2d3a4e;
+            --blue:#6495ed; --blue-bright:#9ab5f5; --cyan:#67e8f9;
+            --green:#10b981; --amber:#f59e0b; --red:#ef4444; --magenta:#c084fc;
+            --ares:#ef4444; --ares-bright:#f87171;
+            --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+            --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        html, body {
+            min-height:100%; background:var(--bg-0); color:var(--text-1);
+            font-family:'JetBrains Mono', monospace;
+            -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+        }
+        ::selection { background:var(--ares); color:var(--bg-0); }
+        .app { display:flex; flex-direction:column; min-height:100vh; min-height:100dvh; }
+
+        /* ═══ Navbar — identical structure to home.html ═══ */
+        .navbar {
+            position:sticky; top:0; z-index:1000;
+            background:rgba(4,7,13,0.92);
+            border-bottom:1px solid var(--line-1);
+            padding:14px 24px;
+            padding-top:calc(14px + var(--sat));
+            padding-left:calc(24px + var(--sal));
+            padding-right:calc(24px + var(--sar));
+            display:flex; align-items:center; justify-content:space-between; gap:20px;
+        }
+        .navbar-left { display:flex; align-items:center; gap:16px; min-width:0; }
+        .nbr { display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; transition:opacity 0.18s ease; min-width:0; }
+        .nbr-other { opacity:0.7; }
+        .nbr-other:hover { opacity:1; }
+        .nbr-mark {
+            width:26px; height:26px; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center;
+            border:1px solid; font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:800; font-size:14px; line-height:1;
+        }
+        .nbr-mark.m-a { border-color:var(--ares); color:var(--ares); }
+        .nbr-mark.m-h { border-color:var(--blue); color:var(--blue); }
+        .nbr-id { display:flex; align-items:baseline; gap:8px; min-width:0; }
+        .nbr-name { font-family:'Bricolage Grotesque', sans-serif; font-weight:700; font-size:14px; letter-spacing:0.02em; white-space:nowrap; }
+        .nbr-name.n-a { color:var(--ares); }
+        .nbr-name.n-h { color:var(--blue); }
+        .nbr-sep { color:var(--text-3); font-size:11px; }
+        .nbr-tag { font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--text-2); letter-spacing:0.1em; text-transform:uppercase; white-space:nowrap; }
+
+        .back-chip {
+            display:inline-flex; align-items:center; gap:6px;
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            color:var(--text-2); text-decoration:none;
+            letter-spacing:0.15em; text-transform:uppercase;
+            padding:5px 11px;
+            border:1px solid var(--line-2);
+            transition:color 0.15s, border-color 0.15s, background 0.15s, gap 0.15s;
+        }
+        .back-chip svg { transition:transform 0.18s ease; }
+        .back-chip:hover { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.05); }
+        .back-chip:hover svg { transform:translateX(-2px); }
+        @media (max-width:600px) {
+            .navbar { padding:12px 14px; gap:10px; }
+            .nbr-tag { display:none; }
+            .back-chip span { display:none; }
+            .back-chip { padding:5px 8px; }
+        }
+
+        /* ═══ Main ═══ */
+        main {
+            flex:1;
+            padding:28px 32px;
+            padding-left:calc(32px + var(--sal));
+            padding-right:calc(32px + var(--sar));
+            max-width:1200px; margin:0 auto; width:100%;
+        }
+
+        /* ═══ Section head (same as home) ═══ */
+        .section-head {
+            display:flex; justify-content:space-between; align-items:baseline;
+            margin-bottom:18px;
+            padding-bottom:10px;
+            border-bottom:1px solid var(--line-1);
+            gap:16px; flex-wrap:wrap;
+        }
+        .section-title {
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:700; font-size:18px; letter-spacing:-0.01em;
+            color:var(--text-1);
+        }
+        .section-title .dim { color:var(--text-3); font-weight:500; }
+        .section-meta {
+            display:flex; align-items:center; gap:10px;
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            color:var(--text-3); letter-spacing:0.15em; text-transform:uppercase;
+        }
+        .refresh {
+            color:var(--text-3); text-decoration:none;
+            padding:4px 10px; border:1px solid var(--line-2);
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            letter-spacing:0.18em; text-transform:uppercase;
+            transition:color 0.18s, border-color 0.18s, background 0.18s;
+        }
+        .refresh:hover { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.05); }
+
+        /* ═══ Drive card ═══ */
+        .drive {
+            margin-bottom:40px;
+        }
+        .drive-head {
+            display:flex; align-items:baseline; justify-content:space-between;
+            gap:16px; flex-wrap:wrap;
+            padding-bottom:12px;
+            margin-bottom:14px;
+            border-bottom:1px dashed var(--line-2);
+        }
+        .drive-name-row {
+            display:flex; align-items:baseline; gap:14px; min-width:0;
+        }
+        .drive-num {
+            font-family:'JetBrains Mono', monospace;
+            font-weight:700; font-size:10px;
+            letter-spacing:0.22em;
+            color:var(--text-3);
+        }
+        .drive-name {
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:800; font-size:26px;
+            letter-spacing:-0.02em; line-height:1;
+            color:var(--text-1);
+        }
+        .drive-tag {
+            color:var(--text-3); font-size:10px;
+            letter-spacing:0.2em; text-transform:uppercase;
+        }
+        .drive-totals {
+            display:flex; gap:22px;
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            color:var(--text-2);
+        }
+        .drive-totals .item { display:flex; align-items:baseline; gap:6px; }
+        .drive-totals .k { color:var(--text-3); letter-spacing:0.18em; text-transform:uppercase; font-size:9px; }
+        .drive-totals .v { color:var(--text-1); font-variant-numeric:tabular-nums; font-size:12px; }
+        .drive-totals .v.accent { color:var(--ares); font-weight:600; }
+
+        /* ═══ Sector bar — hero visualization, structured and readable ═══ */
+        .bar-frame {
+            position:relative;
+            margin-bottom:22px;
+        }
+        .bar-scale {
+            display:flex; justify-content:space-between;
+            margin-bottom:8px;
+            font-family:'JetBrains Mono', monospace;
+            font-size:9px; letter-spacing:0.2em; text-transform:uppercase;
+            color:var(--text-4);
+        }
+        .bar-scale span { position:relative; }
+        .bar-scale span::after {
+            content:''; position:absolute; bottom:-6px; left:50%;
+            width:1px; height:4px; background:var(--line-2);
+        }
+        .bar-scale .first::after { left:0; }
+        .bar-scale .last::after { left:auto; right:0; }
+
+        .sector {
+            position:relative;
+            display:flex;
+            height:54px;
+            background:var(--bg-0);
+            border:1px solid var(--ares);
+            overflow:hidden;
+        }
+        .seg {
+            position:relative;
+            height:100%;
+            min-width:2px;
+            border-right:1px solid var(--bg-0);
+            opacity:0;
+            transform-origin:left center;
+            animation:seg-grow 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            transition:filter 0.15s ease;
+            cursor:default;
+        }
+        .seg:last-child { border-right:0; }
+        .seg:hover { filter:brightness(1.15); }
+        .seg.free {
+            background:repeating-linear-gradient(
+                135deg,
+                #2d1010 0 4px,
+                #1a0808 4px 8px
+            ) !important;
+        }
+        .seg-inner {
+            position:relative; z-index:1;
+            height:100%;
+            padding:7px 10px;
+            display:flex; flex-direction:column; justify-content:space-between;
+            overflow:hidden;
+            white-space:nowrap;
+        }
+        .seg-label {
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:800; font-size:11px;
+            color:rgba(255,255,255,0.96);
+            letter-spacing:0.04em;
+            text-transform:uppercase;
+            overflow:hidden; text-overflow:ellipsis;
+        }
+        .seg-meta {
+            font-family:'JetBrains Mono', monospace;
+            font-size:9px; font-weight:600;
+            color:rgba(255,255,255,0.72);
+            letter-spacing:0.1em;
+            overflow:hidden; text-overflow:ellipsis;
+        }
+        .seg.free .seg-label { color:rgba(239,68,68,0.6); }
+        .seg.free .seg-meta  { color:rgba(239,68,68,0.4); }
+        .seg[data-small="1"] .seg-meta { display:none; }
+        .seg[data-tiny="1"] .seg-label { display:none; }
+        @keyframes seg-grow { 0% { opacity:0; transform:scaleX(0); } 100% { opacity:1; transform:scaleX(1); } }
+
+        /* ═══ Structured data table ═══ */
+        .table {
+            border:1px solid var(--line-2);
+            background:var(--bg-1);
+        }
+        .t-head, .t-row {
+            display:grid;
+            grid-template-columns:44px 1fr 110px 140px 120px 1fr;
+            align-items:baseline;
+        }
+        .t-head {
+            padding:10px 18px;
+            border-bottom:1px solid var(--line-2);
+            background:var(--bg-2);
+            font-family:'JetBrains Mono', monospace;
+            font-size:9px; font-weight:700;
+            color:var(--text-3);
+            letter-spacing:0.22em; text-transform:uppercase;
+        }
+        .t-head .num-col { text-align:right; }
+        .t-row {
+            padding:12px 18px;
+            border-bottom:1px solid var(--line-1);
+            opacity:0;
+            animation:t-row-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+            transition:background 0.15s ease;
+            position:relative;
+        }
+        .t-row:last-child { border-bottom:0; }
+        .t-row:hover { background:var(--bg-2); }
+        @keyframes t-row-in { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
+
+        .t-idx {
+            font-family:'JetBrains Mono', monospace;
+            font-size:10px; color:var(--text-4);
+            letter-spacing:0.15em; font-weight:600;
+        }
+        .t-name-cell {
+            display:flex; align-items:center; gap:10px; min-width:0;
+        }
+        .t-swatch {
+            width:10px; height:10px; flex-shrink:0;
+            background:var(--row-color, var(--ares));
+        }
+        .t-name {
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:700; font-size:14px;
+            color:var(--text-1);
+            letter-spacing:-0.01em;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        }
+        .t-cat {
+            font-family:'JetBrains Mono', monospace;
+            font-size:10px; letter-spacing:0.18em; text-transform:uppercase;
+            color:var(--text-3);
+        }
+        .t-size {
+            font-family:'JetBrains Mono', monospace;
+            font-size:13px; color:var(--text-1);
+            font-variant-numeric:tabular-nums;
+            text-align:right;
+            font-weight:500;
+        }
+        .t-pct {
+            font-family:'JetBrains Mono', monospace;
+            font-size:12px;
+            color:var(--row-color, var(--ares));
+            font-variant-numeric:tabular-nums;
+            text-align:right;
+            font-weight:700;
+            letter-spacing:0.05em;
+        }
+        .t-micro {
+            position:relative;
+            height:4px;
+            background:var(--bg-3);
+            margin-left:20px;
+            overflow:hidden;
+        }
+        .t-micro-fill {
+            position:absolute; inset:0 auto 0 0;
+            background:var(--row-color, var(--ares));
+            transform-origin:left; transform:scaleX(0);
+            animation:micro-grow 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes micro-grow { to { transform:scaleX(var(--w, 1)); } }
+
+        .t-row.free .t-name { color:var(--text-2); font-weight:600; }
+        .t-row.free .t-pct { color:var(--text-3); }
+        .t-row.free .t-swatch {
+            background:repeating-linear-gradient(45deg, var(--text-4) 0 3px, transparent 3px 5px);
+            box-shadow:none;
+        }
+        .t-row.free .t-micro-fill {
+            background:repeating-linear-gradient(90deg, rgba(139,163,192,0.4) 0 3px, transparent 3px 6px);
+        }
+
+        /* Detail row — sub-row with extra context, indented */
+        .t-row .t-detail {
+            grid-column:2 / -1;
+            font-family:'JetBrains Mono', monospace;
+            font-size:10px;
+            color:var(--text-3);
+            letter-spacing:0.03em;
+            line-height:1.5;
+            margin-top:5px;
+            padding-left:20px;
+        }
+
+        @media (max-width:900px) {
+            .t-head, .t-row { grid-template-columns:32px 1fr auto auto; }
+            .t-head .cat-col, .t-row .t-cat,
+            .t-head .bar-col, .t-row .t-micro { display:none; }
+        }
+
+        /* ═══ Footer ═══ */
+        footer {
+            border-top:1px solid var(--line-1);
+            padding:14px 32px;
+            padding-bottom:calc(14px + var(--sab));
+            font-family:'JetBrains Mono', monospace;
+            font-size:10px; color:var(--text-3);
+            letter-spacing:0.12em; text-transform:uppercase;
+            display:flex; justify-content:space-between; flex-shrink:0;
+        }
+        footer a { color:var(--text-3); text-decoration:none; }
+        footer a:hover { color:var(--ares); }
+
+        /* Loading */
+        .loading {
+            padding:60px 0; text-align:center;
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            color:var(--text-3); letter-spacing:0.2em; text-transform:uppercase;
+        }
+        .loading .glyph {
+            display:inline-block; width:9px; height:9px;
+            background:var(--ares); margin-right:10px;
+            clip-path:polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+            animation:spin 1.4s ease-in-out infinite;
+            vertical-align:middle;
+        }
+        @keyframes spin { 0%,100% { transform:rotate(0deg); opacity:0.35; } 50% { transform:rotate(180deg); opacity:1; } }
+
+        @media (max-width:768px) {
+            main { padding:20px 16px; }
+            .drive-name { font-size:22px; }
+            .drive-totals { gap:14px; font-size:10px; flex-wrap:wrap; }
+            .legend { grid-template-columns:1fr; }
+            .sector { height:20px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .seg, .tick, .leg { animation:none !important; opacity:1 !important; transform:none !important; }
+        }
+    </style>
+    <script>window.__NODE="ARES"</script>
+    <script src="/static/node-switcher.js" defer></script>
+</head>
+<body>
+<div class="app">
+    <header class="navbar">
+        <div class="navbar-left">
+            <a href="/" class="nbr nbr-self">
+                <div class="nbr-mark m-a">A</div>
+                <div class="nbr-id">
+                    <span class="nbr-name n-a">ARES</span>
+                    <span class="nbr-sep">/</span>
+                    <span class="nbr-tag">STORAGE</span>
+                </div>
+            </a>
+            <a href="/" class="back-chip" title="Back to home">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                <span>Home</span>
+            </a>
+        </div>
+        <a href="/jump/hermes" class="nbr nbr-other">
+            <div class="nbr-mark m-h">H</div>
+            <div class="nbr-id">
+                <span class="nbr-name n-h">HERMES</span>
+                <span class="nbr-sep">/</span>
+                <span class="nbr-tag">MID-NAS</span>
+            </div>
+        </a>
+    </header>
+
+    <main>
+        <div class="section-head">
+            <div class="section-title">Storage <span class="dim">/ breakdown</span></div>
+            <div class="section-meta">
+                <span id="updated">—</span>
+                <a href="#" class="refresh" id="refresh">refresh</a>
+            </div>
+        </div>
+
+        <div id="drives">
+            <div class="loading"><span class="glyph"></span>Loading breakdown…</div>
+        </div>
+    </main>
+
+    <footer>
+        <span>ARES · v1.0</span>
+        <span><a href="/terminal">→ terminal</a></span>
+    </footer>
+</div>
+
+<script>
+const drivesEl  = document.getElementById('drives');
+const updatedEl = document.getElementById('updated');
+const refreshBtn = document.getElementById('refresh');
+
+function fmtBytes(b) {
+    if (b < 1024) return b + ' B';
+    const u = ['KiB','MiB','GiB','TiB','PiB'];
+    let n = b / 1024, i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    const digits = n >= 100 ? 0 : n >= 10 ? 1 : 2;
+    return n.toFixed(digits) + ' ' + u[i];
+}
+function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
+// Split a bytes value into numeric and unit so we can style the unit separately.
+function splitBytes(b) {
+    if (b < 1024) return { n:String(b), u:'B' };
+    const u = ['KiB','MiB','GiB','TiB','PiB'];
+    let n = b / 1024, i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    const digits = n >= 100 ? 0 : n >= 10 ? 1 : 2;
+    return { n: n.toFixed(digits), u: u[i] };
+}
+
+function renderDrive(d, index) {
+    const total = d.total_bytes;
+    const pctUsed = total > 0 ? (d.used_bytes / total * 100) : 0;
+    const segs = [...(d.segments || [])];
+    segs.sort((a, b) => b.bytes - a.bytes);
+    const freeBytes = Math.max(0, total - segs.reduce((s, x) => s + x.bytes, 0));
+
+    // 1) Sector bar — big, structured, with in-segment labels when there's room.
+    let barHtml = '';
+    segs.forEach((seg, i) => {
+        const pct = total > 0 ? (seg.bytes / total * 100) : 0;
+        if (pct <= 0) return;
+        const small = pct < 8 ? '1' : '0';
+        const tiny  = pct < 4 ? '1' : '0';
+        const delay = 80 + i * 60;
+        const titleTxt = (seg.name + ' · ' + fmtBytes(seg.bytes) + ' (' + pct.toFixed(1) + '%)').replace(/"/g,'&quot;');
+        barHtml +=
+            '<div class="seg" data-small="' + small + '" data-tiny="' + tiny + '"' +
+                ' style="width:' + pct.toFixed(3) + '%;' +
+                        'background:' + seg.color + ';' +
+                        'animation-delay:' + delay + 'ms" ' +
+                'title="' + titleTxt + '">' +
+                '<div class="seg-inner">' +
+                    '<span class="seg-label">' + escapeHtml(seg.name) + '</span>' +
+                    '<span class="seg-meta">' + fmtBytes(seg.bytes) + ' · ' + pct.toFixed(1) + '%</span>' +
+                '</div>' +
+            '</div>';
+    });
+    if (freeBytes > 0 && total > 0) {
+        const pct = freeBytes / total * 100;
+        const small = pct < 8 ? '1' : '0';
+        const tiny  = pct < 4 ? '1' : '0';
+        barHtml +=
+            '<div class="seg free" data-small="' + small + '" data-tiny="' + tiny + '"' +
+                ' style="width:' + pct.toFixed(3) + '%;animation-delay:' + (80 + segs.length * 60) + 'ms" ' +
+                'title="Free · ' + fmtBytes(freeBytes) + ' (' + pct.toFixed(1) + '%)">' +
+                '<div class="seg-inner">' +
+                    '<span class="seg-label">Free</span>' +
+                    '<span class="seg-meta">' + fmtBytes(freeBytes) + ' · ' + pct.toFixed(1) + '%</span>' +
+                '</div>' +
+            '</div>';
+    }
+
+    // 2) Structured table — every consumer as a tabular row.
+    const tableItems = segs.concat(freeBytes > 0 ? [{
+        name:'Free', category:'unalloc', bytes:freeBytes, color:'#4a5d78',
+        detail:'Unallocated space on ' + d.name, _free:true
+    }] : []);
+    const maxBytes = Math.max(1, ...tableItems.map(x => x.bytes));
+
+    let tableRowsHtml = '';
+    tableItems.forEach((seg, i) => {
+        const pct = total > 0 ? (seg.bytes / total * 100) : 0;
+        const weight = (seg.bytes / maxBytes).toFixed(4);
+        const delay = 200 + i * 55;
+        const idx = String(i + 1).padStart(2, '0');
+        tableRowsHtml +=
+            '<div class="t-row' + (seg._free ? ' free' : '') + '"' +
+                ' style="--row-color:' + seg.color + ';animation-delay:' + delay + 'ms">' +
+                '<span class="t-idx">' + idx + '</span>' +
+                '<div class="t-name-cell">' +
+                    '<span class="t-swatch"></span>' +
+                    '<span class="t-name" title="' + escapeHtml(seg.detail || seg.name) + '">' + escapeHtml(seg.name) + '</span>' +
+                '</div>' +
+                '<span class="t-cat">' + escapeHtml(seg.category || '—') + '</span>' +
+                '<span class="t-size">' + fmtBytes(seg.bytes) + '</span>' +
+                '<span class="t-pct">' + pct.toFixed(1) + '%</span>' +
+                '<div class="t-micro"><div class="t-micro-fill" style="--w:' + weight + ';animation-delay:' + (delay + 160) + 'ms"></div></div>' +
+            '</div>';
+    });
+
+    return (
+        '<div class="drive">' +
+            '<div class="drive-head">' +
+                '<div class="drive-name-row">' +
+                    '<span class="drive-num">0' + (index + 1) + '</span>' +
+                    '<span class="drive-name">' + escapeHtml(d.name) + '</span>' +
+                    '<span class="drive-tag">' + escapeHtml(d.tag) + '</span>' +
+                '</div>' +
+                '<div class="drive-totals">' +
+                    '<div class="item"><span class="k">used</span><span class="v">' + fmtBytes(d.used_bytes) + '</span></div>' +
+                    '<div class="item"><span class="k">free</span><span class="v">' + fmtBytes(d.total_bytes - d.used_bytes) + '</span></div>' +
+                    '<div class="item"><span class="k">total</span><span class="v">' + fmtBytes(d.total_bytes) + '</span></div>' +
+                    '<div class="item"><span class="k">pct</span><span class="v accent">' + pctUsed.toFixed(1) + '%</span></div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="bar-frame">' +
+                '<div class="bar-scale">' +
+                    '<span class="first">0</span>' +
+                    '<span>25%</span>' +
+                    '<span>50%</span>' +
+                    '<span>75%</span>' +
+                    '<span class="last">100%</span>' +
+                '</div>' +
+                '<div class="sector">' + barHtml + '</div>' +
+            '</div>' +
+            '<div class="table">' +
+                '<div class="t-head">' +
+                    '<span>#</span>' +
+                    '<span>NAME</span>' +
+                    '<span class="cat-col">CATEGORY</span>' +
+                    '<span class="num-col">SIZE</span>' +
+                    '<span class="num-col">%</span>' +
+                    '<span class="bar-col"></span>' +
+                '</div>' +
+                tableRowsHtml +
+            '</div>' +
+        '</div>'
+    );
+}
+
+async function load() {
+    try {
+        const r = await fetch('/api/storage-breakdown');
+        if (r.status === 401) { location.href = '/login'; return; }
+        const data = await r.json();
+        drivesEl.innerHTML = (data.drives || []).map(renderDrive).join('');
+        updatedEl.textContent = new Date().toLocaleTimeString('en-US', { hour12:false });
+    } catch (e) {
+        drivesEl.innerHTML = '<div class="loading" style="color:var(--amber)">error · ' + e.message + '</div>';
+    }
+}
+
+refreshBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    drivesEl.innerHTML = '<div class="loading"><span class="glyph"></span>Refreshing…</div>';
+    load();
+});
+
+load();
+</script>
+</body>
+</html>
