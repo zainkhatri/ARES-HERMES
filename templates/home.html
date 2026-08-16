@@ -53,9 +53,9 @@
             background:
                 radial-gradient(120% 70% at 50% 118%, rgba(var(--ares-rgb),.16), transparent 62%),
                 radial-gradient(80% 50% at 50% -18%, rgba(194,48,31,.10), transparent 60%);
-            animation:ember-breathe 11s ease-in-out infinite;
+            opacity:.85;   /* perf: static — a full-screen animated layer can't be
+                              snapshot-cached, so it fought the macOS Spaces compositor */
         }
-        @keyframes ember-breathe { 0%,100%{opacity:.72} 50%{opacity:1} }
 
         .scanline {
             position:fixed; inset:0; z-index:900; pointer-events:none;
@@ -71,7 +71,7 @@
            `content` so a panel with no corner class renders nothing; an
            unpositioned pseudo-element lands in the static flow and covers text.
            Equal specificity throughout so the border-side resets still win. */
-        .mod { position:relative; border:1px solid var(--ember-dim); background:rgba(20,8,7,.55);
+        .mod { position:relative; contain:layout paint; border:1px solid var(--ember-dim); background:rgba(20,8,7,.55);
                box-shadow:inset 0 0 22px rgba(var(--ares-rgb),.045); }
         .mod::before, .mod::after {
             position:absolute; width:11px; height:11px; border:2px solid var(--ares); pointer-events:none;
@@ -143,7 +143,7 @@
         .gauge { transform:rotate(-90deg); }
         .gauge-track { fill:none; stroke:rgba(var(--ares-rgb),.14); stroke-width:7; }
         .gauge-load  { fill:none; stroke:var(--ares); stroke-width:7; stroke-linecap:round;
-                       transition:stroke-dashoffset 900ms var(--ease-out); filter:drop-shadow(0 0 5px rgba(var(--ares-rgb),.55)); }
+                       transition:stroke-dashoffset 900ms var(--ease-out); }
         .gauge-temp  { fill:none; stroke:var(--amber); stroke-width:3; stroke-linecap:round;
                        transition:stroke-dashoffset 900ms var(--ease-out), stroke 400ms linear; }
         .gauge-temp-track { fill:none; stroke:rgba(245,158,11,.12); stroke-width:3; }
@@ -192,10 +192,7 @@
             text-shadow:0 0 16px rgba(var(--ares-rgb),.5), 0 0 44px rgba(var(--ares-rgb),.22);
         }
         .mark .m-ar { color:var(--ares); }
-        .mark .m-es { color:#f4f8fd; text-shadow:0 0 16px rgba(244,248,253,.4), 0 0 44px rgba(244,248,253,.18);
-            animation:mark-pulse 7s ease-in-out infinite;
-        }
-        @keyframes mark-pulse { 0%,100%{opacity:.94} 50%{opacity:1} }
+        .mark .m-es { color:#f4f8fd; text-shadow:0 0 16px rgba(244,248,253,.4), 0 0 44px rgba(244,248,253,.18); }
 
         /* ---- vitals tiles (markup emitted by loadVitals) -------------------- */
         .vitals { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
@@ -738,21 +735,9 @@ function buildTileHtml(t) {
 
 // Count a number element from `from` to `to` over ~600ms (easeOutCubic).
 function tweenNum(el, from, to, finalStr) {
-    if (from === to || prefersReducedMotion()) { el.textContent = finalStr; return; }
-    var dec = (finalStr.split('.')[1] || '').length;
-    var dur = 600;
-    var tok = (el._tw || 0) + 1; el._tw = tok;  // cancels any in-flight tween on this el
-    var start = null;
-    function frame(ts) {
-        if (el._tw !== tok) return;
-        if (start === null) start = ts;
-        var p = (ts - start) / dur; if (p > 1) p = 1;
-        var e = 1 - Math.pow(1 - p, 3);
-        el.textContent = (from + (to - from) * e).toFixed(dec);
-        if (p < 1) requestAnimationFrame(frame);
-        else el.textContent = finalStr;
-    }
-    requestAnimationFrame(frame);
+    // perf: no count-up rAF loops (they kept the main thread hot every update).
+    // The values change every couple seconds — just set them.
+    el.textContent = finalStr;
 }
 
 // Update one existing tile in place — width, number, unit, meta, crit/warn.
@@ -1060,6 +1045,7 @@ var _vitalsBusy = false;
 var _vtick = 0;
 async function loadVitals() {
     if (_vitalsBusy) return;   // skip tick if previous poll still running
+    if (document.hidden) return;   // perf: don't poll/redraw while the tab is hidden
     _vitalsBusy = true;
     try {
         var r = await fetch('/api/system-info');
@@ -1193,7 +1179,8 @@ fitHud(); setTimeout(fitHud, 700); setTimeout(fitHud, 2500);
 if (!window.__BOOT) loadVitals();
 pollWin();
 pollPeer();
-setInterval(loadVitals, 1000);   // charts advance every 1s
+setInterval(loadVitals, 2000);   // perf: 2s poll (was 1s)
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) loadVitals(); });   // refetch on return
 setInterval(pollWin, 20000);     // win status on its own slow loop
 setInterval(pollPeer, 12000);    // sister-node health on its own slow loop
 
