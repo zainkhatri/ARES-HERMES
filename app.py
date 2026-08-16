@@ -529,15 +529,54 @@ def healthz():
     capability profile, and the deploy stamp (git SHA written by
     deploy/sync-to-cronos.sh) so a deploy can assert the remote box is running
     the code it just pushed — turning silent drift into a loud check."""
-    from system.system_info import _capabilities
+    from system.system_info import _capabilities, get_system_info
     stamp = "dev"
     try:
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".deploy_stamp")) as f:
             stamp = f.read().strip() or "dev"
     except OSError:
         pass
+    # Light, non-secret vitals summary (counts only, no names) for the peer's
+    # sister-node card. Cached under the hood.
+    summary = None
+    try:
+        info = get_system_info()
+        conts = info.get("containers", []) or []
+        crons = info.get("crons", []) or []
+        summary = {
+            "cpu": info.get("cpu_percent"),
+            "mem": info.get("memory_percent"),
+            "containers_total": len(conts),
+            "containers_down": sum(1 for c in conts if not c.get("ok")),
+            "jobs_failed": sum(1 for j in crons if not j.get("ok") and not j.get("running")),
+        }
+    except Exception:
+        pass
     return jsonify({"ok": True, "brand": os.getenv("HOST_BRAND", ""),
-                    "caps": _capabilities(), "stamp": stamp})
+                    "caps": _capabilities(), "stamp": stamp, "summary": summary})
+
+
+@app.route("/api/peer")
+@require_auth
+def api_peer():
+    """Same-origin proxy to the sister box's /healthz — powers the sister-node
+    card, so the browser never makes a cross-box request (no CORS, no DNS). Set
+    PEER_URL/PEER_NAME/PEER_TAG per box; returns {configured:false} otherwise."""
+    url = os.getenv("PEER_URL", "").strip()
+    if not url:
+        return jsonify({"configured": False})
+    out = {"configured": True, "name": os.getenv("PEER_NAME", "Sister"),
+           "tag": os.getenv("PEER_TAG", ""), "url": url, "up": False, "summary": None}
+    try:
+        import requests
+        r = requests.get(url.rstrip("/") + "/healthz", timeout=3)
+        if r.ok:
+            d = r.json()
+            out["up"] = bool(d.get("ok"))
+            out["summary"] = d.get("summary")
+    except Exception:
+        pass
+    return jsonify(out)
 
 
 
