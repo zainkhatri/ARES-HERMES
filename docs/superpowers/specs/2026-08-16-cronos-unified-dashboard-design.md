@@ -140,3 +140,40 @@ Containers).
   pre-warm in the startup cache task if you want it instant.
 - CRONOS "Scheduled jobs" will be sparse (few systemd timers there) — the Services
   panel is its real "what's running" view.
+
+---
+
+## Hardening pass (LLM council review) — 2026-08-16
+
+Ran the 5-advisor council against the real diff. Real bugs found + fixed (all
+ARES-safe, verified via render loop + live checks on both boxes):
+
+1. **Backend probes were ungated** (Contrarian/First-Principles, verified): `get_system_info()`
+   SSH'd to the Proxmox host (`root@192.168.20.51`) and GPU box every refresh
+   regardless of box — wasting a 2s connect-timeout on CRONOS and a *latent*
+   wrong-data bug (same LAN: a key would make CRONOS report ARES's CPU/RAM).
+   Fixed: gate `_get_host_disks`/`_get_host_compute`/`_get_gpu_info`/`_get_mordor_status`
+   on caps. CRONOS `get_system_info()` compute dropped **~2000ms → 1ms**.
+2. **Fail-open default**: unset `HOST_BRAND` granted full ARES caps. Fixed: unknown/unset
+   brand → CONSERVATIVE profile. Made ARES explicit (`HOST_BRAND=ARES` in its `.env`)
+   first so the flip is safe.
+3. **Unescaped innerHTML** (XSS-ish): container names/status, folder/job names went
+   into `innerHTML` raw. Added `esc()`; verified an injected `<script>` renders inert.
+4. **Empty jobs panel on CRONOS**: hidden when no cron collector present.
+5. **Silent drift** (Executor): added unauth `GET /healthz` → `{ok, brand, caps, stamp}`.
+   Deploy writes the git SHA as `.deploy_stamp`; `sync-to-cronos.sh --restart` asserts
+   `/healthz` reports it. CRONOS stamp `4ad3ded` == HEAD (no drift).
+6. **Deploy guards**: added a <5MB collapse floor (a bad exclude that empties the tree
+   now fails loudly, not just the >500MB blowup ceiling).
+7. **Discoverability** (Outsider): `deploy/README.md` maps the confusing names
+   (hostname cronos / brand CRONOS / dir ARES-DASHBOARD / unit cronos-dashboard / two
+   ports) + the `systemctl --user` incantation + log command.
+8. **Security** (chosen: Tailscale-only + real pw): CRONOS bound to `100.100.29.36:8890`
+   (LAN refused, verified), real `ARES_PASSWORD` set (no longer default).
+
+Applied but deferred by the council as acceptable: password in unit `Environment=`
+(single-user Tailscale box), reboot-race (Restart=on-failure + RestartSec=3 cover it;
+not reboot-tested). Expansionist's fleet vision (cross-box aggregation, container
+start/stop actions, Nth-box-for-free) noted as future upside, not built.
+
+Commits: `fa990cb` (feature), `4ad3ded` (hardening).
