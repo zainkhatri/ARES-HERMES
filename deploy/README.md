@@ -25,6 +25,23 @@ Survives reboot via **linger** (already enabled: `loginctl show-user zain | grep
 Env (brand, Tailscale bind, password, empty GPU/PVE hosts) lives in that unit's
 `Environment=` lines.
 
+## Clean URL (tailscale serve)
+The dashboard has a tailnet-private HTTPS URL (works from any device with
+Tailscale + MagicDNS — Mac/phone/etc; NOT public, NOT Funnel):
+
+    https://hermes.tail3045df.ts.net:8443/
+
+Set up (additive — does NOT touch the public :443 Funnel that serves the FAI stack):
+
+    tailscale serve --bg --https=8443 http://100.100.29.36:8890   # persists across reboot
+    tailscale serve --https=8443 off                              # to remove
+
+Note: the box's DNS name is `hermes` in Tailscale (renaming to `cronos` would move
+the FAI Funnel URL too, so it's left as-is). A self-`curl` from this box resolves the
+name to the public Funnel IPs and won't reach :8443 — that's expected; MagicDNS
+clients (your devices) resolve it to the 100.100.29.36 tailscale IP and reach it fine.
+Direct `http://100.100.29.36:8890/` also still works.
+
 ## Health / drift
 `curl -s http://100.100.29.36:8890/healthz` → `{ok, brand, caps, stamp}`.
 `stamp` is the git SHA of the code this box is running (written on each deploy).
