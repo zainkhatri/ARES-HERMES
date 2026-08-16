@@ -294,9 +294,9 @@
         .sp-c-cpu.sp-line { stroke:var(--ares); }
         .sp-c-cpu.sp-fill { fill:rgba(var(--ares-rgb),.14); }
         .sp-c-mem.sp-line { stroke:var(--ares-bright); }
-        .sp-c-mem.sp-fill { fill:rgba(255,122,69,.13); }
+        .sp-c-mem.sp-fill { fill:rgba(var(--ares-rgb),.13); }
         .sp-c-gpu.sp-line { stroke:var(--amber); }
-        .sp-c-gpu.sp-fill { fill:rgba(245,158,11,.12); }
+        .sp-c-gpu.sp-fill { fill:rgba(var(--ares-rgb),.10); }
 
         /* ---- thermal chart ------------------------------------------------------ */
         .thermal { display:block; width:100%; height:120px; }
@@ -1358,7 +1358,9 @@ function drawCharts() {
 }
 
 // Array map: every disk the API reports, widest first.
-var ARR_COLOR = { '970-EVO': '#fb923c', '990-PRO': '#f59e0b', 'PROMETHEUS': '#ef4444' };
+var ARR_COLOR = (document.documentElement.getAttribute('data-brand') === 'ZEUS')
+    ? { '970-EVO': '#38bdf8', '990-PRO': '#22d3ee', 'PROMETHEUS': '#0ea5e9' }
+    : { '970-EVO': '#fb923c', '990-PRO': '#f59e0b', 'PROMETHEUS': '#ef4444' };
 
 function renderArray(disks) {
     var list = document.getElementById('arr-list');
