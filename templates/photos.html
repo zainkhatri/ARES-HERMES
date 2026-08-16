@@ -2767,6 +2767,62 @@
     }
     .thumb-fav-badge svg { width:9px; height:9px; fill:#ff4d6d; stroke:#ff4d6d; stroke-width:1.5; }
 
+    /* ── Bulk select mode ─────────────────────────────────────── */
+    .thumb-check {
+        position:absolute; top:6px; right:6px;
+        width:22px; height:22px; border-radius:50%;
+        border:2px solid rgba(255,255,255,0.6);
+        background:rgba(0,0,0,0.32);
+        pointer-events:none;
+        display:none;
+        align-items:center; justify-content:center;
+        transition:background 0.12s, border-color 0.12s;
+    }
+    .thumb-check svg { width:12px; height:12px; stroke:#fff; fill:none; stroke-width:2.5;
+        stroke-linecap:round; stroke-linejoin:round; opacity:0; transition:opacity 0.1s; }
+    body.sel-mode .thumb { opacity:0.6; transition:opacity 0.12s; }
+    body.sel-mode .thumb.sel { opacity:1; }
+    body.sel-mode .thumb-check { display:flex; }
+    body.sel-mode .thumb.sel .thumb-check { background:var(--ares); border-color:var(--ares); }
+    body.sel-mode .thumb.sel .thumb-check svg { opacity:1; }
+
+    .sel-bar {
+        position:fixed; bottom:0; left:0; right:0;
+        display:flex; align-items:center; justify-content:space-between; gap:12px;
+        padding:10px 16px;
+        padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px));
+        background:var(--bg-1); border-top:1px solid var(--line-2);
+        transform:translateY(100%);
+        transition:transform 0.22s var(--ease);
+        z-index:600;
+        font-family:'Bricolage Grotesque', sans-serif;
+    }
+    .sel-bar.show { transform:translateY(0); }
+    .sel-cancel {
+        flex:0 0 auto; background:none; border:1px solid var(--line-2); color:var(--text-2);
+        font-family:inherit; font-size:12px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;
+        padding:8px 14px; cursor:pointer; touch-action:manipulation;
+        transition:color 0.14s, border-color 0.14s;
+    }
+    .sel-cancel:hover { color:var(--text-1); border-color:var(--line-3); }
+    .sel-count {
+        flex:1; text-align:center;
+        font-family:'JetBrains Mono', monospace;
+        font-size:11px; color:var(--text-3); letter-spacing:0.1em; text-transform:uppercase;
+    }
+    .sel-acts { display:flex; gap:8px; flex:0 0 auto; }
+    .sel-act {
+        background:none; border:1px solid;
+        font-family:inherit; font-size:12px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase;
+        padding:8px 14px; cursor:pointer; touch-action:manipulation;
+        transition:background 0.14s, opacity 0.14s;
+    }
+    .sel-act:disabled { opacity:0.28; pointer-events:none; }
+    .sel-act.vault { color:var(--ares); border-color:var(--ares); }
+    .sel-act.vault:hover { background:var(--ares-dim); }
+    .sel-act.danger { color:var(--red); border-color:var(--red); }
+    .sel-act.danger:hover { background:rgba(239,68,68,0.1); }
+
     /* ── flat-list section (Favorites / Screenshots / Memories) ── */
     .flat-section { padding:0 0 32px; }
     .flat-section-head {
@@ -2883,9 +2939,9 @@
                     <button class="om-density-btn" data-size="280" role="radio">Large</button>
                 </div>
             </div>
-            <a href="/jump/nexus" class="om-link" role="menuitem">
-                <span class="nx-mark">N</span>
-                <span>Switch to NEXUS</span>
+            <a href="/jump/zeus" class="om-link" role="menuitem">
+                <span class="nx-mark">H</span>
+                <span>Switch to ZEUS</span>
                 <span class="arrow">→</span>
             </a>
             <a href="/" class="om-link" role="menuitem">
@@ -3007,6 +3063,16 @@
         <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
         Delete
     </button>
+</div>
+
+<!-- ════════════════════ SELECT ACTION BAR ════════════════════ -->
+<div class="sel-bar" id="sel-bar" role="toolbar" aria-label="Selection actions">
+    <button class="sel-cancel" id="sel-cancel">Cancel</button>
+    <span class="sel-count" id="sel-count">0 selected</span>
+    <div class="sel-acts">
+        <button class="sel-act vault" id="sel-vault" disabled>My Eyes Only</button>
+        <button class="sel-act danger" id="sel-delete" disabled>Delete</button>
+    </div>
 </div>
 
 <!-- ════════════════════ ZOOM LEVEL TOAST ════════════════════ -->
@@ -3752,6 +3818,7 @@ function thumbHTML(item, globalIdx, eager) {
     return '<div class="thumb' + (isVideo ? ' video' : '') + '" data-idx="' + globalIdx + '" style="--ar:' + itemAr(item) + bgStyle + '">' +
         '<img src="' + thumbSrc + '"' + loadAttr + ' decoding="async" alt="" onload="this.classList.add(\'loaded\')" onerror="_thumbErr(this)">' +
         arrow +
+        '<span class="thumb-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>' +
     '</div>';
 }
 
@@ -3862,7 +3929,7 @@ function bindGridEvents(grid) {
         longStartX = e.touches[0].clientX;
         longStartY = e.touches[0].clientY;
         longTimer = setTimeout(function() {
-            showCtxMenu({ clientX: longStartX, clientY: longStartY }, parseInt(longTarget.dataset.idx), longTarget);
+            enterSelMode(parseInt(longTarget.dataset.idx));
         }, 550);
     }, { passive: false });
 
@@ -3903,7 +3970,10 @@ function bindGridEvents(grid) {
             return;
         }
         var t = e.target.closest('.thumb');
-        if (t) openLightbox(parseInt(t.dataset.idx), t);
+        if (!t) return;
+        var idx = parseInt(t.dataset.idx);
+        if (_selMode) { toggleSel(idx, t); return; }
+        openLightbox(idx, t);
     });
     /* Hover prefetch — desktop. By the time the click event fires (typically
        150-400ms after mouseover), the preview is already in HTTP/SW cache
@@ -5486,7 +5556,9 @@ function showLbItem() {
         vid.poster = item.thumb || item.thumb_hq || previewURL(item) || '';
         vid.preload = 'auto';
         vid.crossOrigin = 'anonymous';
-        var videoURL = '/api/photos/video?p=' + encodeURIComponent(item.path);
+        var videoURL = item._vaultKey
+            ? '/api/vault/stream/' + item._vaultKey
+            : '/api/photos/video?p=' + encodeURIComponent(item.path);
         /* Chrome's battery-saver pauses MUTED autoplay videos as
            "video-only background media", which then throws AbortError on
            our explicit play() call. Start UNMUTED — Chrome trusts the
@@ -5542,9 +5614,15 @@ function showLbItem() {
                 vid.src = videoURL;
             }
         }
-        fetch('/api/photos/hls?p=' + encodeURIComponent(item.path || ''), {credentials: 'same-origin', redirect: 'follow'})
-            .then(function(r) { if (!r.ok) throw new Error(r.status); _playHls(r.url); })
-            .catch(function() { vid.src = videoURL; var p = vid.play(); if (p && p.catch) p.catch(function() { vid.muted = true; vid.play().catch(function(){}); }); });
+        if (item._vaultKey) {
+            vid.src = videoURL;
+            var _vp = vid.play();
+            if (_vp && _vp.catch) _vp.catch(function() { vid.muted = true; vid.play().catch(function(){}); });
+        } else {
+            fetch('/api/photos/hls?p=' + encodeURIComponent(item.path || ''), {credentials: 'same-origin', redirect: 'follow'})
+                .then(function(r) { if (!r.ok) throw new Error(r.status); _playHls(r.url); })
+                .catch(function() { vid.src = videoURL; var p = vid.play(); if (p && p.catch) p.catch(function() { vid.muted = true; vid.play().catch(function(){}); }); });
+        }
         lb.addEventListener('transitionend', function _hc() {
             if (!lb.classList.contains('open') && _hlsInst) { _hlsInst.destroy(); _hlsInst = null; lb.removeEventListener('transitionend', _hc); }
         });
@@ -8733,6 +8811,7 @@ function _openVaultLightbox(item, allVaultItems) {
         thumb:    item.thumb,
         thumb_hq: item.thumb_hq || item.thumb,
         _vault:   true,
+        _vaultKey: item.key || '',
     });
     if (typeof openLightbox === 'function') {
         /* Push into allItems at end, open it */
@@ -8756,9 +8835,16 @@ async function _vaultAdd(thumbKey) {
             body: JSON.stringify({ thumb_keys: [thumbKey] })
         });
         if (r.ok) {
-            if (typeof showToast === 'function') {
-                showToast({ title: 'My Eyes Only', msg: 'Photo moved to your private vault.', duration: 3000 });
-            }
+            /* Remove from grid and allItems */
+            allItems.forEach(function(item, idx) {
+                if (!item) return;
+                if (_thumbKeyFromItem(item) === thumbKey) {
+                    document.querySelectorAll('.thumb[data-idx="' + idx + '"]').forEach(function(el) { el.remove(); });
+                    allItems[idx] = null;
+                }
+            });
+            if (lbOpen) closeLightbox();
+            showToast({ title: 'My Eyes Only', msg: 'Moved to your private vault.', duration: 3000 });
         }
     } catch(e) {}
 }
@@ -9205,6 +9291,126 @@ _checkVaultStatus();
         timer = setTimeout(sweep, 400);
     }, { passive: true, capture: true });
 })();
+
+/* ╔══════════════════════════════════════════════════════════════════╗
+   ║  BULK SELECT MODE                                                ║
+   ╚══════════════════════════════════════════════════════════════════╝ */
+var _selMode = false;
+var _selSet  = new Set();  /* allItems indices currently selected */
+var selBar    = document.getElementById('sel-bar');
+var selCount  = document.getElementById('sel-count');
+var selVault  = document.getElementById('sel-vault');
+var selDelete = document.getElementById('sel-delete');
+
+function enterSelMode(idx) {
+    _selMode = true;
+    document.body.classList.add('sel-mode');
+    selBar.classList.add('show');
+    if (idx !== undefined) {
+        var el = document.querySelector('.thumb[data-idx="' + idx + '"]');
+        toggleSel(idx, el);
+    }
+}
+
+function exitSelMode() {
+    _selMode = false;
+    document.body.classList.remove('sel-mode');
+    selBar.classList.remove('show');
+    document.querySelectorAll('.thumb.sel').forEach(function(el) { el.classList.remove('sel'); });
+    _selSet.clear();
+    _updateSelCount();
+}
+
+function toggleSel(idx, el) {
+    if (!el) el = document.querySelector('.thumb[data-idx="' + idx + '"]');
+    if (_selSet.has(idx)) {
+        _selSet.delete(idx);
+        if (el) el.classList.remove('sel');
+    } else {
+        _selSet.add(idx);
+        if (el) el.classList.add('sel');
+    }
+    _updateSelCount();
+}
+
+function _updateSelCount() {
+    var n = _selSet.size;
+    selCount.textContent = n + ' selected';
+    selVault.disabled  = n === 0;
+    selDelete.disabled = n === 0;
+}
+
+/* Cancel */
+document.getElementById('sel-cancel').addEventListener('click', exitSelMode);
+
+/* Escape exits select mode */
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && _selMode) exitSelMode();
+}, true);
+
+/* Bulk delete */
+document.getElementById('sel-delete').addEventListener('click', async function() {
+    var indices = Array.from(_selSet);
+    var items   = indices.map(function(i) { return allItems[i]; }).filter(Boolean);
+    if (!items.length) return;
+    var n = items.length;
+    if (!confirm('Move ' + n + ' photo' + (n === 1 ? '' : 's') + ' to trash?')) return;
+    var failed = 0;
+    for (var i = 0; i < indices.length; i++) {
+        var idx  = indices[i];
+        var item = allItems[idx];
+        if (!item) continue;
+        try {
+            var r = await fetch('/api/photos/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: item.path })
+            });
+            if (r.ok) {
+                document.querySelectorAll('.thumb[data-idx="' + idx + '"]').forEach(function(el) { el.remove(); });
+                allItems[idx] = null;
+            } else { failed++; }
+        } catch(e) { failed++; }
+    }
+    exitSelMode();
+    if (failed) showToast({ title: 'Delete', msg: failed + ' failed to delete.', duration: 4000 });
+    else showToast({ title: 'Deleted', msg: n + ' photo' + (n === 1 ? '' : 's') + ' moved to trash.', duration: 3000 });
+});
+
+/* Bulk vault */
+document.getElementById('sel-vault').addEventListener('click', function() {
+    var indices   = Array.from(_selSet);
+    var items     = indices.map(function(i) { return allItems[i]; }).filter(Boolean);
+    var thumbKeys = items.map(_thumbKeyFromItem).filter(Boolean);
+    if (!thumbKeys.length) return;
+
+    var doVault = async function() {
+        try {
+            var r = await fetch('/api/vault/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ thumb_keys: thumbKeys })
+            });
+            if (r.ok) {
+                indices.forEach(function(idx) {
+                    document.querySelectorAll('.thumb[data-idx="' + idx + '"]').forEach(function(el) { el.remove(); });
+                    allItems[idx] = null;
+                });
+                var n = thumbKeys.length;
+                exitSelMode();
+                showToast({ title: 'My Eyes Only', msg: n + ' photo' + (n === 1 ? '' : 's') + ' moved to vault.', duration: 3000 });
+            } else {
+                var err = await r.json().catch(function() { return {}; });
+                showToast({ title: 'Error', msg: err.error || 'Failed', duration: 4000 });
+            }
+        } catch(e) {
+            showToast({ title: 'Error', msg: 'Network error', duration: 4000 });
+        }
+    };
+
+    if (!_vaultUnlocked) { _openPinOverlay(doVault); return; }
+    doVault();
+});
 </script>
 </body>
 </html>

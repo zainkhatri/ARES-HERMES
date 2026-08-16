@@ -74,7 +74,7 @@ _CLAUDE_SIGNS = ("esc to interrupt", "⏵⏵", "auto-accept edits", "? for short
 
 
 def _detect_kind(session, idx):
-    """Classify window `idx`: ("claude","ares") | ("claude","nexus") | ("shell",None).
+    """Classify window `idx`: ("claude","ares") | ("claude","cronos") | ("shell",None).
     Cheap: one capture + one display-message. Remote Claude is inferred from an
     ssh pane whose content shows the Claude UI."""
     pane = f"{session}:{idx}"
@@ -87,8 +87,8 @@ def _detect_kind(session, idx):
                              "#{pane_current_command}"], capture_output=True, text=True, timeout=3).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         cmd = ""
-    # Claude reached through an ssh pane = the sister box (NEXUS).
-    return ("claude", "nexus") if cmd == "ssh" else ("claude", "ares")
+    # Claude reached through an ssh pane = the sister box (ZEUS host, ZEUS label).
+    return ("claude", "cronos") if cmd == "ssh" else ("claude", "ares")
 
 
 def _windows(session):
@@ -476,17 +476,17 @@ def _tool_summary(name, inp):
     return ""
 
 
-NEXUS_SSH = "zain@100.100.29.36"
+ZEUS_SSH = "zain@100.100.29.36"
 
 
-def _nexus_transcript_bytes():
-    """Newest NEXUS Claude transcript over the tailnet. Full-replace model (no
+def _hermes_transcript_bytes():
+    """Newest ZEUS Claude transcript over the tailnet. Full-replace model (no
     byte-offset tailing over ssh): return the last ~500 KB, which covers a long
     conversation's recent turns. Bounded, one ssh per poll while the tab is open.
     Returns (bytes, err_string)."""
     try:
         r = subprocess.run(
-            ["tailscale", "ssh", NEXUS_SSH,
+            ["tailscale", "ssh", ZEUS_SSH,
              "f=$(ls -t ~/.claude/projects/*/*.jsonl 2>/dev/null | head -1); "
              "[ -n \"$f\" ] && tail -c 500000 \"$f\""],
             capture_output=True, timeout=20,
@@ -592,13 +592,13 @@ async def console_loop(ws, target):
                 src = str(d.get("src", "ares"))
                 w = d.get("win")
                 win = w if isinstance(w, int) and 0 <= w <= 999 else -1
-                if src == "nexus":
+                if src == "cronos":
                     # Full-replace each poll: parse the tail fetched over ssh.
-                    raw, err = await asyncio.to_thread(_nexus_transcript_bytes)
+                    raw, err = await asyncio.to_thread(_hermes_transcript_bytes)
                     evs = _parse_transcript_bytes(raw)
                     await _safe_send(ws, json.dumps(
                         {"claudelog": {"reset": True, "events": evs, "off": 0, "err": err,
-                                       "src": "nexus", "win": win}}))
+                                       "src": "cronos", "win": win}}))
                 else:
                     # Resolve THIS window's Claude; fall back to global newest when
                     # the window isn't specified (or resolution fails at startup).

@@ -13,7 +13,7 @@
         /* Tokens lifted verbatim from the ARES dashboard so this page is pixel-identical chrome. */
         :root {
             --bg-0:#04070d; --bg-1:#070c16; --bg-2:#0a121f;
-            --nav-ares:#ef4444; --nav-blue:#6495ed;
+            --nav-ares:#ef4444; --nav-blue:#6495ed; --zeus:#22d3ee;
             --nav-line:rgba(239,68,68,0.08); --nav-line-2:rgba(239,68,68,0.18);
             --nav-text-2:#8ba3c0; --nav-text-3:#4a5d78;
         }
@@ -46,20 +46,21 @@
             font-family:'Bricolage Grotesque', sans-serif;
         }
         .navbar-left { display:flex; align-items:center; gap:16px; min-width:0; }
-        .nbr { display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; transition:opacity 0.18s ease; min-width:0; }
-        .nbr-other { opacity:0.7; }
-        .nbr-other:hover { opacity:1; }
+        .nbr { display:inline-flex; align-items:center; gap:12px; text-decoration:none; opacity:.45; transition:opacity 0.18s ease, transform 0.18s ease; min-width:0; }
+        .nbr.is-active { opacity:1; }
+        .nbr:not(.is-active):hover { opacity:1; transform:translateY(-1px); }
+        .nbr.node-ares  { color:var(--nav-ares); }
+        .nbr.node-zeus{ color:var(--zeus); }
         .nbr-mark {
-            width:26px; height:26px; flex-shrink:0;
+            width:26px; height:26px; min-height:40px; flex-shrink:0;
             display:flex; align-items:center; justify-content:center;
-            border:1px solid; font-weight:800; font-size:14px; line-height:1;
+            border:1px solid currentColor; font-weight:800; font-size:14px; line-height:1;
+            transition:box-shadow 0.18s ease;
         }
-        .nbr-mark.m-a { border-color:var(--nav-ares); color:var(--nav-ares); }
-        .nbr-mark.m-h { border-color:var(--nav-blue); color:var(--nav-blue); }
+        .nbr.is-active .nbr-mark { box-shadow:0 0 14px -4px currentColor; }
+        .nbr:hover .nbr-mark { box-shadow:0 0 14px -3px currentColor; }
         .nbr-id { display:flex; align-items:baseline; gap:8px; min-width:0; }
-        .nbr-name { font-weight:700; font-size:14px; letter-spacing:0.02em; white-space:nowrap; }
-        .nbr-name.n-a { color:var(--nav-ares); }
-        .nbr-name.n-h { color:var(--nav-blue); }
+        .nbr-name { color:currentColor; font-weight:700; font-size:14px; letter-spacing:0.02em; white-space:nowrap; }
         .nbr-sep { color:var(--nav-text-3); font-size:11px; }
         .nbr-tag { font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--nav-text-2); letter-spacing:0.1em; text-transform:uppercase; white-space:nowrap; }
         .back-chip {
@@ -113,8 +114,8 @@
         .tab-add .plus { font-size:15px; line-height:1; margin-right:1px; opacity:0.85; }
         .tab-add.t-ares  { color:var(--nav-ares); border-color:var(--nav-ares); }
         .tab-add.t-ares:active  { background:rgba(239,68,68,0.12); }
-        .tab-add.t-hermes { color:var(--nav-blue); border-color:rgba(100,149,237,0.5); }
-        .tab-add.t-hermes:active { background:rgba(100,149,237,0.12); }
+        .tab-add.t-zeus { color:var(--nav-blue); border-color:rgba(100,149,237,0.5); }
+        .tab-add.t-zeus:active { background:rgba(100,149,237,0.12); }
 
         /* === Terminal === */
         #term { flex:1 1 auto; width:100%; border:0; display:block; background:var(--bg-0); min-height:0; }
@@ -248,10 +249,10 @@
     <div id="app">
         <header class="navbar">
             <div class="navbar-left">
-                <a href="/" class="nbr nbr-self">
-                    <div class="nbr-mark m-a">A</div>
+                <a href="/" class="nbr node-ares is-active" aria-current="page">
+                    <div class="nbr-mark">A</div>
                     <div class="nbr-id">
-                        <span class="nbr-name n-a">ARES</span>
+                        <span class="nbr-name">ARES</span>
                         <span class="nbr-sep">/</span>
                         <span class="nbr-tag">TERMINAL</span>
                     </div>
@@ -261,10 +262,10 @@
                     <span>Home</span>
                 </a>
             </div>
-            <a href="/jump/hermes" class="nbr nbr-other">
-                <div class="nbr-mark m-h">H</div>
+            <a href="/jump/zeus" class="nbr node-zeus" aria-label="Switch to ZEUS">
+                <div class="nbr-mark">Z</div>
                 <div class="nbr-id">
-                    <span class="nbr-name n-h">HERMES</span>
+                    <span class="nbr-name">ZEUS</span>
                     <span class="nbr-sep">/</span>
                     <span class="nbr-tag">MID-NAS</span>
                 </div>
@@ -274,7 +275,7 @@
         <!-- Session tabs (= tmux windows). Hidden while the keyboard is open. -->
         <div class="ctl-tabs" id="tabs">
             <button class="tab tab-add t-ares" id="tab-add-ares" title="New ARES shell"><span class="plus">+</span>ARES</button>
-            <button class="tab tab-add t-hermes" id="tab-add-hermes" title="SSH into HERMES"><span class="plus">+</span>HERMES</button>
+            <button class="tab tab-add t-zeus" id="tab-add-zeus" title="SSH into ZEUS"><span class="plus">+</span>ZEUS</button>
         </div>
 
         <!-- Live PTY into the ARES host's persistent tmux session "web" (ttyd). -->
@@ -413,7 +414,7 @@
         /* ── Tab strip ──────────────────────────────────────────────────── */
         var tabsEl  = document.getElementById('tabs');
         var addAres = document.getElementById('tab-add-ares');
-        var addHermes= document.getElementById('tab-add-hermes');
+        var addZeus= document.getElementById('tab-add-zeus');
         var busy    = false;
         var lastWindows = [];
 
@@ -574,7 +575,7 @@
         }
 
         addAres.addEventListener('click', function () { guard(api('/new', { target: 'ares' })); });
-        addHermes.addEventListener('click',function () { guard(api('/new', { target: 'hermes'})); });
+        addZeus.addEventListener('click',function () { guard(api('/new', { target: 'hermes'})); });
 
         function nextTab() {
             if (lastWindows.length < 2) return;

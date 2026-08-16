@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ARES & CRONOS</title>
+    <title>ARES & ZEUS</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="apple-touch-icon" href="/static/icon-180.png">
@@ -395,7 +395,7 @@
         </style>
 </head>
 <body>
-<!-- CRONOS watchdog banner (2026-07-06): polls /api/alerts; hidden when level=ok -->
+<!-- ZEUS watchdog banner (2026-07-06): polls /api/alerts; hidden when level=ok -->
 <div id="hermes-alert-banner" onclick="this.style.display='none'" title="tap to dismiss" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:10px 16px;font:600 14px/1.4 system-ui,sans-serif;color:#fff;text-align:center;cursor:pointer;"></div>
 <script>
 (function(){
@@ -404,7 +404,7 @@
     fetch("/api/alerts",{credentials:"same-origin"}).then(function(r){return r.json();}).then(function(a){
       if(a.level==="ok"){el.style.display="none";return;}
       el.style.background=a.level==="red"?"#dc2626":"#d97706";
-      el.textContent="CRONOS "+a.level.toUpperCase()+": "+(a.reasons||[]).join(" \u00b7 ");
+      el.textContent="ZEUS "+a.level.toUpperCase()+": "+(a.reasons||[]).join(" \u00b7 ");
       el.style.display="block";
     }).catch(function(){});
   }
@@ -421,15 +421,15 @@
 
     <header class="hud-top">
         <div>
-            {% set is_cronos = boot and (boot.hostname or '')|upper == 'CRONOS' %}
+            {% set is_zeus = boot and (boot.hostname or '')|upper == 'ZEUS' %}
             <div class="nodes">
-                <a href="{{ 'https://ares.tail3045df.ts.net/' if is_cronos else '/' }}" class="chip{{ '' if is_cronos else ' is-active' }}"{{ '' if is_cronos else ' aria-current=page'|safe }} aria-label="ARES">
+                <a href="{{ 'https://ares.tail3045df.ts.net/' if is_zeus else '/' }}" class="chip{{ '' if is_zeus else ' is-active' }}"{{ '' if is_zeus else ' aria-current=page'|safe }} aria-label="ARES">
                     <span class="chip-mark">A</span>
                     <span class="chip-name">ARES</span><span class="chip-tag">/ SUPER-NAS</span>
                 </a>
-                <a href="{{ '/' if is_cronos else '/jump/hermes' }}" class="chip{{ ' is-active' if is_cronos else '' }}" aria-label="CRONOS">
-                    <span class="chip-mark">C</span>
-                    <span class="chip-name">CRONOS</span><span class="chip-tag">/ MID-NAS</span>
+                <a href="{{ '/' if is_zeus else '/jump/zeus' }}" class="chip{{ ' is-active' if is_zeus else '' }}" aria-label="ZEUS">
+                    <span class="chip-mark">Z</span>
+                    <span class="chip-name">ZEUS</span><span class="chip-tag">/ MID-NAS</span>
                 </a>
             </div>
         </div>
@@ -530,17 +530,17 @@
 
         <!-- ── centre: wordmark + vitals ───────────────────────────────── -->
         <div class="col col-mid">
-            <div class="mark">{% if boot and (boot.hostname or '')|upper == 'CRONOS' %}<pre class="m-ar"> ██████╗██████╗  ██████╗ 
-██╔════╝██╔══██╗██╔═══██╗
-██║     ██████╔╝██║   ██║
-██║     ██╔══██╗██║   ██║
-╚██████╗██║  ██║╚██████╔╝
- ╚═════╝╚═╝  ╚═╝ ╚═════╝ </pre><pre class="m-es">███╗   ██╗ ██████╗ ███████╗
-████╗  ██║██╔═══██╗██╔════╝
-██╔██╗ ██║██║   ██║███████╗
-██║╚██╗██║██║   ██║╚════██║
-██║ ╚████║╚██████╔╝███████║
-╚═╝  ╚═══╝ ╚═════╝ ╚══════╝</pre>{% else %}<pre class="m-ar"> █████╗ ██████╗ 
+            <div class="mark">{% if boot and (boot.hostname or '')|upper == 'ZEUS' %}<pre class="m-ar">███████╗███████╗
+╚══███╔╝██╔════╝
+  ███╔╝ █████╗  
+ ███╔╝  ██╔══╝  
+███████╗███████╗
+╚══════╝╚══════╝</pre><pre class="m-es">██╗   ██╗███████╗
+██║   ██║██╔════╝
+██║   ██║███████╗
+██║   ██║╚════██║
+╚██████╔╝███████║
+ ╚═════╝ ╚══════╝</pre>{% else %}<pre class="m-ar"> █████╗ ██████╗ 
 ██╔══██╗██╔══██╗
 ███████║██████╔╝
 ██╔══██║██╔══██╗
@@ -863,7 +863,7 @@ function _rel(sec) {
 function renderCrons(jobs) {
     var el = document.getElementById('cron-list');
     if (!el) return;
-    // No scheduled-job collector on this box (e.g. CRONOS) -> hide the panel
+    // No scheduled-job collector on this box (e.g. ZEUS) -> hide the panel
     // entirely rather than showing an empty shell.
     var panel = document.getElementById('panel-jobs');
     if (panel) panel.style.display = (jobs && jobs.length) ? '' : 'none';
@@ -938,7 +938,7 @@ function applyCaps(caps) {
     show('#panel-containers', caps.docker === 1);
 }
 
-// Docker/FAI container health (CRONOS). Reuses the .crow/.cdot job-row styling.
+// Docker/FAI container health (ZEUS). Reuses the .crow/.cdot job-row styling.
 function renderContainers(list) {
     var el = document.getElementById('ctr-list');
     if (!el) return;
@@ -994,7 +994,7 @@ var winReady = false;
 var winGpuHome = true;
 
 function winTile() {
-    // No Windows VM on this box (e.g. CRONOS) -> no tile at all.
+    // No Windows VM on this box (e.g. ZEUS) -> no tile at all.
     if (window.__CAPS && !window.__CAPS.windows_vm) return '';
     // Hidden on phones (CSS hides .v-win at <=600px); rendered on desktop.
     if (winBusy) {

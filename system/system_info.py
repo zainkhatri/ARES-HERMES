@@ -71,7 +71,7 @@ def _read_host_crons():
 # --- capability profiles: which feature panels this box should show ----------
 _CAPS_DEFAULTS = {
     "ARES":   {"gpu": 1, "proxmox": 1, "windows_vm": 1, "mordor": 1, "photos": 1, "journals": 1, "finance": 1, "terminal": 1, "docker": 0},
-    "CRONOS": {"gpu": 0, "proxmox": 0, "windows_vm": 0, "mordor": 0, "photos": 0, "journals": 0, "finance": 1, "terminal": 1, "docker": 1},
+    "ZEUS": {"gpu": 0, "proxmox": 0, "windows_vm": 0, "mordor": 0, "photos": 0, "journals": 0, "finance": 1, "terminal": 1, "docker": 1},
 }
 _CAPS_CONSERVATIVE = {"gpu": 0, "proxmox": 0, "windows_vm": 0, "mordor": 0, "photos": 0, "journals": 0, "finance": 0, "terminal": 1, "docker": 0}
 
@@ -81,7 +81,7 @@ def _capabilities():
     CAPS="gpu=0,docker=1" env override. Fail-safe: an unset/unknown HOST_BRAND
     yields the CONSERVATIVE profile (terminal only), never full ARES access — a
     misconfigured box locks down rather than exposing GPU/photos/PVE probes.
-    Both boxes set HOST_BRAND explicitly (ARES via .env, CRONOS via the unit)."""
+    Both boxes set HOST_BRAND explicitly (ARES via .env, ZEUS via the unit)."""
     brand = os.getenv("HOST_BRAND", "").upper()
     caps = dict(_CAPS_DEFAULTS.get(brand, _CAPS_CONSERVATIVE))
     for pair in os.getenv("CAPS", "").split(","):          # bounded by env length
@@ -818,7 +818,7 @@ def get_system_info() -> dict:
 
     # Disks (cached). The Proxmox-host probes (AIRDISK drives + real host CPU/mem
     # over SSH) are ARES-LXC-only: ARES's Flask runs inside LXC 101 and reaches
-    # past its cgroup to the host. On a bare-metal box (e.g. CRONOS) they would
+    # past its cgroup to the host. On a bare-metal box (e.g. ZEUS) they would
     # waste an SSH connect-timeout every refresh and — same LAN — could even report
     # the WRONG box's numbers. Gate them on the proxmox capability.
     disks = _get_disks() + (_get_host_disks() if caps.get("proxmox") else [])
