@@ -552,31 +552,27 @@ def healthz():
         }
     except Exception:
         pass
-    return jsonify({"ok": True, "brand": os.getenv("HOST_BRAND", ""),
+    resp = jsonify({"ok": True, "brand": os.getenv("HOST_BRAND", ""),
                     "caps": _capabilities(), "stamp": stamp, "summary": summary})
+    # Non-secret, tailnet-only. CORS-open so the sister-node card on the OTHER box
+    # can read it cross-origin from the browser (the ARES dashboard runs in an LXC
+    # with no Tailscale, so it can't reach the peer server-side — the browser can).
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
 
 
 @app.route("/api/peer")
 @require_auth
 def api_peer():
-    """Same-origin proxy to the sister box's /healthz — powers the sister-node
-    card, so the browser never makes a cross-box request (no CORS, no DNS). Set
-    PEER_URL/PEER_NAME/PEER_TAG per box; returns {configured:false} otherwise."""
+    """Returns the sister box's config (name/tag/url) from env. The browser then
+    fetches PEER_URL/healthz itself (client-side) — the ARES Flask is in an LXC
+    with no route to the peer's tailscale IP, but the user's browser is on the
+    tailnet and reaches both boxes. {configured:false} when no PEER_URL is set."""
     url = os.getenv("PEER_URL", "").strip()
     if not url:
         return jsonify({"configured": False})
-    out = {"configured": True, "name": os.getenv("PEER_NAME", "Sister"),
-           "tag": os.getenv("PEER_TAG", ""), "url": url, "up": False, "summary": None}
-    try:
-        import requests
-        r = requests.get(url.rstrip("/") + "/healthz", timeout=3)
-        if r.ok:
-            d = r.json()
-            out["up"] = bool(d.get("ok"))
-            out["summary"] = d.get("summary")
-    except Exception:
-        pass
-    return jsonify(out)
+    return jsonify({"configured": True, "name": os.getenv("PEER_NAME", "Sister"),
+                    "tag": os.getenv("PEER_TAG", ""), "url": url})
 
 
 

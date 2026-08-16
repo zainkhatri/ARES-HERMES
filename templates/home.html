@@ -908,8 +908,16 @@ var _peerBusy = false;
 async function pollPeer() {
     if (_peerBusy) return;
     _peerBusy = true;
-    try { var r = await fetch('/api/peer'); if (r.ok) renderSister(await r.json()); }
-    catch (e) {}
+    try {
+        var cfg = await fetch('/api/peer').then(function(r){ return r.json(); });
+        if (!cfg || !cfg.configured) { renderSister(cfg); return; }
+        // Fetch the peer's /healthz from the BROWSER (it's on the tailnet and can
+        // reach both boxes; the LXC-hosted Flask can't). CORS-open on /healthz.
+        var h = null;
+        try { h = await fetch(cfg.url.replace(/\/$/, '') + '/healthz', { cache: 'no-store' }).then(function(r){ return r.json(); }); } catch (e) {}
+        renderSister({ configured: true, name: cfg.name, tag: cfg.tag, url: cfg.url,
+                       up: !!(h && h.ok), summary: h && h.summary });
+    } catch (e) {}
     finally { _peerBusy = false; }
 }
 
