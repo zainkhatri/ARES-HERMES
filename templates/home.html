@@ -548,7 +548,7 @@
 
         <!-- ── right: jobs + GPU ─────────────────────────────────────────── -->
         <div class="col">
-            <section class="mod c-tr c-bl">
+            <section class="mod c-tr c-bl" id="panel-jobs">
                 <div class="mod-head">
                     <span class="mod-title">Scheduled jobs</span>
                     <span class="mod-meta" id="jobs-meta">—</span>
@@ -816,6 +816,14 @@ function patchDrive(vd, d) {
     if (tmp) { if (d.temp_c != null) tweenNum(tmp, parseFloat(tmp.textContent) || 0, d.temp_c, d.temp_c + '°C'); else tmp.textContent = ''; }
 }
 
+// HTML-escape any externally-derived string before it goes into innerHTML
+// (container names/status, folder names from the filesystem, job labels).
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+}
+
 // Relative time from an epoch-seconds value: "2h ago" / "in 3h" / "—".
 function _rel(sec) {
     if (!sec) return '—';
@@ -831,6 +839,10 @@ function _rel(sec) {
 function renderCrons(jobs) {
     var el = document.getElementById('cron-list');
     if (!el) return;
+    // No scheduled-job collector on this box (e.g. CRONOS) -> hide the panel
+    // entirely rather than showing an empty shell.
+    var panel = document.getElementById('panel-jobs');
+    if (panel) panel.style.display = (jobs && jobs.length) ? '' : 'none';
     if (!jobs || !jobs.length) { el.innerHTML = '<div class="arr-empty">no jobs</div>'; return; }
     var bad = 0;
     el.innerHTML = jobs.map(function(j) {
@@ -838,7 +850,7 @@ function renderCrons(jobs) {
         if (!j.ok && !j.running) bad++;
         var last = j.running ? 'running…' : _rel(j.last);
         return '<div class="crow"><span class="cdot ' + cls + '"></span>' +
-               '<span class="cname">' + j.name + '</span>' +
+               '<span class="cname">' + esc(j.name) + '</span>' +
                '<span class="cwhen"><b>' + last + '</b> · next ' + _rel(j.next) + '</span></div>';
     }).join('');
     var m = document.getElementById('jobs-meta');
@@ -847,9 +859,12 @@ function renderCrons(jobs) {
 
 // Capability gating: hide panels this box lacks. No-op on ARES (all caps on).
 // Missing cap -> treated as present (undefined !== 0) so older payloads = ARES.
+var _capsApplied = false;
 function applyCaps(caps) {
     caps = caps || window.__CAPS || {};
-    window.__CAPS = caps;
+    window.__CAPS = caps;                 // winTile() reads this every render
+    if (_capsApplied) return;             // DOM show/hide is static per box — do it once
+    _capsApplied = true;
     var show = function(sel, on) { var ns = document.querySelectorAll(sel); for (var k = 0; k < ns.length; k++) ns[k].style.display = on ? '' : 'none'; };
     show('#panel-gpu', caps.gpu !== 0);
     show('#tel-gpu-row', caps.gpu !== 0);
@@ -868,8 +883,8 @@ function renderContainers(list) {
     el.innerHTML = list.slice(0, 14).map(function(c) {
         if (!c.ok) down++;
         return '<div class="crow"><span class="cdot ' + (c.ok ? 'ok' : 'bad') + '"></span>' +
-               '<span class="cname">' + c.name + '</span>' +
-               '<span class="cwhen">' + (c.status || '') + '</span></div>';
+               '<span class="cname">' + esc(c.name) + '</span>' +
+               '<span class="cwhen">' + esc(c.status) + '</span></div>';
     }).join('');
     var m = document.getElementById('ctr-meta');
     if (m) m.textContent = down ? (down + ' down') : (list.length + ' up');
@@ -884,9 +899,9 @@ function renderFolders(folders) {
     var max = top[0].size || 1;
     el.innerHTML = top.map(function(f) {
         var w = Math.max(3, Math.round((f.size / max) * 100));
-        return '<div class="frow"><div class="frow-name">' + f.name + '</div>' +
+        return '<div class="frow"><div class="frow-name">' + esc(f.name) + '</div>' +
                '<div class="frow-bar"><div class="frow-fill" style="width:' + w + '%"></div></div>' +
-               '<div class="frow-size">' + f.display + '</div></div>';
+               '<div class="frow-size">' + esc(f.display) + '</div></div>';
     }).join('');
     var tt = document.getElementById('fbreak-total');
     if (tt) tt.textContent = folders.length + ' folders';
