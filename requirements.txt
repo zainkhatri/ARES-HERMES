@@ -3,6 +3,7 @@ requests
 python-dotenv
 psutil
 anthropic
+cryptography
 
 # AI indexing (optional — only needed on NAS for photo AI features)
 # torch

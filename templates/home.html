@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ARES & NEXUS</title>
+    <title>ARES & CRONOS</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="apple-touch-icon" href="/static/icon-180.png">
@@ -15,579 +15,386 @@
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-0:#04070d; --bg-1:#070c16; --bg-2:#0a121f; --bg-3:#0d1726;
-            --line-1:rgba(239,68,68,0.08); --line-2:rgba(239,68,68,0.18);
-            --text-1:#e8f0f8; --text-2:#8ba3c0; --text-3:#4a5d78; --text-4:#2d3a4e;
-            --blue:#6495ed; --blue-bright:#9ab5f5; --cyan:#67e8f9;
-            --green:#10b981; --amber:#f59e0b; --red:#ef4444; --magenta:#c084fc;
-            --ares:#ef4444; --ares-bright:#f87171;
+            --bg-0:#070403; --bg-1:#0d0605; --bg-2:#140807; --bg-3:#1c0c09;
+            --ares:#f5402d; --ares-bright:#ff7a45; --ember:#c2301f; --ember-dim:rgba(245,64,45,.28);
+            --grid:rgba(245,64,45,.055);
+            --text-1:#f6ece9; --text-2:#c99a90; --text-3:#8d6259; --text-4:#5a3d37;
+            --green:#10b981; --amber:#f59e0b; --red:#ef4444;
+            --dur-fast:120ms; --dur:180ms; --dur-slow:280ms;
+            --ease-out:cubic-bezier(.16,1,.3,1);
             --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
-            --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
         }
         * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         html, body {
-            min-height:100%;
-            background:var(--bg-0);
-            color:var(--text-1);
+            min-height:100%; background:var(--bg-0); color:var(--text-1);
             font-family:'JetBrains Mono', monospace;
-            -webkit-font-smoothing:antialiased;
-            -moz-osx-font-smoothing:grayscale;
+            -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
         }
         ::selection { background:var(--ares); color:var(--bg-0); }
 
-        .app { display:flex; flex-direction:column; min-height:100vh; min-height:100dvh; }
+        /* Console ground: faint ember grid + a slow vertical ember wash so the
+           page is never flat black. */
+        body::before {
+            content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+            background-image:
+                linear-gradient(var(--grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+            background-size:44px 44px, 44px 44px;
+        }
+        body::after {
+            content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+            background:
+                radial-gradient(120% 70% at 50% 118%, rgba(245,64,45,.16), transparent 62%),
+                radial-gradient(80% 50% at 50% -18%, rgba(194,48,31,.10), transparent 60%);
+            animation:ember-breathe 11s ease-in-out infinite;
+        }
+        @keyframes ember-breathe { 0%,100%{opacity:.72} 50%{opacity:1} }
 
-        /* Top bar */
-        .top-bar {
-            position:sticky; top:0; z-index:50;
-            background:rgba(4,7,13,0.85);
-            border-bottom:1px solid var(--line-1);
-            padding:14px 24px;
-            padding-top:calc(14px + var(--sat));
-            padding-left:calc(24px + var(--sal));
-            padding-right:calc(24px + var(--sar));
-            display:flex; align-items:center; justify-content:space-between; gap:16px;
-            flex-shrink:0;
-        }
-        .brand {
-            display:flex; align-items:center; gap:12px;
-            text-decoration:none; color:inherit;
-            transition:opacity 0.18s ease;
-        }
-        .brand-other { opacity:0.7; }
-        .brand-other:hover { opacity:1; }
-        .brand-mark {
-            width:26px; height:26px;
-            display:flex; align-items:center; justify-content:center;
-            border:1px solid var(--ares); color:var(--ares);
-            font-family:'Bricolage Grotesque', sans-serif;
-            font-weight:800; font-size:14px; line-height:1;
-        }
-        .mark-nexus { border-color:var(--blue) !important; color:var(--blue) !important; }
-        .brand-line { display:flex; align-items:baseline; gap:8px; }
-        .brand-text {
-            font-family:'Bricolage Grotesque', sans-serif;
-            font-weight:700; font-size:14px; letter-spacing:0.02em;
-            color:var(--ares);
-        }
-        .brand-sep { color:var(--text-3); font-size:11px; }
-        .brand-tag {
-            font-family:'JetBrains Mono', monospace; font-size:10px;
-            color:var(--text-2); letter-spacing:0.1em; text-transform:uppercase;
+        .scanline {
+            position:fixed; inset:0; z-index:900; pointer-events:none;
+            background:linear-gradient(rgba(18,6,4,0) 50%, rgba(0,0,0,.22) 50%);
+            background-size:100% 3px;
         }
 
-        main {
-            flex:1; display:flex; flex-direction:column;
-            padding:28px 32px;
-            padding-left:calc(32px + var(--sal));
-            padding-right:calc(32px + var(--sar));
-            max-width:1280px; margin:0 auto; width:100%;
-        }
+        .hud { position:relative; z-index:1; display:flex; flex-direction:column;
+               min-height:100vh; min-height:100dvh; padding:calc(14px + var(--sat)) 16px calc(14px + var(--sab)); gap:14px; }
 
-        /* Hero */
-        .hero {
-            flex:1;
-            display:grid;
-            grid-template-columns:auto 1fr;
-            gap:48px;
-            align-items:center;
-            margin-bottom:18px;
-            padding-bottom:14px;
-            border-bottom:1px solid var(--line-1);
+        /* ---- panels ---------------------------------------------------- */
+        /* Corner brackets are opt-in per corner. The base rule deliberately omits
+           `content` so a panel with no corner class renders nothing; an
+           unpositioned pseudo-element lands in the static flow and covers text.
+           Equal specificity throughout so the border-side resets still win. */
+        .mod { position:relative; border:1px solid var(--ember-dim); background:rgba(20,8,7,.55);
+               box-shadow:inset 0 0 22px rgba(245,64,45,.045); }
+        .mod::before, .mod::after {
+            position:absolute; width:11px; height:11px; border:2px solid var(--ares); pointer-events:none;
         }
-        .hero-mark {
-            display:inline-flex; align-items:center;
-            font-family:'JetBrains Mono', monospace;
-            font-weight:700;
-            font-size:clamp(10px, 1.8vw, 22px);
-            line-height:1.1;
-            letter-spacing:0;
-        }
-        .hero-mark pre { font-family:inherit; font-size:inherit; line-height:inherit; margin:0; }
-        .hero-mark .ascii-nex { color:var(--text-1); }
-        .hero-mark .ascii-us { color:var(--ares); }
-        .hero-meta {
-            font-family:'JetBrains Mono', monospace;
-            font-size:14px;
-            color:var(--text-2);
-            border-left:1px solid var(--line-2);
-            padding-left:32px;
-            display:grid; grid-template-columns:repeat(2, 1fr);
-            gap:14px 40px;
-        }
-        .hero-meta .row { display:flex; justify-content:space-between; gap:12px; align-items:baseline; }
-        .hero-meta .key { color:var(--text-3); text-transform:uppercase; letter-spacing:0.12em; font-size:11px; }
-        .hero-meta .val { color:var(--text-1); font-variant-numeric:tabular-nums; font-size:16px; font-family:'Bricolage Grotesque', sans-serif; font-weight:600; }
+        .c-tl::before { content:''; top:-2px; left:-2px; border-right:0; border-bottom:0; }
+        .c-tr::before { content:''; top:-2px; right:-2px; border-left:0; border-bottom:0; }
+        .c-bl::after  { content:''; bottom:-2px; left:-2px; border-right:0; border-top:0; }
+        .c-br::after  { content:''; bottom:-2px; right:-2px; border-left:0; border-top:0; }
 
-        /* Section head */
-        .section-head {
-            display:flex; justify-content:space-between; align-items:baseline;
-            margin-bottom:10px;
-            padding-bottom:6px;
-            border-bottom:1px solid var(--line-1);
-        }
-        .section-title {
-            font-family:'Bricolage Grotesque', sans-serif;
-            font-weight:600; font-size:12px;
-            letter-spacing:0.04em;
-            color:var(--text-1);
-            text-transform:uppercase;
-        }
-        .section-meta {
-            font-family:'JetBrains Mono', monospace; font-size:10px;
-            color:var(--text-3); letter-spacing:0.12em; text-transform:uppercase;
-        }
+        .mod-head { display:flex; align-items:center; justify-content:space-between; gap:10px;
+                    padding:9px 12px; border-bottom:1px solid rgba(245,64,45,.14); }
+        .mod-title { font-size:10.5px; letter-spacing:.16em; color:var(--text-2); text-transform:uppercase; }
+        .mod-meta  { font-size:10px; letter-spacing:.1em; color:var(--text-3); }
+        .mod-body  { padding:12px; }
 
-        /* === Vitals — tile grid + drive strip === */
-        .vitals-hero {
-            display:grid; grid-template-columns:repeat(6, 1fr);
-            gap:1px; background:var(--line-2); border:1px solid var(--line-2);
-            margin-bottom:12px;
+        /* ---- header ----------------------------------------------------- */
+        .hud { transform-origin:top left; }
+        html, body { overflow:hidden; }
+        .hud-top { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+        /* Flex/grid children default to min-width:auto and refuse to shrink below
+           their content, which pushes the console wider than a phone viewport. */
+        .hud-top > * { min-width:0; max-width:100%; }
+        .nodes { display:flex; gap:8px; flex-wrap:wrap; }
+        .chip { display:flex; align-items:center; gap:8px; padding:6px 12px; text-decoration:none;
+                border:1px solid var(--ember-dim); color:var(--text-2); transition:all var(--dur) var(--ease-out); }
+        .chip-mark { display:grid; place-items:center; width:17px; height:17px; font-size:10px; font-weight:700;
+                     border:1px solid currentColor; }
+        .chip-name { font-size:11px; font-weight:700; letter-spacing:.11em; }
+        .chip-tag  { font-size:9.5px; letter-spacing:.1em; opacity:.72; }
+        .chip.is-active { background:rgba(245,64,45,.07); border-color:var(--ares); color:var(--ares);
+                          box-shadow:0 0 16px -7px var(--ares), inset 0 0 22px -14px var(--ares); }
+        .chip.is-active .chip-mark { background:rgba(245,64,45,.14); }
+        .chip:not(.is-active):hover { border-color:var(--ares); color:var(--text-1); background:rgba(245,64,45,.1); }
+
+        .hud-id { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-top:2px; }
+        .hud-id h1 { font-size:26px; font-weight:700; letter-spacing:.06em; color:var(--text-1); }
+        .hud-id h1 em { font-style:normal; color:var(--ares); }
+        .hud-id .sub { font-size:10.5px; letter-spacing:.2em; color:var(--text-3); text-transform:uppercase; }
+
+        .readouts { display:flex; gap:8px; }
+        .ro { min-width:132px; padding:8px 12px; }
+        .ro-k { font-size:9px; letter-spacing:.18em; color:var(--text-3); text-transform:uppercase; }
+        .ro-v { font-size:15px; font-weight:700; color:var(--text-1); letter-spacing:.04em; margin-top:2px; }
+
+        /* ---- main grid --------------------------------------------------- */
+        .hud-grid { flex:1; display:grid; grid-template-columns:326px minmax(0,1fr) 326px; gap:14px;
+                    align-items:start; align-content:center; }
+        .hud-grid > * { min-width:0; }
+                /* left column fills to the footer: Operations panel + nav cards grow */
+        .hud-grid > .col:first-child { align-self:stretch; }
+        .hud-grid > .col:first-child > .mod:last-child { flex:1 1 0; display:flex; flex-direction:column; }
+        .hud-grid > .col:first-child > .mod:last-child > .mod-body { flex:1; display:flex; }
+        .hud-grid > .col:first-child .ops { flex:1; display:flex; flex-direction:column; justify-content:space-between; }
+        .hud-grid > .col:first-child .op { flex:1 1 0; }
+        .hud-grid > .col:first-child .op-body { justify-content:center; }
+        .col { display:flex; flex-direction:column; gap:14px; min-width:0; }
+        .hud-grid > .col:last-child > .mod:last-child { flex:1 1 0; }
+        /* Centre column centres its group vertically instead of pinning the
+           tiles to the floor of the viewport. */
+        .col-mid { align-self:stretch; justify-content:flex-start; gap:16px; }
+        .col-mid #vitals-hero { flex:1 1 0; align-content:stretch; grid-auto-rows:minmax(0,1fr); }
+        .col-mid > .mod { flex:1 1 0; display:flex; flex-direction:column; }
+        .col-mid > .mod > .mod-body.sparks { flex:1; display:flex; flex-direction:column; justify-content:space-around; }
+        .col-mid .spark-row { flex:1; }
+        .col-mid .spark { height:100%; }
+
+        /* ---- CPU instrument ---------------------------------------------- */
+        .gauge-wrap { position:relative; display:grid; place-items:center; padding:4px 0 8px; }
+        .gauge { transform:rotate(-90deg); }
+        .gauge-track { fill:none; stroke:rgba(245,64,45,.14); stroke-width:7; }
+        .gauge-load  { fill:none; stroke:var(--ares); stroke-width:7; stroke-linecap:round;
+                       transition:stroke-dashoffset 900ms var(--ease-out); filter:drop-shadow(0 0 5px rgba(245,64,45,.55)); }
+        .gauge-temp  { fill:none; stroke:var(--amber); stroke-width:3; stroke-linecap:round;
+                       transition:stroke-dashoffset 900ms var(--ease-out), stroke 400ms linear; }
+        .gauge-temp-track { fill:none; stroke:rgba(245,158,11,.12); stroke-width:3; }
+        .gauge-mid { position:absolute; text-align:center; }
+        .gauge-num { font-size:31px; font-weight:700; color:var(--text-1); line-height:1; }
+        .gauge-num .u { font-size:15px; color:var(--ares); }
+        .gauge-lab { font-size:8.5px; letter-spacing:.2em; color:var(--text-3); margin-top:5px; }
+        .gauge-side { position:absolute; right:2px; top:6px; text-align:right; }
+        .gauge-side .t { font-size:13px; font-weight:700; color:var(--amber); }
+        .gauge-side .l { font-size:8.5px; letter-spacing:.16em; color:var(--text-3); }
+
+        .facts { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:rgba(245,64,45,.14);
+                 border-top:1px solid rgba(245,64,45,.14); }
+        .fact { background:var(--bg-1); padding:7px 10px; }
+        .fact-k { font-size:8.5px; letter-spacing:.15em; color:var(--text-3); text-transform:uppercase; }
+        .fact-v { font-size:12px; color:var(--text-1); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+        /* Observed-load trace. Samples are collected client side each poll — this
+           is real history of what the page saw, not synthetic data. */
+        .trace { margin-top:10px; }
+        .trace-head { display:flex; justify-content:space-between; font-size:8.5px; letter-spacing:.15em;
+                      color:var(--text-3); text-transform:uppercase; margin-bottom:5px; }
+        .trace svg { display:block; width:100%; height:38px; }
+        .trace-line { fill:none; stroke:var(--ares); stroke-width:1.5; }
+        .trace-fill { fill:rgba(245,64,45,.13); stroke:none; }
+
+        /* ---- operation modules ------------------------------------------- */
+        .ops { display:flex; flex-direction:column; gap:9px; }
+        .op { position:relative; display:flex; align-items:center; gap:12px; padding:11px 13px; text-decoration:none;
+              border:1px solid var(--ember-dim); background:rgba(20,8,7,.5); color:var(--text-1);
+              transition:all var(--dur) var(--ease-out); }
+        .op:hover { border-color:var(--ares); background:rgba(245,64,45,.1); transform:translateX(3px); }
+        .op-num { font-size:9px; letter-spacing:.14em; color:var(--ares); }
+        .op-body { flex:1; min-width:0; display:block; }
+        /* label above name — these are spans, so they need explicit block display */
+        .op-lab { display:block; font-size:8.5px; letter-spacing:.16em; color:var(--text-3); text-transform:uppercase; }
+        .op-name { display:block; font-size:17px; font-weight:600; letter-spacing:.02em; margin-top:1px; }
+        .op-arrow { color:var(--text-3); transition:color var(--dur), transform var(--dur); }
+        .op:hover .op-arrow { color:var(--ares); transform:translateX(3px); }
+
+        /* ---- wordmark ----------------------------------------------------- */
+        .mark { display:flex; align-items:flex-start; justify-content:center; flex:0 0 auto; padding:6px 0 4px; min-height:0; }
+        .mark pre {
+            font-family:'JetBrains Mono', monospace; font-size:clamp(9px, 2.0vw, 27px); line-height:1.0;
+            font-weight:700; letter-spacing:0; white-space:pre; margin:0;
+            text-shadow:0 0 16px rgba(245,64,45,.5), 0 0 44px rgba(245,64,45,.22);
         }
-        .v-tile {
-            background:var(--bg-1); padding:10px 16px;
-            display:flex; flex-direction:column; gap:6px;
-            position:relative; overflow:hidden;
+        .mark .m-ar { color:var(--ares); }
+        .mark .m-es { color:#f4f8fd; text-shadow:0 0 16px rgba(244,248,253,.4), 0 0 44px rgba(244,248,253,.18);
+            animation:mark-pulse 7s ease-in-out infinite;
         }
-        /* top accent stripe */
-        .v-tile::before {
-            content:''; position:absolute; left:0; top:0; right:0;
-            height:2px; background:var(--accent-color, var(--ares)); opacity:0.55;
-        }
-        /* subtle per-tile glow tint */
-        .v-tile::after {
-            content:''; position:absolute; inset:0; pointer-events:none;
-            background:radial-gradient(ellipse 100% 50% at 50% 0%,
-                var(--accent-color, var(--ares)) 0%, transparent 100%);
-            opacity:0.03;
-        }
-        .v-tile.crit::before { background:var(--red); opacity:1; }
-        .v-tile.warn::before { background:var(--amber); opacity:0.9; }
-        .v-tile.crit::after  { opacity:0.05; }
-        .v-tile.warn::after  { opacity:0.04; }
-        .v-tile-key {
-            font-family:'JetBrains Mono', monospace; font-size:9px;
-            color:var(--text-3); letter-spacing:0.22em; text-transform:uppercase;
-            display:flex; justify-content:space-between; align-items:center;
-        }
-        .v-tile-tag { font-size:8px; color:var(--text-4); letter-spacing:0.1em; text-transform:uppercase; }
-        .v-tile-num {
-            font-family:'Bricolage Grotesque', sans-serif;
-            font-weight:700; font-size:26px;
-            color:var(--text-1); letter-spacing:-0.025em;
-            line-height:1; font-variant-numeric:tabular-nums;
-        }
-        .v-tile-num .unit { color:var(--text-3); font-size:13px; font-weight:500; margin-left:2px; }
-        .v-tile.crit .v-tile-num { color:var(--red); }
-        .v-tile.warn .v-tile-num { color:var(--amber); }
-        /* segmented level-meter bar */
-        .v-tile-bar {
-            height:8px; background:var(--bg-3); position:relative; overflow:hidden;
-        }
-        .v-tile-fill {
-            height:100%; background:var(--accent-color, var(--ares));
-            transition:width 0.7s cubic-bezier(0.16,1,0.3,1), background 0.5s ease;
-        }
-        .v-tile.crit .v-tile-fill { background:var(--red); }
-        .v-tile.warn .v-tile-fill { background:var(--amber); }
-        /* segment cuts — thin bg-colored slices across the fill */
-        .v-tile-bar::after {
-            content:''; position:absolute; inset:0; z-index:1; pointer-events:none;
-            background:repeating-linear-gradient(
-                to right,
-                transparent 0px, transparent 9px,
-                var(--bg-1) 9px, var(--bg-1) 10px
-            );
-        }
-        .v-tile-meta {
-            font-family:'JetBrains Mono', monospace; font-size:10px;
-            color:var(--text-2); font-variant-numeric:tabular-nums;
-            display:flex; justify-content:space-between;
-        }
+        @keyframes mark-pulse { 0%,100%{opacity:.94} 50%{opacity:1} }
+
+        /* ---- vitals tiles (markup emitted by loadVitals) -------------------- */
+        .vitals { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+        .v-tile { position:relative; padding:11px 13px 12px; border:1px solid var(--ember-dim);
+                  background:rgba(20,8,7,.6); overflow:hidden;
+                  transition:border-color var(--dur), background var(--dur); }
+        .v-tile:hover { border-color:var(--ares); }
+        .v-tile-key { display:flex; align-items:center; justify-content:space-between; gap:8px;
+                      font-size:9px; letter-spacing:.16em; color:var(--text-2); text-transform:uppercase; }
+        .v-tile-tag { color:var(--text-3); font-size:8.5px; letter-spacing:.1em;
+                      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:56%; }
+        .v-tile-num { font-size:27px; font-weight:700; color:var(--text-1); line-height:1.1; margin-top:5px; }
+        .v-tile-num .unit { font-size:12px; color:var(--ares); margin-left:3px; letter-spacing:.04em; }
+        .v-tile-bar { height:3px; margin-top:9px; background:rgba(245,64,45,.13); overflow:hidden; }
+        .v-tile-fill { height:100%; background:var(--accent-color,var(--ares));
+                       transition:width 900ms var(--ease-out); }
+        .v-tile-meta { display:flex; justify-content:space-between; gap:8px; margin-top:7px;
+                       font-size:9px; letter-spacing:.06em; color:var(--text-2); }
         .v-tile-meta .lo { color:var(--text-3); }
+        .v-tile.warn { border-color:rgba(245,158,11,.5); }
+        .v-tile.crit { border-color:var(--red); animation:crit-pulse 1.6s ease-in-out infinite; }
+        @keyframes crit-pulse { 0%,100%{box-shadow:inset 0 0 22px rgba(239,68,68,.05)} 50%{box-shadow:inset 0 0 22px rgba(239,68,68,.22)} }
+        @keyframes win-pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+        @keyframes win-scan { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+        .v-win .v-tile-bar.boot { position:relative; overflow:hidden; }
+        .v-win .v-tile-bar.boot .v-tile-fill { width:100%!important; background:linear-gradient(90deg,transparent,#f59e0b,transparent)!important; animation:win-scan 1.1s linear infinite!important; }
 
-        .v-drives {
-            display:grid; grid-template-columns:repeat(3, 1fr);
-            gap:1px; background:var(--line-1); border:1px solid var(--line-1);
-            min-height:74px;
-        }
-        .v-drive {
-            background:var(--bg-1); padding:13px 18px;
-            position:relative;
-        }
-        .v-drive::before {
-            content:''; position:absolute; left:0; top:0; bottom:0;
-            width:2px; background:var(--drive-color, var(--ares));
-        }
-        .v-drive-row {
-            display:flex; justify-content:space-between; align-items:baseline;
-            margin-bottom:10px;
-        }
-        .v-drive-name {
-            font-family:'Bricolage Grotesque', sans-serif;
-            font-weight:700; font-size:15px;
-            color:var(--drive-color, var(--ares));
-            letter-spacing:-0.01em; line-height:1;
-        }
-        .v-drive-tag {
-            font-family:'JetBrains Mono', monospace; font-size:9px;
-            color:var(--text-3); letter-spacing:0.15em; text-transform:uppercase;
-        }
-        .v-drive-bar { height:6px; background:var(--bg-3); margin-bottom:8px; position:relative; overflow:hidden; }
-        .v-drive-bar::after { content:''; position:absolute; inset:0; z-index:1; pointer-events:none; background:repeating-linear-gradient(to right, transparent 0px, transparent 9px, var(--bg-1) 9px, var(--bg-1) 10px); }
-        .v-drive-bar-fill { height:100%; background:var(--drive-color, var(--ares)); transition:width 0.6s cubic-bezier(0.16,1,0.3,1); }
-        .v-drive-stats { display:flex; justify-content:space-between; font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--text-2); font-variant-numeric:tabular-nums; }
-        .v-drive-stats .pct { color:var(--text-1); font-weight:500; }
+        /* WIN tile: split control, same contract as before (.v-win / halves). */
+        .v-tile-split { display:flex; padding:0; }
+        .v-tile-half { flex:1; padding:11px 13px 12px; cursor:pointer; transition:background var(--dur); min-width:0; overflow:hidden; }
+        .v-tile-half .v-tile-num { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .v-tile-half.status { background:rgba(16,185,129,.05); }
+        .v-tile-half.remote { background:rgba(245,64,45,.06); }
+        .v-tile-half.status:hover { background:rgba(16,185,129,.14); }
+        .v-tile-half.remote:hover { background:rgba(245,64,45,.14); }
+        .v-tile-half:hover { background:rgba(245,64,45,.12); }
+        .v-tile-half + .v-tile-half { border-left:1px solid var(--ember-dim); }
+        .v-tile-wide { grid-column:span 2; }
 
-        /* Respect reduced-motion: snap bars instead of gliding (JS skips the
-           number count-up too, see prefersReducedMotion()). */
-        @media (prefers-reduced-motion: reduce) {
-            .v-tile-fill, .v-drive-bar-fill { transition:none; }
-        }
-
-        @media (max-width:1200px) {
-            .vitals-hero { grid-template-columns:repeat(3, 1fr); }
-            .v-drives { grid-template-columns:1fr; }
-        }
-        @media (max-width:520px) {
-            .vitals-hero { grid-template-columns:1fr 1fr; }
-            .v-tile { padding:12px 14px; }
-            .v-tile-num { font-size:24px; }
-        }
-
-        /* Nav grid */
-        .nav-grid {
-            display:grid;
-            grid-template-columns:repeat(4, 1fr);
-            gap:1px;
-            background:var(--line-1);
-            border:1px solid var(--line-1);
-        }
-        .nav-card {
-            background:var(--bg-1);
-            padding:20px 22px;
-            display:flex; align-items:center; gap:18px;
-            text-decoration:none; color:inherit;
-            position:relative;
-            transition:background 0.18s ease, border-color 0.18s ease;
-            border-left:2px solid transparent;
-        }
-        .nav-card:hover { background:var(--bg-2); border-left-color:var(--ares); }
-        .nav-card-num {
-            position:absolute; top:10px; right:14px;
-            font-family:'JetBrains Mono', monospace;
-            font-size:9px; color:var(--text-4); letter-spacing:0.12em;
-        }
-        .nav-card-body { flex:1; min-width:0; }
-        .nav-card-label {
-            font-family:'JetBrains Mono', monospace;
-            font-size:9px; color:var(--text-3);
-            letter-spacing:0.18em; text-transform:uppercase;
-            margin-bottom:6px;
-        }
-        .nav-card-title {
-            font-family:'Bricolage Grotesque', sans-serif;
-            font-weight:700; font-size:22px;
-            letter-spacing:-0.02em; line-height:1;
-            color:var(--text-1);
-            transition:color 0.18s ease;
-        }
-        .nav-card:hover .nav-card-title { color:var(--text-1); }
-        .nav-card-arrow {
-            color:var(--text-4);
-            transition:color 0.2s ease, transform 0.2s ease;
-            flex-shrink:0;
-        }
-        .nav-card:hover .nav-card-arrow { color:var(--ares); transform:translateX(5px); }
-
-        /* Footer */
-        footer {
-            border-top:1px solid var(--line-1);
-            padding:14px 32px;
-            padding-bottom:calc(14px + var(--sab));
-            font-family:'JetBrains Mono', monospace;
-            font-size:10px; color:var(--text-3);
-            letter-spacing:0.12em; text-transform:uppercase;
-            display:flex; justify-content:space-between; flex-shrink:0;
-        }
-
-        @media (max-width:900px) {
-            .vitals { grid-template-columns:1fr; }
-            .nav-grid { grid-template-columns:repeat(2, 1fr); }
-        }
-        @media (max-width:768px) {
-            main { padding:20px 16px; }
-            .hero { grid-template-columns:1fr; gap:18px; align-items:start; }
-            .nav-card-title { font-size:18px; }
-        }
-        @media (max-width:430px) {
-            .nav-grid { grid-template-columns:1fr; }
-        }
-
-        /* Mobile smoothness: skip the staggered entrance cascade. On a phone the
-           translateY slide-ins make the page feel unresponsive to an early swipe —
-           content paints instantly instead. Momentum scroll + no rubber-band, and
-           snappy taps (no 300ms delay). Desktop keeps the full entrance. */
-        @media (max-width:600px) {
-            .navbar, footer, .hero, .pool-banner, .section-head, .nav-grid, .vitals,
-            .vitals-hero, .v-drives, .drive-strip, .nav-card, .v-tile, .v-drive,
-            .vcol, .vrow, .canvas-wrap, .canvas, .split, .layout, .cal-grid, .detail,
-            .year-nav { animation:none !important; }
-            body { overscroll-behavior-y:none; -webkit-overflow-scrolling:touch; }
-            .nav-card, button, a { touch-action:manipulation; }
-            .v-win { display:none !important; }  /* Windows VM tile: desktop only */
-        }
-
-        /* === Unified Navbar === */
-        .navbar {
-            position:sticky; top:0; z-index:1000;
-            background:rgba(4,7,13,0.92);
-            border-bottom:1px solid var(--line-1);
-            padding:14px 24px;
-            padding-top:calc(14px + env(safe-area-inset-top, 0px));
-            padding-left:calc(24px + env(safe-area-inset-left, 0px));
-            padding-right:calc(24px + env(safe-area-inset-right, 0px));
-            display:flex; align-items:center; justify-content:space-between; gap:20px;
-        }
-        .navbar-left { display:flex; align-items:center; gap:16px; min-width:0; }
-        .nbr { display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; transition:opacity 0.18s ease; min-width:0; }
-        .nbr-other { opacity:0.7; }
-        .nbr-other:hover { opacity:1; }
-        .nbr-mark {
-            width:26px; height:26px; flex-shrink:0;
-            display:flex; align-items:center; justify-content:center;
-            border:1px solid; font-family:'Bricolage Grotesque', sans-serif;
-            font-weight:800; font-size:14px; line-height:1;
-        }
-        .nbr-mark.m-a { border-color:var(--ares, #ef4444); color:var(--ares, #ef4444); }
-        .nbr-mark.m-n { border-color:var(--blue, #6495ed); color:var(--blue, #6495ed); }
-        .nbr-id { display:flex; align-items:baseline; gap:8px; min-width:0; }
-        .nbr-name { font-family:'Bricolage Grotesque', sans-serif; font-weight:700; font-size:14px; letter-spacing:0.02em; white-space:nowrap; }
-        .nbr-name.n-a { color:var(--ares, #ef4444); }
-        .nbr-name.n-n { color:var(--blue, #6495ed); }
-        .nbr-sep { color:var(--text-3, #4a5d78); font-size:11px; }
-        .nbr-tag { font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--text-2, #8ba3c0); letter-spacing:0.1em; text-transform:uppercase; white-space:nowrap; }
-        .back-chip {
-            display:inline-flex; align-items:center; gap:6px;
-            font-family:'JetBrains Mono', monospace; font-size:10px;
-            color:var(--text-2, #8ba3c0);
-            text-decoration:none;
-            letter-spacing:0.15em; text-transform:uppercase;
-            padding:5px 11px;
-            border:1px solid var(--line-2, rgba(100,149,237,0.18));
-            transition:color 0.15s, border-color 0.15s, background 0.15s, gap 0.15s;
-        }
-        .back-chip svg { transition:transform 0.18s ease; }
-        .back-chip:hover { color:var(--nav-accent, #6495ed); border-color:var(--nav-accent, #6495ed); background:rgba(100,149,237,0.05); }
-        .back-chip:hover svg { transform:translateX(-2px); }
-        @media (max-width:600px) {
-            .navbar { padding:12px 14px; gap:10px; }
-            .nbr-tag { display:none; }
-            .back-chip span { display:none; }
-            .back-chip { padding:5px 8px; }
-        }
-
-    
-        /* === Load animations === */
-        @keyframes fade-in {
-            from { opacity:0; transform:translateY(10px); }
-            to { opacity:1; transform:translateY(0); }
-        }
-        @media (prefers-reduced-motion: no-preference) {
-            .navbar, footer, .hero, .pool-banner, .section-head, .nav-grid, .vitals, .vitals-hero, .v-drives, .drive-strip, .canvas-wrap, .canvas, .split, .layout, .cal-grid, .detail, .year-nav {
-                animation: fade-in 0.55s cubic-bezier(0.16,1,0.3,1) backwards;
-            }
-            .navbar { animation-delay: 0s; }
-            footer { animation-delay: 0.4s; }
-            .hero { animation-delay: 0.03s; }
-            .pool-banner { animation-delay: 0.08s; }
-            .section-head:nth-of-type(1) { animation-delay: 0.12s; }
-            .nav-grid { animation-delay: 0.16s; }
-            .section-head:nth-of-type(2) { animation-delay: 0.22s; }
-            .vitals, .vitals-hero { animation-delay: 0.26s; }
-            .v-drives, .drive-strip { animation-delay: 0.32s; }
-            .canvas-wrap, .canvas, .split, .layout { animation-delay: 0.18s; }
-            .year-nav { animation-delay: 0.1s; }
-
-            /* Per-item stagger inside grids */
-            .nav-card { animation: fade-in 0.5s cubic-bezier(0.16,1,0.3,1) backwards; }
-            .nav-card:nth-child(1) { animation-delay: 0.18s; }
-            .nav-card:nth-child(2) { animation-delay: 0.22s; }
-            .nav-card:nth-child(3) { animation-delay: 0.26s; }
-            .nav-card:nth-child(4) { animation-delay: 0.30s; }
-
-            .v-tile { animation: fade-in 0.5s cubic-bezier(0.16,1,0.3,1) backwards; }
-            .v-tile:nth-child(1) { animation-delay: 0s; }
-            .v-tile:nth-child(2) { animation-delay: 0.06s; }
-            .v-tile:nth-child(3) { animation-delay: 0.12s; }
-            .v-tile:nth-child(4) { animation-delay: 0.18s; }
-            .v-tile:nth-child(5) { animation-delay: 0.24s; }
-            .v-tile:nth-child(6) { animation-delay: 0.30s; }
-
-            .v-drive { animation: fade-in 0.5s cubic-bezier(0.16,1,0.3,1) backwards; }
-            .v-drive:nth-child(1) { animation-delay: 0s; }
-            .v-drive:nth-child(2) { animation-delay: 0.06s; }
-            .v-drive:nth-child(3) { animation-delay: 0.12s; }
-
-            /* When real tiles replace the skeletons (data arrived), they resolve
-               in with a quick opacity fade instead of replaying the sliding
-               entrance the skeletons already played — no jarring second wave. */
-            @keyframes v-resolve { from { opacity:0; } to { opacity:1; } }
-            #vitals-hero.vitals-loaded .v-tile,
-            #v-drives.drives-loaded .v-drive { animation: v-resolve 0.4s ease both; }
-
-            .vcol { animation: fade-in 0.5s cubic-bezier(0.16,1,0.3,1) backwards; }
-            .vcol:nth-child(1) { animation-delay: 0.30s; }
-            .vcol:nth-child(2) { animation-delay: 0.38s; }
-            .vcol:nth-child(3) { animation-delay: 0.46s; }
-
-            .vrow { animation: fade-in 0.4s cubic-bezier(0.16,1,0.3,1) backwards; }
-            .vrow:nth-child(1) { animation-delay: 0s; }
-            .vrow:nth-child(2) { animation-delay: 0.05s; }
-            .vrow:nth-child(3) { animation-delay: 0.10s; }
-            .vrow:nth-child(4) { animation-delay: 0.15s; }
-
-            .strip-card { animation: fade-in 0.5s cubic-bezier(0.16,1,0.3,1) backwards; }
-            .strip-card:nth-child(1) { animation-delay: 0.22s; }
-            .strip-card:nth-child(2) { animation-delay: 0.28s; }
-            .strip-card:nth-child(3) { animation-delay: 0.34s; }
-
-            .pick-card { animation: fade-in 0.5s cubic-bezier(0.16,1,0.3,1) backwards; }
-            .pick-card:nth-child(1) { animation-delay: 0.22s; }
-            .pick-card:nth-child(2) { animation-delay: 0.28s; }
-            .pick-card:nth-child(3) { animation-delay: 0.34s; }
-
-            .month { animation: fade-in 0.4s cubic-bezier(0.16,1,0.3,1) backwards; }
-            .month:nth-child(1) { animation-delay: 0.18s; }
-            .month:nth-child(2) { animation-delay: 0.21s; }
-            .month:nth-child(3) { animation-delay: 0.24s; }
-            .month:nth-child(4) { animation-delay: 0.27s; }
-            .month:nth-child(5) { animation-delay: 0.30s; }
-            .month:nth-child(6) { animation-delay: 0.33s; }
-            .month:nth-child(7) { animation-delay: 0.36s; }
-            .month:nth-child(8) { animation-delay: 0.39s; }
-            .month:nth-child(9) { animation-delay: 0.42s; }
-            .month:nth-child(10) { animation-delay: 0.45s; }
-            .month:nth-child(11) { animation-delay: 0.48s; }
-            .month:nth-child(12) { animation-delay: 0.51s; }
-        }
-        /* WIN split tile — status (left) + remote (right) */
-        .v-tile.v-tile-split,
-        .v-tile.v-tile-wide {
-            grid-column: span 2;
-        }
-        .v-tile.v-tile-split {
-            padding:0 !important;
-            cursor:default;
-            display:flex; flex-direction:row;
-            overflow:hidden;
-        }
-        .v-tile.v-tile-split::before,
-        .v-tile.v-tile-split::after { display:none; }
-        .v-tile-half {
-            flex:1; min-width:0;
-            padding:10px 16px;
-            display:flex; flex-direction:column; gap:6px;
-            cursor:pointer;
-            transition:background 0.18s ease;
-            position:relative; overflow:hidden;
-        }
-        .v-tile-half:hover { background:rgba(255,255,255,0.035); }
-        /* top stripe per half */
-        .v-tile-half.status::before {
-            content:''; position:absolute; left:0; top:0; right:0;
-            height:2px; background:#10b981; opacity:0.8;
-        }
-        .v-tile-half.status::after {
-            content:''; position:absolute; inset:0; pointer-events:none;
-            background:radial-gradient(ellipse 100% 50% at 50% 0%, #10b981 0%, transparent 100%);
-            opacity:0.04;
-        }
-        .v-tile-half.remote {
-            border-left:1px solid var(--line-1);
-        }
-        .v-tile-half.remote::before {
-            content:''; position:absolute; left:0; top:0; right:0;
-            height:2px; background:#ef4444; opacity:0.55;
-        }
-        .v-tile-half.remote::after {
-            content:''; position:absolute; inset:0; pointer-events:none;
-            background:radial-gradient(ellipse 100% 50% at 50% 0%, #ef4444 0%, transparent 100%);
-            opacity:0.025;
-        }
-        /* halves use gap:8px, no manual margins needed */
-        @keyframes win-pulse {
-            0%,100% { opacity:1; }
-            50% { opacity:0.45; }
-        }
-    
-        
-        /* ─── Vitals skeleton (load state) ─── */
-        .v-skel {
-            position:relative; overflow:hidden;
-            display:flex; flex-direction:column; gap:9px;
-            /* neutral accent so the loading state shows no red until real
-               tiles (with their colour + numbers) resolve in together */
-            --accent-color:var(--text-4);
-        }
-        .v-skel::before {
-            content:''; position:absolute; left:0; top:0;
-            width:2px; height:100%;
-            background:var(--text-4); opacity:0.4;
-        }
+        /* Skeletons keep the pre-data shell from reading as broken tiles. */
+        .v-skel, .v-skel-drive { border-color:rgba(245,64,45,.14); }
         .v-skel-key, .v-skel-num, .v-skel-bar, .v-skel-meta {
-            background:var(--bg-3); border-radius:1px;
-            position:relative; overflow:hidden;
+            background:linear-gradient(90deg, rgba(245,64,45,.06) 25%, rgba(245,64,45,.14) 37%, rgba(245,64,45,.06) 63%);
+            background-size:200% 100%; animation:shimmer 1.3s linear infinite; border-radius:2px;
         }
-        .v-skel-key  { height:9px; width:32%; }
-        .v-skel-num  { height:24px; width:54%; margin-top:3px; }
-        .v-skel-bar  { height:8px; width:100%; }
-        .v-skel-meta { height:9px; width:64%; }
-        .v-skel-drive .v-skel-key  { height:11px; width:25%; }
-        .v-skel-drive .v-skel-bar  { height:6px; width:100%; }
-        .v-skel-drive .v-skel-meta { height:9px; width:42%; }
-        /* Shimmer */
-        .v-skel-key::after, .v-skel-num::after, .v-skel-bar::after, .v-skel-meta::after {
-            content:''; position:absolute; inset:0;
-            background:linear-gradient(
-                90deg,
-                transparent 0%,
-                rgba(232,240,248,0.08) 45%,
-                rgba(232,240,248,0.14) 50%,
-                rgba(232,240,248,0.08) 55%,
-                transparent 100%
-            );
-            transform:translateX(-100%);
-            animation:v-skel-shimmer 1.6s cubic-bezier(0.4,0,0.2,1) infinite;
+        .v-skel-key { height:9px; width:52%; }
+        .v-skel-num { height:24px; width:66%; margin-top:7px; }
+        .v-skel-bar { height:3px; width:100%; margin-top:9px; }
+        .v-skel-meta { height:9px; width:78%; margin-top:8px; }
+        @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+        .skeleton { background:linear-gradient(90deg, rgba(245,64,45,.08) 25%, rgba(245,64,45,.18) 37%, rgba(245,64,45,.08) 63%);
+                    background-size:200% 100%; animation:shimmer 1.3s linear infinite; color:transparent!important;
+                    border-radius:2px; min-width:3.2em; display:inline-block; }
+
+        /* ---- storage matrix (markup emitted by renderDrives) ---------------- */
+        .drives { display:flex; flex-direction:column; }
+        .v-drive { padding:11px 12px; border-bottom:1px solid rgba(245,64,45,.1); }
+        .v-drive:last-child { border-bottom:0; }
+        .v-drive-row { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+        .v-drive-name { font-size:12px; font-weight:700; color:var(--text-1); letter-spacing:.05em; }
+        .v-drive-tag { font-size:9px; letter-spacing:.08em; color:var(--text-3); }
+        .v-drive-bar { height:3px; margin-top:8px; background:rgba(245,64,45,.13); overflow:hidden; }
+        .v-drive-bar-fill { height:100%; background:var(--drive-color,var(--ares));
+                            transition:width 900ms var(--ease-out); }
+        .v-drive-stats { display:flex; justify-content:space-between; gap:8px; margin-top:7px;
+                         font-size:9.5px; color:var(--text-2); letter-spacing:.05em; }
+        .v-drive-stats .pct { color:var(--text-1); font-weight:700; }
+        .v-drive-stats .tmp { color:var(--amber); }
+
+        /* ---- GPU relay ------------------------------------------------------ */
+        .gpu-top { display:flex; align-items:center; gap:14px; }
+        .gpu-arc { position:relative; display:grid; place-items:center; flex:none; }
+        .gpu-arc .n { position:absolute; font-size:12px; font-weight:700; color:var(--text-1); }
+        .gpu-name { font-size:15px; font-weight:700; color:var(--text-1); letter-spacing:.03em; }
+        .gpu-sub { font-size:9px; letter-spacing:.16em; color:var(--text-3); text-transform:uppercase; margin-top:2px; }
+        .gpu-rows { margin-top:12px; display:flex; flex-direction:column; gap:9px; }
+        .gpu-row { display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+                   font-size:10px; letter-spacing:.1em; color:var(--text-2); text-transform:uppercase; }
+        .gpu-row b { font-size:12px; color:var(--text-1); font-weight:700; letter-spacing:.02em; }
+        .gpu-bar { height:3px; margin-top:5px; background:rgba(245,64,45,.13); overflow:hidden; }
+        .gpu-bar i { display:block; height:100%; background:var(--amber); transition:width 900ms var(--ease-out); }
+        .gpu-off { font-size:11px; color:var(--text-3); letter-spacing:.1em; }
+
+        /* ---- telemetry sparklines --------------------------------------------- */
+        .sparks { display:flex; flex-direction:column; gap:11px; }
+        .spark-row { display:flex; align-items:center; gap:12px; }
+        .spark-lab { flex:none; width:70px; font-size:9px; letter-spacing:.14em;
+                     color:var(--text-3); text-transform:uppercase; }
+        .spark { flex:1; min-width:0; height:48px; display:block;
+                 background:linear-gradient(180deg, rgba(245,64,45,.04), transparent); }
+        .spark-val { flex:none; width:60px; text-align:right; font-size:14px; font-weight:700; color:var(--text-1); }
+        .sp-line { fill:none; stroke-width:1.6; vector-effect:non-scaling-stroke; }
+        .sp-fill { stroke:none; }
+        .sp-c-cpu.sp-line { stroke:var(--ares); }
+        .sp-c-cpu.sp-fill { fill:rgba(245,64,45,.14); }
+        .sp-c-mem.sp-line { stroke:var(--ares-bright); }
+        .sp-c-mem.sp-fill { fill:rgba(255,122,69,.13); }
+        .sp-c-gpu.sp-line { stroke:var(--amber); }
+        .sp-c-gpu.sp-fill { fill:rgba(245,158,11,.12); }
+
+        /* ---- thermal chart ------------------------------------------------------ */
+        .thermal { display:block; width:100%; height:120px; }
+        .th-grid { stroke:rgba(245,64,45,.1); stroke-width:1; vector-effect:non-scaling-stroke; }
+        .th-line { fill:none; stroke-width:1.6; vector-effect:non-scaling-stroke; }
+        .th-cpu { stroke:var(--ares); }
+        .th-gpu { stroke:var(--amber); }
+        .th-scale { display:flex; justify-content:space-between; margin-top:5px;
+                    font-size:8.5px; letter-spacing:.14em; color:var(--text-4); }
+        .key-dot { display:inline-block; width:7px; height:2px; margin:0 4px 0 9px; vertical-align:middle; }
+        .key-cpu { background:var(--ares); }
+        .key-gpu { background:var(--amber); }
+
+        /* ---- array map ------------------------------------------------------------ */
+        /* logical storage breakdown (top folders) under the wordmark */
+        .fbreak { padding:2px 2px 0; }
+        .fbreak-head { display:flex; justify-content:space-between; align-items:baseline;
+                       font-size:9.5px; letter-spacing:.16em; text-transform:uppercase;
+                       color:var(--text-3); padding:0 2px 9px; }
+        .frow { display:grid; grid-template-columns:82px minmax(0,1fr) 62px; align-items:center; gap:11px; padding:5px 2px; }
+        .frow-name { font-size:10.5px; font-weight:700; letter-spacing:.08em; color:var(--text-1);
+                     text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .frow-bar { position:relative; height:7px; background:rgba(245,64,45,.1); overflow:hidden; }
+        .frow-fill { position:absolute; left:0; top:0; height:100%;
+                     background:linear-gradient(90deg, var(--ares), var(--amber));
+                     transition:width .5s var(--ease-out); }
+        .frow-size { font-size:10px; color:var(--text-2); font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right; }
+        /* scheduled-job status */
+        .cron-list { display:flex; flex-direction:column; }
+        .crow { display:grid; grid-template-columns:8px 1fr auto; align-items:center; gap:10px; padding:7px 2px; }
+        .crow + .crow { border-top:1px solid rgba(255,255,255,.045); }
+        .cdot { width:8px; height:8px; border-radius:50%; background:var(--text-3); }
+        .cdot.ok  { background:#22c55e; box-shadow:0 0 8px -1px #22c55e; }
+        .cdot.bad { background:var(--ares); box-shadow:0 0 9px -1px var(--ares); }
+        .cdot.run { background:var(--amber); box-shadow:0 0 9px -1px var(--amber); animation:cpulse 1.2s ease-in-out infinite; }
+        @keyframes cpulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+        .cname { font-size:11px; font-weight:600; color:var(--text-1); letter-spacing:.03em;
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .cwhen { font-size:9.5px; color:var(--text-3); text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+        .cwhen b { color:var(--text-2); font-weight:600; }
+        .arr-list { display:flex; flex-direction:column; gap:10px; }
+        /* center Array map fills its panel: rows split the height, content centered */
+        .col-mid .mod-body.arr-list { flex:1; justify-content:space-between; }
+        .col-mid .arr-list .arr-row { flex:1 1 0; display:flex; flex-direction:column; justify-content:center; }
+        .col-mid .arr-name { font-size:14px; }
+        .col-mid .arr-cap, .col-mid .arr-meta { font-size:11px; }
+        .col-mid .arr-bar { height:12px; margin-top:8px; }
+        .arr-empty { font-size:10px; letter-spacing:.1em; color:var(--text-3); }
+        .arr-row { display:block; }
+        .arr-top { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+        .arr-name { font-size:11.5px; font-weight:700; color:var(--text-1); letter-spacing:.05em; }
+        .arr-cap { font-size:9.5px; color:var(--text-2); }
+        .arr-bar { position:relative; height:8px; margin-top:6px; background:rgba(245,64,45,.1);
+                   border:1px solid rgba(245,64,45,.14); overflow:hidden; }
+        /* segmented fill so it reads as an instrument, not a progress bar */
+        .arr-fill { height:100%; background:
+                        repeating-linear-gradient(90deg, var(--arr-color,var(--ares)) 0 4px, transparent 4px 6px);
+                    transition:width 900ms var(--ease-out); }
+        .arr-meta { display:flex; justify-content:space-between; gap:8px; margin-top:4px;
+                    font-size:8.5px; letter-spacing:.1em; color:var(--text-3); text-transform:uppercase; }
+        .arr-meta .hot { color:var(--amber); }
+
+        /* ---- footer rail ----------------------------------------------------- */
+        .rail { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+                padding-top:11px; border-top:1px solid rgba(245,64,45,.14);
+                font-size:9.5px; letter-spacing:.14em; color:var(--text-3); text-transform:uppercase; }
+        .rail b { color:var(--text-2); font-weight:400; }
+
+        /* ---- responsive ------------------------------------------------------ */
+        @media (max-width:1180px) {
+            .hud-grid { grid-template-columns:1fr 1fr; }
+            .col-mid { grid-column:1 / -1; order:-1; }
         }
-        .v-skel-num::after  { animation-delay: 0.06s; }
-        .v-skel-bar::after  { animation-delay: 0.12s; }
-        .v-skel-meta::after { animation-delay: 0.18s; }
-        @keyframes v-skel-shimmer {
-            0%   { transform:translateX(-100%); }
-            60%  { transform:translateX(100%); }
-            100% { transform:translateX(100%); }
+        @media (max-width:820px) {
+            .hud-grid { grid-template-columns:1fr; }
+            .col-mid { grid-column:auto; }
+            .vitals { grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .readouts { flex-wrap:wrap; }
+            .ro { min-width:calc(50% - 4px); flex:1; }
+            .v-win { display:none; }   /* VM control stays desktop-only, as before */
+            .hud-id h1 { font-size:21px; }
         }
-        /* Soften the red gridlines while skeletons are present */
-        #vitals-hero:has(.v-skel),
-        #v-drives:has(.v-skel-drive) {
-            background:var(--bg-3);
-            border-color:var(--bg-3);
+        @media (max-width:600px) {
+            .hud { padding-left:12px; padding-right:12px; }
+            .mark pre { font-size:clamp(9px, 3.4vw, 22px); }
+            .hud-id .sub { display:none; }          /* the strapline cannot fit beside the title */
+            .readouts { width:100%; }
+            .ro { min-width:0; }
+            .vitals { gap:8px; }
         }
-    
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation:none!important; transition:none!important; }
+        }
+
         </style>
 </head>
 <body>
-<!-- NEXUS watchdog banner (2026-07-06): polls /api/alerts; hidden when level=ok -->
-<div id="nexus-alert-banner" onclick="this.style.display='none'" title="tap to dismiss" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:10px 16px;font:600 14px/1.4 system-ui,sans-serif;color:#fff;text-align:center;cursor:pointer;"></div>
+<!-- CRONOS watchdog banner (2026-07-06): polls /api/alerts; hidden when level=ok -->
+<div id="hermes-alert-banner" onclick="this.style.display='none'" title="tap to dismiss" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:10px 16px;font:600 14px/1.4 system-ui,sans-serif;color:#fff;text-align:center;cursor:pointer;"></div>
 <script>
 (function(){
-  var el=document.getElementById("nexus-alert-banner");
+  var el=document.getElementById("hermes-alert-banner");
   function poll(){
     fetch("/api/alerts",{credentials:"same-origin"}).then(function(r){return r.json();}).then(function(a){
       if(a.level==="ok"){el.style.display="none";return;}
       el.style.background=a.level==="red"?"#dc2626":"#d97706";
-      el.textContent="NEXUS "+a.level.toUpperCase()+": "+(a.reasons||[]).join(" \u00b7 ");
+      el.textContent="CRONOS "+a.level.toUpperCase()+": "+(a.reasons||[]).join(" \u00b7 ");
       el.style.display="block";
     }).catch(function(){});
   }
@@ -595,104 +402,270 @@
 })();
 </script>
 
-<div class="app">
-    
+<div class="scanline"></div>
 
-    
-    <header class="navbar">
-        <div class="navbar-left">
-            <a href="/" class="nbr nbr-self">
-                <div class="nbr-mark m-a">A</div>
-                <div class="nbr-id">
-                    <span class="nbr-name n-a">ARES</span>
-                    <span class="nbr-sep">/</span>
-                    <span class="nbr-tag">SUPER-NAS</span>
-                </div>
-            </a>
-            
-        </div>
-        <a href="/jump/nexus" class="nbr nbr-other">
-            <div class="nbr-mark m-n">N</div>
-            <div class="nbr-id">
-                <span class="nbr-name n-n">NEXUS</span>
-                <span class="nbr-sep">/</span>
-                <span class="nbr-tag">MINI-NAS</span>
+<script id="ares-boot" type="application/json">{{ boot|default(none)|tojson }}</script>
+<script>try{window.__BOOT=JSON.parse(document.getElementById('ares-boot').textContent);}catch(e){window.__BOOT=null;}</script>
+
+<div class="hud">
+
+    <header class="hud-top">
+        <div>
+            {% set is_cronos = boot and (boot.hostname or '')|upper == 'CRONOS' %}
+            <div class="nodes">
+                <a href="{{ 'https://ares.tail3045df.ts.net/' if is_cronos else '/' }}" class="chip{{ '' if is_cronos else ' is-active' }}"{{ '' if is_cronos else ' aria-current=page'|safe }} aria-label="ARES">
+                    <span class="chip-mark">A</span>
+                    <span class="chip-name">ARES</span><span class="chip-tag">/ SUPER-NAS</span>
+                </a>
+                <a href="{{ '/' if is_cronos else '/jump/hermes' }}" class="chip{{ ' is-active' if is_cronos else '' }}" aria-label="CRONOS">
+                    <span class="chip-mark">C</span>
+                    <span class="chip-name">CRONOS</span><span class="chip-tag">/ MID-NAS</span>
+                </a>
             </div>
-        </a>
+        </div>
+        <div class="readouts">
+            <div class="mod c-tl c-br ro">
+                <div class="ro-k">Mission clock</div>
+                <div class="ro-v" id="f-time">—</div>
+            </div>
+            <div class="mod c-tr c-bl ro">
+                <div class="ro-k">Kernel relay</div>
+                <div class="ro-v"><span class="skeleton" id="h-kernel"></span></div>
+            </div>
+        </div>
     </header>
-    <main>
-        <section class="hero">
-            <div class="hero-mark"><pre class="ascii-nex"> █████╗ ██████╗
+
+    <div class="hud-grid">
+
+        <!-- ── left: CPU instrument + operations ───────────────────────── -->
+        <div class="col">
+            <section class="mod c-tl c-br">
+                <div class="mod-head">
+                    <span class="mod-title">CPU Load</span>
+                    <span class="mod-meta" id="g-threads">—</span>
+                </div>
+                <div class="mod-body" style="padding-bottom:0">
+                    <div class="gauge-wrap">
+                        <svg class="gauge" width="150" height="150" viewBox="0 0 130 130" aria-hidden="true">
+                            <circle class="gauge-track" cx="65" cy="65" r="54"></circle>
+                            <circle class="gauge-load" id="g-arc" cx="65" cy="65" r="54"
+                                    stroke-dasharray="339.29" stroke-dashoffset="339.29"></circle>
+                            <circle class="gauge-temp-track" cx="65" cy="65" r="44"></circle>
+                            <circle class="gauge-temp" id="g-temp-arc" cx="65" cy="65" r="44"
+                                    stroke-dasharray="276.46" stroke-dashoffset="276.46"></circle>
+                        </svg>
+                        <div class="gauge-mid">
+                            <div class="gauge-num"><span id="g-load">—</span><span class="u">%</span></div>
+                            <div class="gauge-lab">SYS_LOAD</div>
+                        </div>
+                        <div class="gauge-side">
+                            <div class="t" id="g-temp">—</div>
+                            <div class="l">PKG / 90&deg;</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="facts">
+                    <div class="fact"><div class="fact-k">Processor</div><div class="fact-v"><span class="skeleton" id="h-cpu"></span></div></div>
+                    <div class="fact"><div class="fact-k">Memory</div><div class="fact-v" id="g-mem">—</div></div>
+                    <div class="fact"><div class="fact-k">Uptime</div><div class="fact-v"><span class="skeleton" id="h-uptime"></span></div></div>
+                    <div class="fact"><div class="fact-k">Host</div><div class="fact-v" id="v-host-tag">—</div></div>
+                </div>
+            </section>
+
+            <section class="mod c-bl c-tr">
+                <div class="mod-head">
+                    <span class="mod-title">Operation modules</span>
+                    <span class="mod-meta">04 active</span>
+                </div>
+                <div class="mod-body">
+                    <nav class="ops">
+                        <a href="/photos" class="op op-photos">
+                            <span class="op-num">001</span>
+                            <span class="op-body"><span class="op-lab">Media / Gallery</span><span class="op-name">Photos</span></span>
+                            <svg class="op-arrow" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                        </a>
+                        <a href="/terminal" class="op">
+                            <span class="op-num">002</span>
+                            <span class="op-body"><span class="op-lab">Shell / pve</span><span class="op-name">Terminal</span></span>
+                            <svg class="op-arrow" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                        </a>
+                        <a href="/journals" class="op op-journals">
+                            <span class="op-num">003</span>
+                            <span class="op-body"><span class="op-lab">Notes / Archive</span><span class="op-name">Journals</span></span>
+                            <svg class="op-arrow" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                        </a>
+                        <a href="/breakdown" class="op">
+                            <span class="op-num">004</span>
+                            <span class="op-body"><span class="op-lab">Money / Net Worth</span><span class="op-name">Finance</span></span>
+                            <svg class="op-arrow" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                        </a>
+                    </nav>
+                </div>
+            </section>
+        </div>
+
+        <!-- ── centre: wordmark + vitals ───────────────────────────────── -->
+        <div class="col col-mid">
+            <div class="mark">{% if boot and (boot.hostname or '')|upper == 'CRONOS' %}<pre class="m-ar"> ██████╗██████╗  ██████╗ 
+██╔════╝██╔══██╗██╔═══██╗
+██║     ██████╔╝██║   ██║
+██║     ██╔══██╗██║   ██║
+╚██████╗██║  ██║╚██████╔╝
+ ╚═════╝╚═╝  ╚═╝ ╚═════╝ </pre><pre class="m-es">███╗   ██╗ ██████╗ ███████╗
+████╗  ██║██╔═══██╗██╔════╝
+██╔██╗ ██║██║   ██║███████╗
+██║╚██╗██║██║   ██║╚════██║
+██║ ╚████║╚██████╔╝███████║
+╚═╝  ╚═══╝ ╚═════╝ ╚══════╝</pre>{% else %}<pre class="m-ar"> █████╗ ██████╗ 
 ██╔══██╗██╔══██╗
 ███████║██████╔╝
 ██╔══██║██╔══██╗
 ██║  ██║██║  ██║
-╚═╝  ╚═╝╚═╝  ╚═╝</pre><pre class="ascii-us">███████╗███████╗
+╚═╝  ╚═╝╚═╝  ╚═╝</pre><pre class="m-es">███████╗███████╗
 ██╔════╝██╔════╝
 █████╗  ███████╗
 ██╔══╝  ╚════██║
 ███████╗███████║
-╚══════╝╚══════╝</pre></div>
-            <div class="hero-meta">
-                <div class="row"><span class="key">Host</span><span class="val" id="h-host">—</span></div>
-                <div class="row"><span class="key">CPU</span><span class="val" id="h-cpu">—</span></div>
-                <div class="row"><span class="key">GPU</span><span class="val" id="h-gpu">—</span></div>
-                <div class="row"><span class="key">Pool</span><span class="val" id="h-pool">—</span></div>
-            </div>
-        </section>
+╚══════╝╚══════╝</pre>{% endif %}</div>
+            <section class="fbreak">
+                <div class="fbreak-head"><span>Where it lives</span><span id="fbreak-total">—</span></div>
+                <div id="fbreak-list"><div class="arr-empty">measuring…</div></div>
+            </section>
+            <div class="vitals" id="vitals-hero"><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div></div>
 
-        <div class="section-head">
-            <div class="section-title">Operations</div>
-            <div class="section-meta">04 modules</div>
+            
+
+            <section class="mod c-bl c-br">
+                <div class="mod-head">
+                    <span class="mod-title">Array map</span>
+                    <span class="mod-meta" id="arr-count">—</span>
+                </div>
+                <div class="mod-body arr-list" id="arr-list">
+                    <div class="arr-empty">waiting for array…</div>
+                </div>
+            </section>
         </div>
-        <nav class="nav-grid" style="margin-bottom:18px">
-            <a href="/photos" class="nav-card">
-                <span class="nav-card-num">001</span>
-                <div class="nav-card-body">
-                    <div class="nav-card-label">Media · Gallery</div>
-                    <div class="nav-card-title">Photos</div>
-                </div>
-                <svg class="nav-card-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
-            </a>
-            <a href="/terminal" class="nav-card">
-                <span class="nav-card-num">002</span>
-                <div class="nav-card-body">
-                    <div class="nav-card-label">Shell · pve</div>
-                    <div class="nav-card-title">Terminal</div>
-                </div>
-                <svg class="nav-card-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
-            </a>
-            <a href="/journals" class="nav-card">
-                <span class="nav-card-num">003</span>
-                <div class="nav-card-body">
-                    <div class="nav-card-label">Notes · Archive</div>
-                    <div class="nav-card-title">Journals</div>
-                </div>
-                <svg class="nav-card-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
-            </a>
-            <a href="/breakdown" class="nav-card">
-                <span class="nav-card-num">004</span>
-                <div class="nav-card-body">
-                    <div class="nav-card-label">Money · Net Worth</div>
-                    <div class="nav-card-title">Finance</div>
-                </div>
-                <svg class="nav-card-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
-            </a>
-        </nav>
 
-        <div class="section-head">
-            <div class="section-title">Vitals</div>
-            <div class="section-meta"><span id="v-host-tag">—</span> · <span id="v-uptime">—</span></div>
+        <!-- ── right: jobs + GPU ─────────────────────────────────────────── -->
+        <div class="col">
+            <section class="mod c-tr c-bl">
+                <div class="mod-head">
+                    <span class="mod-title">Scheduled jobs</span>
+                    <span class="mod-meta" id="jobs-meta">—</span>
+                </div>
+                <div class="mod-body cron-list" id="cron-list">
+                    <div class="arr-empty">loading…</div>
+                </div>
+            </section>
+            <section class="mod c-tr c-br" id="panel-gpu">
+                <div class="mod-head">
+                    <span class="mod-title">GPU relay</span>
+                    <span class="mod-meta"><span class="skeleton" id="h-gpu"></span></span>
+                </div>
+                <div class="mod-body">
+                    <div class="gpu-top">
+                        <div class="gpu-arc">
+                            <svg class="gauge" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+                                <circle class="gauge-track" cx="32" cy="32" r="26" style="stroke-width:5"></circle>
+                                <circle class="gauge-load" id="gpu-arc" cx="32" cy="32" r="26"
+                                        style="stroke-width:5" stroke-dasharray="163.36" stroke-dashoffset="163.36"></circle>
+                            </svg>
+                            <span class="n" id="gpu-util">—</span>
+                        </div>
+                        <div>
+                            <div class="gpu-name" id="gpu-name">—</div>
+                            <div class="gpu-sub">utilisation arc / core</div>
+                        </div>
+                    </div>
+                    <div class="gpu-rows" id="gpu-rows">
+                        <div>
+                            <div class="gpu-row"><span>VRAM</span><b id="gpu-vram">—</b></div>
+                            <div class="gpu-bar"><i id="gpu-vram-bar" style="width:0%"></i></div>
+                        </div>
+                        <div class="gpu-row"><span>Power draw</span><b id="gpu-power">—</b></div>
+                        <div class="gpu-row"><span>Core temp</span><b id="gpu-temp">—</b></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="mod c-tr c-bl" id="panel-containers" style="display:none">
+                <div class="mod-head">
+                    <span class="mod-title">Services</span>
+                    <span class="mod-meta" id="ctr-meta">—</span>
+                </div>
+                <div class="mod-body cron-list" id="ctr-list">
+                    <div class="arr-empty">loading…</div>
+                </div>
+            </section>
+
+            <section class="mod c-tr c-br">
+                <div class="mod-head">
+                    <span class="mod-title">Thermals</span>
+                    <span class="mod-meta">
+                        <i class="key-dot key-cpu"></i>CPU
+                        <span id="th-gpu-key"><i class="key-dot key-gpu"></i>GPU</span>
+                    </span>
+                </div>
+                <div class="mod-body">
+                    <svg class="thermal" viewBox="0 0 300 76" preserveAspectRatio="none" aria-hidden="true">
+                        <line class="th-grid" x1="0" y1="19" x2="300" y2="19"></line>
+                        <line class="th-grid" x1="0" y1="38" x2="300" y2="38"></line>
+                        <line class="th-grid" x1="0" y1="57" x2="300" y2="57"></line>
+                        <path class="th-line th-cpu" id="th-cpu" d=""></path>
+                        <path class="th-line th-gpu" id="th-gpu" d=""></path>
+                    </svg>
+                    <div class="th-scale"><span id="th-hi">90&deg;C</span><span id="th-lo">0&deg;C</span></div>
+                </div>
+            </section>
+
+            <section class="mod c-bl c-br">
+                <div class="mod-head">
+                    <span class="mod-title">Telemetry</span>
+                    <span class="mod-meta"><span id="tel-window">—</span> observed</span>
+                </div>
+                <div class="mod-body sparks">
+                    <div class="spark-row">
+                        <span class="spark-lab">CPU load</span>
+                        <svg class="spark" viewBox="0 0 400 36" preserveAspectRatio="none" aria-hidden="true">
+                            <path class="sp-fill sp-c-cpu" id="sp-cpu-f" d=""></path>
+                            <path class="sp-line sp-c-cpu" id="sp-cpu-l" d=""></path>
+                        </svg>
+                        <span class="spark-val" id="sp-cpu-v">—</span>
+                    </div>
+                    <div class="spark-row">
+                        <span class="spark-lab">Memory</span>
+                        <svg class="spark" viewBox="0 0 400 36" preserveAspectRatio="none" aria-hidden="true">
+                            <path class="sp-fill sp-c-mem" id="sp-mem-f" d=""></path>
+                            <path class="sp-line sp-c-mem" id="sp-mem-l" d=""></path>
+                        </svg>
+                        <span class="spark-val" id="sp-mem-v">—</span>
+                    </div>
+                    <div class="spark-row" id="tel-gpu-row">
+                        <span class="spark-lab">GPU core</span>
+                        <svg class="spark" viewBox="0 0 400 36" preserveAspectRatio="none" aria-hidden="true">
+                            <path class="sp-fill sp-c-gpu" id="sp-gpu-f" d=""></path>
+                            <path class="sp-line sp-c-gpu" id="sp-gpu-l" d=""></path>
+                        </svg>
+                        <span class="spark-val" id="sp-gpu-v">—</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Thermal history — CPU package vs GPU core, same observed samples. -->
+            
+
+            <!-- Every disk the API reports, not a hardcoded pair. -->
+            
         </div>
-        <div class="vitals-hero" id="vitals-hero"><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div></div>
-        <div class="v-drives" id="v-drives"><div class="v-drive v-skel-drive"><div class="v-skel-key"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-drive v-skel-drive"><div class="v-skel-key"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-drive v-skel-drive"><div class="v-skel-key"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div></div>
-    </main>
+    </div>
 
-    <footer>
-        <span>ARES · v1.0</span>
-        <span id="f-time">—</span>
+    <footer class="rail">
+        <span><span id="foot-brand">ARES</span> <b>· v1.0</b></span>
+        <span>Uptime <b id="v-uptime">—</b></span>
+        <span>Relay <b>ares.tail3045df.ts.net</b></span>
     </footer>
 </div>
+
 
 <script>
 function tick() {
@@ -806,9 +779,9 @@ function renderVitals(tiles, winHtml) {
     }
 }
 
-var DRIVE_DISPLAY = { 'PROMETHEUS':'POOL', 'EVO-970':'EVO-970', 'AIRDISK':'AIRDISK' };
-var DRIVE_TAG = { 'PROMETHEUS':'MergerFS', 'EVO-970':'Samsung 970', 'AIRDISK':'LVM' };
-var DRIVE_COLOR = { 'PROMETHEUS':'#ef4444', 'EVO-970':'#fb923c', 'AIRDISK':'#f59e0b' };
+var DRIVE_DISPLAY = { '970-EVO':'970 EVO', '990-PRO':'990 PRO', 'PROMETHEUS':'POOL' };
+var DRIVE_TAG = { '970-EVO':'Samsung · pool', '990-PRO':'Samsung · system', 'PROMETHEUS':'MergerFS' };
+var DRIVE_COLOR = { '970-EVO':'#fb923c', '990-PRO':'#f59e0b', 'PROMETHEUS':'#ef4444' };
 
 // Drives use the same build-once / patch-in-place strategy as the vitals
 // tiles: created a single time (stable data-dk), then values patched so the
@@ -826,7 +799,7 @@ function buildDriveHtml(d) {
             '<span class="v-drive-tag">' + tag + '</span>' +
         '</div>' +
         '<div class="v-drive-bar"><div class="v-drive-bar-fill" style="width:' + (d.percent != null ? d.percent : 0) + '%"></div></div>' +
-        '<div class="v-drive-stats"><span class="du">' + (d.used || '—') + ' / ' + (d.total || '—') + '</span><span class="pct">' + (d.percent != null ? d.percent : 0) + '%</span></div>' +
+        '<div class="v-drive-stats"><span class="du">' + (d.used || '—') + ' / ' + (d.total || '—') + '</span><span class="tmp">' + (d.temp_c != null ? d.temp_c + '°C' : '') + '</span><span class="pct">' + (d.percent != null ? d.percent : 0) + '%</span></div>' +
     '</div>';
 }
 
@@ -838,7 +811,85 @@ function patchDrive(vd, d) {
     var du = el.querySelector('.v-drive-stats .du');
     if (du) du.textContent = (d.used || '—') + ' / ' + (d.total || '—');
     var pct = el.querySelector('.v-drive-stats .pct');
-    if (pct) pct.textContent = (d.percent != null ? d.percent : 0) + '%';
+    if (pct) { var pv = d.percent != null ? d.percent : 0; tweenNum(pct, parseFloat(pct.textContent) || 0, pv, pv + '%'); }
+    var tmp = el.querySelector('.v-drive-stats .tmp');
+    if (tmp) { if (d.temp_c != null) tweenNum(tmp, parseFloat(tmp.textContent) || 0, d.temp_c, d.temp_c + '°C'); else tmp.textContent = ''; }
+}
+
+// Relative time from an epoch-seconds value: "2h ago" / "in 3h" / "—".
+function _rel(sec) {
+    if (!sec) return '—';
+    var d = (Date.now() / 1000) - sec, a = Math.abs(d), s;
+    if (a < 60)        s = Math.round(a) + 's';
+    else if (a < 3600) s = Math.round(a / 60) + 'm';
+    else if (a < 86400) s = Math.round(a / 3600) + 'h';
+    else                s = Math.round(a / 86400) + 'd';
+    return d >= 0 ? s + ' ago' : 'in ' + s;
+}
+
+// Scheduled-job status (host systemd timers via ops/cron-status.py).
+function renderCrons(jobs) {
+    var el = document.getElementById('cron-list');
+    if (!el) return;
+    if (!jobs || !jobs.length) { el.innerHTML = '<div class="arr-empty">no jobs</div>'; return; }
+    var bad = 0;
+    el.innerHTML = jobs.map(function(j) {
+        var cls = j.running ? 'run' : (j.ok ? 'ok' : 'bad');
+        if (!j.ok && !j.running) bad++;
+        var last = j.running ? 'running…' : _rel(j.last);
+        return '<div class="crow"><span class="cdot ' + cls + '"></span>' +
+               '<span class="cname">' + j.name + '</span>' +
+               '<span class="cwhen"><b>' + last + '</b> · next ' + _rel(j.next) + '</span></div>';
+    }).join('');
+    var m = document.getElementById('jobs-meta');
+    if (m) m.textContent = bad ? (bad + ' failed') : (jobs.length + ' ok');
+}
+
+// Capability gating: hide panels this box lacks. No-op on ARES (all caps on).
+// Missing cap -> treated as present (undefined !== 0) so older payloads = ARES.
+function applyCaps(caps) {
+    caps = caps || window.__CAPS || {};
+    window.__CAPS = caps;
+    var show = function(sel, on) { var ns = document.querySelectorAll(sel); for (var k = 0; k < ns.length; k++) ns[k].style.display = on ? '' : 'none'; };
+    show('#panel-gpu', caps.gpu !== 0);
+    show('#tel-gpu-row', caps.gpu !== 0);
+    show('#th-gpu-key', caps.gpu !== 0);
+    show('.op-photos', caps.photos !== 0);
+    show('.op-journals', caps.journals !== 0);
+    show('#panel-containers', caps.docker === 1);
+}
+
+// Docker/FAI container health (CRONOS). Reuses the .crow/.cdot job-row styling.
+function renderContainers(list) {
+    var el = document.getElementById('ctr-list');
+    if (!el) return;
+    if (!list || !list.length) { el.innerHTML = '<div class="arr-empty">no containers</div>'; return; }
+    var down = 0;
+    el.innerHTML = list.slice(0, 14).map(function(c) {
+        if (!c.ok) down++;
+        return '<div class="crow"><span class="cdot ' + (c.ok ? 'ok' : 'bad') + '"></span>' +
+               '<span class="cname">' + c.name + '</span>' +
+               '<span class="cwhen">' + (c.status || '') + '</span></div>';
+    }).join('');
+    var m = document.getElementById('ctr-meta');
+    if (m) m.textContent = down ? (down + ' down') : (list.length + ' up');
+}
+
+// Logical storage: top folders by size, bars scaled to the largest folder.
+function renderFolders(folders) {
+    var el = document.getElementById('fbreak-list');
+    if (!el) return;
+    if (!folders || !folders.length) { el.innerHTML = '<div class="arr-empty">no folders</div>'; return; }
+    var top = folders.slice(0, 5);
+    var max = top[0].size || 1;
+    el.innerHTML = top.map(function(f) {
+        var w = Math.max(3, Math.round((f.size / max) * 100));
+        return '<div class="frow"><div class="frow-name">' + f.name + '</div>' +
+               '<div class="frow-bar"><div class="frow-fill" style="width:' + w + '%"></div></div>' +
+               '<div class="frow-size">' + f.display + '</div></div>';
+    }).join('');
+    var tt = document.getElementById('fbreak-total');
+    if (tt) tt.textContent = folders.length + ' folders';
 }
 
 function renderDrives(drives) {
@@ -855,7 +906,7 @@ function renderDrives(drives) {
     }
 }
 
-var DRIVE_ORDER = ['PROMETHEUS', 'EVO-970', 'AIRDISK'];
+var DRIVE_ORDER = ['970-EVO', '990-PRO'];
 
 // === Windows VM Control ===
 var winRunning = false;
@@ -864,14 +915,16 @@ var winReady = false;
 var winGpuHome = true;
 
 function winTile() {
+    // No Windows VM on this box (e.g. CRONOS) -> no tile at all.
+    if (window.__CAPS && !window.__CAPS.windows_vm) return '';
     // Hidden on phones (CSS hides .v-win at <=600px); rendered on desktop.
     if (winBusy) {
         var label = winRunning ? 'Stopping' : 'Starting';
-        var bwide = (window.gpuOnline === false) ? ' v-tile-wide' : '';
-        return '<div class="v-tile v-win' + bwide + '" style="--accent-color:#f59e0b">' +
+        var bwide = (window.gpuOnline === false) ? '' : '';
+        return '<div class="v-tile v-win" style="--accent-color:#f59e0b">' +
             '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">VM 200</span></div>' +
             '<div class="v-tile-num" style="color:#f59e0b">' + label + '</div>' +
-            '<div class="v-tile-bar"><div class="v-tile-fill" style="width:50%;background:#f59e0b;animation:win-pulse 1.2s ease-in-out infinite"></div></div>' +
+            '<div class="v-tile-bar boot"><div class="v-tile-fill"></div></div>' +
             '<div class="v-tile-meta"><span class="lo">working\u2026</span><span style="color:#f59e0b">\u25cf</span></div>' +
         '</div>';
     }
@@ -883,33 +936,33 @@ function winTile() {
             '<div class="v-tile-meta"><span class="lo">reclaim failed — gpu-swap.log</span><span style="color:#ef4444">●</span></div>' +
         '</div>';
     }
-    if (winRunning && !winReady) {
-        // Windows is booting; Sunshine not accepting connections yet.
-        return '<div class="v-tile v-win" style="--accent-color:#f59e0b">' +
-            '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">VM 200</span></div>' +
-            '<div class="v-tile-num" style="font-size:20px;color:#f59e0b">Booting Windows</div>' +
-            '<div class="v-tile-bar"><div class="v-tile-fill" style="width:75%;background:#f59e0b;animation:win-pulse 1.2s ease-in-out infinite"></div></div>' +
-            '<div class="v-tile-meta"><span class="lo">waiting for Sunshine…</span><span style="color:#f59e0b">●</span></div>' +
-        '</div>';
-    }
     if (winRunning) {
-        // Split: left = Status (tap to stop), right = Remote (tap to open desktop)
-        return '<div class="v-tile v-win v-tile-split" style="--accent-color:#10b981">' +
+        // Windows is up. Always show the split so DESKTOP is available immediately;
+        // the status half reflects booting vs. stream-ready.
+        var ready = winReady;
+        var accent = ready ? '#10b981' : '#f59e0b';
+        var statusHalf = ready
+            ? '<div class="v-tile-num" style="font-size:17px;color:#10b981">Ready</div>' +
+              '<div class="v-tile-meta"><span class="lo">vm 200</span><span style="color:#10b981">●</span></div>'
+            : '<div class="v-tile-num" style="font-size:16px;color:#f59e0b">Booting…</div>' +
+              '<div class="v-tile-bar boot"><div class="v-tile-fill"></div></div>' +
+              '<div class="v-tile-meta"><span class="lo">waiting for Sunshine…</span><span style="color:#f59e0b">●</span></div>';
+        return '<div class="v-tile v-win v-tile-split" style="--accent-color:' + accent + '">' +
             '<div class="v-tile-half status" onclick="toggleWindows()" title="Stop Windows">' +
                 '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">stop</span></div>' +
-                '<div class="v-tile-num" style="font-size:18px;color:#10b981">Ready to stream</div>' +
-                '<div class="v-tile-meta"><span class="lo">vm 200</span><span style="color:#10b981">\u25cf</span></div>' +
+                statusHalf +
             '</div>' +
             '<div class="v-tile-half remote" onclick="location.href=\'/windows\'" title="Open Windows desktop">' +
-                '<div class="v-tile-key"><span>VIEW</span><span class="v-tile-tag">live</span></div>' +
-                '<div class="v-tile-num" style="color:#e8f0f8">Desktop</div>' +
-                '<div class="v-tile-meta"><span class="lo">open</span><span style="color:#ef4444;font-size:14px">\u2192</span></div>' +
+                '<div class="v-tile-key"><span>VIEW</span><span class="v-tile-tag">' + (ready ? 'live' : 'soon') + '</span></div>' +
+                '<div class="v-tile-num" style="font-size:16px;color:#e8f0f8">Desktop</div>' +
+                '<div class="v-tile-meta"><span class="lo">open</span><span style="color:#ef4444;font-size:14px">→</span></div>' +
             '</div>' +
         '</div>';
     }
+
     // Stopped
-    var wide = (window.gpuOnline === false) ? ' v-tile-wide' : '';
-    return '<div class="v-tile v-win' + wide + '" style="--accent-color:#2d3a4e;cursor:pointer" onclick="toggleWindows()" title="Start Windows VM">' +
+    var wide = (window.gpuOnline === false) ? '' : '';
+    return '<div class="v-tile v-win" style="--accent-color:#2d3a4e;cursor:pointer" onclick="toggleWindows()" title="Start Windows VM">' +
         '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">VM 200</span></div>' +
         '<div class="v-tile-num" style="font-size:22px;line-height:1.1;color:#2d3a4e">Stopped</div>' +
         '<div class="v-tile-bar"><div class="v-tile-fill" style="width:0%;background:#2d3a4e"></div></div>' +
@@ -917,76 +970,72 @@ function winTile() {
     '</div>';
 }
 
+var _vitalsBusy = false;
+var _vtick = 0;
 async function loadVitals() {
+    if (_vitalsBusy) return;   // skip tick if previous poll still running
+    _vitalsBusy = true;
     try {
         var r = await fetch('/api/system-info');
         if (r.status === 401) { location.href = '/login'; return; }
         var i = await r.json();
+        applyVitals(i);
+    } catch(e) { console.error(e); }
+    finally { _vitalsBusy = false; }
+}
 
-        document.getElementById('h-host').textContent = i.hostname || 'ARES';
-        document.getElementById('h-cpu').textContent = i.cpu_percent + '%';
-        var pool = (i.disks || []).find(function(d){return d.name==='PROMETHEUS';});
-        if (pool) {
-            document.getElementById('h-pool').textContent = pool.percent + '%';
-            var ncPool = document.getElementById('nc-pool');
-            if (ncPool) ncPool.textContent = pool.used + ' / ' + pool.total;
-        }
+// Render everything from a system-info payload. Driven by the poll loop and,
+// once synchronously at boot, from the server-inlined __BOOT snapshot — so the
+// first paint already shows real numbers (no skeleton -> pop-in flash).
+function applyVitals(i) {
+        applyCaps(i.caps);   // hide box-specific panels before anything renders
+        var byName = function(n){ return (i.disks || []).find(function(d){return d.name===n;}); };
+        var pool = byName('PROMETHEUS');
         var g = i.gpu || {};
         window.gpuOnline = !!g.online;
-        if (g.online) {
-            document.getElementById('h-gpu').textContent = g.temp_c + '\u00b0C \u00b7 ' + g.util_pct + '%';
-        } else {
-            document.getElementById('h-gpu').textContent = '\u2014';
-        }
 
-        document.getElementById('v-uptime').textContent = i.uptime || '\u2014';
-        document.getElementById('v-host-tag').textContent = i.hostname || 'ARES';
+        // FAST PATH (every tick, ~1s): the live-moving telemetry only — gauges,
+        // sparklines, thermal, load trace, GPU arc. Cheap: SVG path/dashoffset updates.
+        updateInstruments(i, g, pool);
 
-        // Windows VM status — only polled on desktop (the WIN tile is hidden on
-        // phones, so skip the ~700ms subprocess hit there). Non-blocking either way.
-        if (window.innerWidth > 600) {
-            fetch('/api/vm/status', { method: 'POST' })
-                .then(function(wr){ return wr.json(); })
-                .then(function(wd){
-                    var gpuHome = (wd.gpu_home !== false);  // null (running) counts as fine
-                    var changed = (wd.running !== winRunning) ||
-                                  (!!wd.streaming_ready !== winReady) ||
-                                  (gpuHome !== winGpuHome);
-                    winRunning = wd.running;
-                    winReady = !!wd.streaming_ready;
-                    winGpuHome = gpuHome;
-                    if (changed) {
-                        var vh2 = document.getElementById('vitals-hero');
-                        if (vh2) updateWin(vh2, winTile());
-                    }
-                })
-                .catch(function(){});
-        }
+        // HEAVY PATH (every 5th tick, ~5s): identity card, tile/drive/array DOM and
+        // the count-up number tweens. These don't need 1s cadence and were the jank.
+        if (_vtick % 5 === 0) {
+            var shortUptime = (i.uptime || '—').replace(/ days?/,'d').replace(/ hours?/,'h').replace(/ minutes?/,'m').replace(/,/g,'');
+            var shortCpu = (i.cpu || '—').replace(/^(AMD|Intel)\s+/,'').split(/\s+\d+-Core|\s+·/)[0].trim();
+            ['h-uptime','h-gpu','h-cpu','h-kernel'].forEach(function(id){ var e=document.getElementById(id); if(e) e.classList.remove('skeleton'); });
+            document.getElementById('h-uptime').textContent = shortUptime;
+            document.getElementById('h-cpu').textContent = shortCpu;
+            document.getElementById('h-kernel').textContent = i.kernel || '—';
+            var ncPool = document.getElementById('nc-pool');
+            if (pool && ncPool) ncPool.textContent = pool.used + ' / ' + pool.total;
+            document.getElementById('h-gpu').textContent = (g.online && g.name) ? g.name.replace('NVIDIA GeForce ', '') : '\u2014';
+            document.getElementById('v-uptime').textContent = i.uptime || '\u2014';
+            document.getElementById('v-host-tag').textContent = i.hostname || 'ARES';
 
-        // Hero tiles: TEMP, CPU, MEM, GPU, POOL (+ WIN, rendered separately).
-        // Built once then patched in place by renderVitals().
-        var tiles = [];
-        if (i.cpu_temp != null) {
-            tiles.push({k:'temp', key:'TEMP', tag:'CPU', num:i.cpu_temp.toFixed(0), unit:'\u00b0C', meta:'<span class="lo">cool</span><span>90\u00b0</span>', pct:Math.min(100,(i.cpu_temp/90)*100), color:'#67e8f9'});
-        }
-        tiles.push({k:'cpu', key:'CPU', tag:'load', num:i.cpu_percent, unit:'%', meta:'<span class="lo">idle</span><span>peak</span>', pct:i.cpu_percent, color:'#ef4444'});
-        tiles.push({k:'mem', key:'MEM', tag:'usage', num:i.memory_percent, unit:'%', meta:'<span>' + i.memory_used + '</span><span class="lo">/ ' + i.memory_total + '</span>', pct:i.memory_percent, color:'#f87171'});
-        if (g.online) {
-            tiles.push({k:'gpu', key:'GPU', tag:(g.name ? g.name.replace('NVIDIA GeForce ','') : 'GPU'), num:g.temp_c, unit:'\u00b0C ' + g.util_pct + '%', meta:'<span>' + g.power_w.toFixed(0) + 'W</span><span class="lo">VRAM ' + (g.vram_used_mib/1024).toFixed(1) + '/' + (g.vram_total_mib/1024).toFixed(0) + 'G</span>', pct:g.util_pct, color:'#ef4444'});
-        }
-        if (pool) {
-            tiles.push({k:'pool', key:'POOL', tag:DRIVE_TAG['PROMETHEUS'], num:pool.percent, unit:'%', meta:'<span>' + pool.used + '</span><span class="lo">/ ' + pool.total + '</span>', pct:pool.percent, color:'#ef4444'});
-        }
-        renderVitals(tiles, winTile());
+            var tiles = [];
+            if (i.cpu_temp != null) {
+                tiles.push({k:'temp', key:'TEMP', tag:'CPU', num:i.cpu_temp.toFixed(0), unit:'\u00b0C', meta:'<span class="lo">cool</span><span>90\u00b0</span>', pct:Math.min(100,(i.cpu_temp/90)*100), color:'#fb923c'});
+            }
+            tiles.push({k:'cpu', key:'CPU', tag:'load', num:i.cpu_percent, unit:'%', meta:'<span class="lo">idle</span><span>peak</span>', pct:i.cpu_percent, color:'#ef4444'});
+            tiles.push({k:'mem', key:'MEM', tag:'usage', num:i.memory_percent, unit:'%', meta:'<span>' + i.memory_used + '</span><span class="lo">/ ' + i.memory_total + '</span>', pct:i.memory_percent, color:'#f43f5e'});
+            if (g.online) {
+                tiles.push({k:'gpu', key:'GPU', tag:(g.name ? g.name.replace('NVIDIA GeForce ','') : 'GPU'), num:g.temp_c, unit:'\u00b0C ' + g.util_pct + '%', meta:'<span>' + g.power_w.toFixed(0) + 'W</span><span class="lo">VRAM ' + (g.vram_used_mib/1024).toFixed(1) + '/' + (g.vram_total_mib/1024).toFixed(0) + 'G</span>', pct:(g.vram_total_mib ? Math.min(100,(g.vram_used_mib/g.vram_total_mib)*100) : g.util_pct), color:'#eab308'});
+            } else {
+                tiles.push({k:'gpu', key:'GPU', tag:'RTX 3080', num:'\u2014', unit:'', meta:'<span class="lo">in VM 200</span><span></span>', pct:0, color:'#2d3a4e'});
+            }
+            if (pool) {
+                tiles.push({k:'pool', key:'POOL', tag:DRIVE_TAG['PROMETHEUS'], num:pool.percent, unit:'%', meta:'<span>' + pool.used + '</span><span class="lo">/ ' + pool.total + '</span>', pct:pool.percent, color:'#ea580c'});
+            }
+            renderVitals(tiles, winTile());
 
-        // Drive strip — patched in place (built once, see renderDrives).
-        var drives = [];
-        DRIVE_ORDER.forEach(function(n) {
-            var d = (i.disks || []).find(function(x){return x.name===n;});
-            if (d) drives.push(d);
-        });
-        renderDrives(drives);
-    } catch(e) { console.error(e); }
+            renderArray(i.disks || []);
+            renderFolders(i.folders || []);
+            renderCrons(i.crons || []);
+            if (i.caps && i.caps.docker) renderContainers(i.containers || []);
+            var fb = document.getElementById('foot-brand'); if (fb) fb.textContent = i.hostname || 'ARES';
+        }
+        _vtick++;
 }
 
 
@@ -1024,8 +1073,281 @@ async function toggleWindows() {
 // Page chrome + neutral skeletons paint immediately (no gate). When data
 // arrives, the skeletons resolve into complete tiles (final numbers, filled
 // bars) with a quick opacity fade. Live values refresh every 15s in place.
-loadVitals();
-setInterval(loadVitals, 15000);
+// Windows VM status lives on its OWN slow loop (~700ms subprocess), so the
+// vitals/chart loop can poll fast without paying that cost every tick.
+function pollWin() {
+    if (window.innerWidth <= 600) return;
+    fetch('/api/vm/status', { method: 'POST' })
+        .then(function(wr){ return wr.json(); })
+        .then(function(wd){
+            var gpuHome = (wd.gpu_home !== false);
+            var changed = (wd.running !== winRunning) || (!!wd.streaming_ready !== winReady) || (gpuHome !== winGpuHome);
+            winRunning = wd.running; winReady = !!wd.streaming_ready; winGpuHome = gpuHome;
+            if (changed) { var vh2 = document.getElementById('vitals-hero'); if (vh2) updateWin(vh2, winTile()); }
+        })
+        .catch(function(){});
+}
+
+// Fit-to-viewport: scale the whole HUD so it fills the screen with NO scroll,
+// as large as it can be. Re-fits on resize and after charts/data change height.
+function fitHud(){
+    var hud=document.querySelector('.hud'); if(!hud) return;
+    hud.style.transform='none'; hud.style.width='';
+    var natW=hud.offsetWidth||1, natH=hud.offsetHeight||1;
+    var s=Math.min(window.innerWidth/natW, window.innerHeight/natH);
+    if (s < 1) hud.style.width=(window.innerWidth/s)+'px';   // re-widen so scaled layout fills width
+    // re-measure height after any re-widen, then scale to fit height exactly
+    natH=hud.offsetHeight||1; s=Math.min(window.innerWidth/(hud.offsetWidth||1), window.innerHeight/natH);
+    hud.style.transform='scale('+s.toFixed(4)+')';
+}
+window.addEventListener('resize', fitHud);
+fitHud(); setTimeout(fitHud, 700); setTimeout(fitHud, 2500);
+// No server-inlined snapshot -> fetch now. When present, the first render is
+// deferred to the end of this script (below), after HIST/_trace are initialized.
+if (!window.__BOOT) loadVitals();
+pollWin();
+setInterval(loadVitals, 1000);   // charts advance every 1s
+setInterval(pollWin, 20000);     // win status on its own slow loop
+
+// === Instruments =========================================================
+// Everything below is driven by fields /api/system-info actually returns.
+// No per-core, frequency or voltage telemetry exists on this box, so the
+// gauge shows total load + package temp rather than inventing a core map.
+var GAUGE_C = 339.29;   // 2*pi*54  — load ring
+var TEMP_C  = 276.46;   // 2*pi*44  — temp ring
+var GPU_C   = 163.36;   // 2*pi*26  — gpu arc
+var TRACE_MAX = 26;     // shorter window -> line advances visibly faster at 1s poll
+var _trace = [];
+
+function setArc(el, circ, pct) {
+    if (!el) return;
+    var p = Math.max(0, Math.min(100, pct || 0));
+    el.setAttribute('stroke-dashoffset', (circ * (1 - p / 100)).toFixed(2));
+}
+
+// Observed-load trace: samples this page has actually seen since it loaded.
+function drawTrace() {
+    var line = document.getElementById('g-trace-line');
+    var fill = document.getElementById('g-trace-fill');
+    var cnt  = document.getElementById('g-trace-n');
+    if (cnt) cnt.textContent = _trace.length + (_trace.length === 1 ? ' sample' : ' samples');
+    if (!line || !fill || _trace.length < 2) return;
+    var w = 300, h = 38, step = w / (_trace.length - 1);
+    var pts = _trace.map(function(v, ix) {
+        var x = (ix * step).toFixed(1);
+        var y = (h - (Math.max(0, Math.min(100, v)) / 100) * (h - 3) - 1.5).toFixed(1);
+        return x + ',' + y;
+    });
+    line.setAttribute('d', 'M' + pts.join(' L'));
+    fill.setAttribute('d', 'M0,' + h + ' L' + pts.join(' L') + ' L' + w + ',' + h + ' Z');
+    var stt = w / (_trace.length - 1); smoothIn('g-trace-line', stt); smoothIn('g-trace-fill', stt);
+}
+
+function updateGpu(g) {
+    var name = document.getElementById('gpu-name');
+    var util = document.getElementById('gpu-util');
+    var vbar = document.getElementById('gpu-vram-bar');
+    if (!g || !g.online) {
+        if (name) name.textContent = 'Offline';
+        if (util) util.textContent = '—';
+        setArc(document.getElementById('gpu-arc'), GPU_C, 0);
+        ['gpu-vram', 'gpu-power', 'gpu-temp'].forEach(function(id) {
+            var e = document.getElementById(id); if (e) e.textContent = '—';
+        });
+        if (vbar) vbar.style.width = '0%';
+        return;
+    }
+    if (name) name.textContent = (g.name || 'GPU').replace('NVIDIA GeForce ', '');
+    var u = (g.util_pct != null) ? g.util_pct : 0;
+    var vpct = g.vram_total_mib ? Math.min(100,(g.vram_used_mib/g.vram_total_mib)*100) : 0;
+    if (util) util.textContent = (u > 0 ? u + '%' : 'IDLE');
+    setArc(document.getElementById('gpu-arc'), GPU_C, Math.max(u, vpct));
+    var vr = document.getElementById('gpu-vram');
+    if (vr && g.vram_total_mib) {
+        vr.textContent = (g.vram_used_mib / 1024).toFixed(1) + 'G / ' + (g.vram_total_mib / 1024).toFixed(0) + 'G';
+        if (vbar) vbar.style.width = Math.min(100, (g.vram_used_mib / g.vram_total_mib) * 100) + '%';
+    }
+    var pw = document.getElementById('gpu-power');
+    if (pw && g.power_w != null) pw.textContent = g.power_w.toFixed(0) + 'W';
+    var tp = document.getElementById('gpu-temp');
+    if (tp && g.temp_c != null) tp.textContent = g.temp_c + '°C';
+}
+
+// ---- observed history -----------------------------------------------------
+// One entry per poll. Every chart below is drawn from these samples, so an
+// empty chart means "not observed yet", never a fabricated baseline.
+var HIST = { cpu: [], mem: [], gpu: [], ctemp: [], gtemp: [] };
+
+function pushHist(key, value) {
+    var a = HIST[key];
+    if (!a) return;
+    if (a.length === 0 && value != null) a.push(value);  // seed twin so a flat line draws immediately
+    a.push(value == null ? null : value);
+    if (a.length > TRACE_MAX) a.shift();
+}
+
+// Build an SVG path from a series, scaling `max` to the full height.
+// Null entries break the line rather than drawing through a gap.
+// Zoomed window [lo,hi] from a series: real min/max + 18% padding, with a
+// minimum span so a dead-flat idle line sits mid-height instead of glued flat.
+function histRange(arr, minSpan) {
+    var lo = Infinity, hi = -Infinity;
+    for (var i = 0; i < arr.length; i++) { var v = arr[i]; if (v == null) continue; if (v < lo) lo = v; if (v > hi) hi = v; }
+    if (!isFinite(lo)) return [0, minSpan];
+    if (hi - lo < minSpan) { var mid = (lo + hi) / 2; lo = mid - minSpan / 2; hi = mid + minSpan / 2; }
+    var pad = (hi - lo) * 0.18; lo -= pad; hi += pad;
+    if (lo < 0) lo = 0;
+    return [lo, hi];
+}
+function seriesPath(arr, w, h, lo, hi, close) {
+    if (!arr || arr.length < 2) return '';
+    var span = (hi - lo) || 1;
+    var step = w / (arr.length - 1);
+    var d = '', open = false;
+    for (var ix = 0; ix < arr.length; ix++) {
+        var v = arr[ix];
+        if (v == null) { open = false; continue; }
+        var x = ix * step;
+        var cv = Math.max(lo, Math.min(hi, v));
+        var y = h - ((cv - lo) / span) * (h - 3) - 1.5;
+        d += (open ? ' L' : ' M') + x.toFixed(1) + ',' + y.toFixed(1);
+        open = true;
+    }
+    if (!d) return '';
+    if (close) {
+        var first = arr.findIndex(function(v) { return v != null; });
+        var last = arr.length - 1;
+        while (last >= 0 && arr[last] == null) last--;
+        if (first < 0 || last <= first) return '';
+        d = 'M' + (first * step).toFixed(1) + ',' + h + d.replace(/^ M/, ' L') +
+            ' L' + (last * step).toFixed(1) + ',' + h + ' Z';
+    }
+    return d.trim();
+}
+
+function setPath(id, d) {
+    var el = document.getElementById(id);
+    if (el) el.setAttribute('d', d);
+}
+var _RM = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Smooth scroll: put the freshly-drawn line one step to the right, then glide it
+// back to 0 over the poll interval -> continuous leftward motion between samples.
+function smoothIn(id, step) {
+    // Treadmill transform caused a visible blip (big instant sideways jump when the
+    // buffer was small). Neutralized: lines redraw in place each poll, no flicker.
+    var el = document.getElementById(id);
+    if (el) { el.style.transition = 'none'; el.style.transform = 'none'; }
+}
+
+function drawSpark(key, lineId, fillId, valId, suffix) {
+    var arr = HIST[key];
+    var r = histRange(arr, key === 'gpu' ? 8 : 6);   // %; floor so idle still reads as a live wiggle
+    setPath(lineId, seriesPath(arr, 400, 36, r[0], r[1], false));
+    setPath(fillId, seriesPath(arr, 400, 36, r[0], r[1], true));
+    if (arr && arr.length > 1) { var st = 400 / (arr.length - 1); smoothIn(lineId, st); smoothIn(fillId, st); }
+    var v = document.getElementById(valId);
+    if (v) {
+        var last = null;
+        for (var ix = arr.length - 1; ix >= 0; ix--) { if (arr[ix] != null) { last = arr[ix]; break; } }
+        v.textContent = last == null ? '—' : last.toFixed(0) + suffix;
+    }
+}
+
+function drawCharts() {
+    drawSpark('cpu', 'sp-cpu-l', 'sp-cpu-f', 'sp-cpu-v', '%');
+    drawSpark('mem', 'sp-mem-l', 'sp-mem-f', 'sp-mem-v', '%');
+    drawSpark('gpu', 'sp-gpu-l', 'sp-gpu-f', 'sp-gpu-v', '%');
+    // Thermals share a 0–90C scale so the two lines are directly comparable.
+    var tr = histRange(HIST.ctemp.concat(HIST.gtemp), 6);   // °C, shared so CPU vs GPU stay comparable
+    setPath('th-cpu', seriesPath(HIST.ctemp, 300, 76, tr[0], tr[1], false));
+    setPath('th-gpu', seriesPath(HIST.gtemp, 300, 76, tr[0], tr[1], false));
+    var _thi = document.getElementById('th-hi'), _tlo = document.getElementById('th-lo');
+    if (_thi) _thi.textContent = Math.round(tr[1]) + '\u00b0C';
+    if (_tlo) _tlo.textContent = Math.round(tr[0]) + '\u00b0C';
+    if (HIST.ctemp.length > 1) { var sh = 300 / (HIST.ctemp.length - 1); smoothIn('th-cpu', sh); smoothIn('th-gpu', sh); }
+    var w = document.getElementById('tel-window');
+    if (w) {
+        var n = HIST.cpu.length;
+        var mins = Math.round(n * 15 / 60);
+        w.textContent = n < 2 ? (n + ' sample') : (mins < 1 ? n + ' samples' : '~' + mins + ' min');
+    }
+}
+
+// Array map: every disk the API reports, widest first.
+var ARR_COLOR = { '970-EVO': '#fb923c', '990-PRO': '#f59e0b', 'PROMETHEUS': '#ef4444' };
+
+function renderArray(disks) {
+    var list = document.getElementById('arr-list');
+    var count = document.getElementById('arr-count');
+    if (!list) return;
+    if (!disks || !disks.length) {
+        list.innerHTML = '<div class="arr-empty">no array data</div>';
+        if (count) count.textContent = '—';
+        return;
+    }
+    if (count) count.textContent = disks.length + ' volumes';
+    list.innerHTML = disks.map(function(d) {
+        var pct = d.percent != null ? d.percent : 0;
+        var color = ARR_COLOR[d.name] || 'var(--ares)';
+        var temp = d.temp_c != null ? '<span class="hot">' + d.temp_c + '°C</span>' : '<span></span>';
+        return '<div class="arr-row">' +
+                   '<div class="arr-top"><span class="arr-name">' + d.name + '</span>' +
+                   '<span class="arr-cap">' + (d.used || '—') + ' / ' + (d.total || '—') + '</span></div>' +
+                   '<div class="arr-bar"><div class="arr-fill" style="width:' + pct + '%;--arr-color:' + color + '"></div></div>' +
+                   '<div class="arr-meta"><span>' + pct + '% used</span>' + temp + '</div>' +
+               '</div>';
+    }).join('');
+}
+
+function updateInstruments(i, g, pool) {
+    // Load ring + centre number
+    var load = parseFloat(i.cpu_percent);
+    if (!isFinite(load)) load = 0;
+    var ln = document.getElementById('g-load');
+    if (ln) ln.textContent = load.toFixed(0);
+    setArc(document.getElementById('g-arc'), GAUGE_C, load);
+
+    // Package temp ring, scaled against the 90C redline; colour shifts as it climbs.
+    var tEl = document.getElementById('g-temp');
+    var tArc = document.getElementById('g-temp-arc');
+    if (i.cpu_temp != null) {
+        if (tEl) tEl.textContent = i.cpu_temp.toFixed(0) + '°C';
+        setArc(tArc, TEMP_C, Math.min(100, (i.cpu_temp / 90) * 100));
+        if (tArc) tArc.style.stroke = i.cpu_temp >= 75 ? 'var(--red)'
+                                    : i.cpu_temp >= 60 ? 'var(--ares)' : 'var(--amber)';
+    } else {
+        if (tEl) tEl.textContent = '—';
+        setArc(tArc, TEMP_C, 0);
+    }
+
+    var th = document.getElementById('g-threads');
+    if (th) {
+        var m = (i.cpu || '').match(/(\d+)\s*threads/);
+        th.textContent = m ? m[1] + ' THREADS' : '';
+    }
+    var mem = document.getElementById('g-mem');
+    if (mem && i.memory_used) mem.textContent = i.memory_used + ' / ' + i.memory_total;
+
+    if (_trace.length === 0) _trace.push(load);
+    _trace.push(load);
+    if (_trace.length > TRACE_MAX) _trace.shift();
+    drawTrace();
+
+    // Feed the charts from the same payload.
+    pushHist('cpu', load);
+    pushHist('mem', isFinite(parseFloat(i.memory_percent)) ? parseFloat(i.memory_percent) : null);
+    pushHist('gpu', (g && g.online && g.util_pct != null) ? g.util_pct : null);
+    pushHist('ctemp', i.cpu_temp != null ? i.cpu_temp : null);
+    pushHist('gtemp', (g && g.online && g.temp_c != null) ? g.temp_c : null);
+    drawCharts();
+    updateGpu(g);
+}
+
+// First frame from the server-inlined snapshot — runs here, after every `var`
+// (HIST/_trace/TRACE_MAX) is initialized, so the first paint shows real numbers
+// with no skeleton -> pop-in flash.
+if (window.__BOOT) { try { applyVitals(window.__BOOT); } catch(e) { console.error(e); } window.__BOOT = null; }
+
 </script>
 </body>
 </html>
