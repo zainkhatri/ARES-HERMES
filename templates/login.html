@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content, viewport-fit=cover">
-    <title>ARES & NEXUS · Login</title>
+    <title>ARES & CRONOS · Login</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -134,10 +134,10 @@
 <div class="shell">
     <div class="card">
         <div class="brand">
-            <div class="brand-mark">A</div>
+            <div class="brand-mark">{{ (brand_name or 'ARES')[0] }}</div>
             <div class="brand-id">
-                <span class="brand-name">ARES</span>
-                <span class="brand-tag">Super-NAS</span>
+                <span class="brand-name">{{ brand_name or 'ARES' }}</span>
+                <span class="brand-tag">{{ brand_tag or 'Super-NAS' }}</span>
             </div>
         </div>
 
@@ -154,8 +154,8 @@
         </form>
 
         <div class="footer">
-            <div>ARES · Super-NAS · v1.0</div>
-            <div class="sister">Sister node · <a href="/jump/nexus">Nexus</a></div>
+            <div>{{ brand_name or 'ARES' }} · {{ brand_tag or 'Super-NAS' }} · v1.0</div>
+            <div class="sister">Sister node · <a href="{{ sister_href or '/jump/hermes' }}">{{ sister_name or 'CRONOS' }}</a></div>
         </div>
     </div>
 </div>
