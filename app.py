@@ -608,7 +608,7 @@ def api_outreach():
         opens = d.get("opens") or {}
         out.append({
             "company": d.get("company") or "?",
-            "sent": s.get("totalSends") or 0,
+            "sent": s.get("totalSends") or contacted or 0,
             "contacted": contacted,
             "replied": replied,
             "reply_rate": round(100 * replied / contacted, 1) if contacted else 0,
