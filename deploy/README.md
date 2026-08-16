@@ -42,6 +42,22 @@ name to the public Funnel IPs and won't reach :8443 — that's expected; MagicDN
 clients (your devices) resolve it to the 100.100.29.36 tailscale IP and reach it fine.
 Direct `http://100.100.29.36:8890/` also still works.
 
+
+## Sister-node card (peer health at a glance)
+Each box's home dashboard shows a compact card with the OTHER box's live health
+(● up/down, cpu %, mem %, containers up/down, failed jobs) — tap it to open the
+peer's dashboard. Config per box (ARES `.env`, CRONOS systemd unit):
+
+    PEER_URL   = http://<peer tailscale IP>:<port>   # ARES->CRONOS :8890, CRONOS->ARES :8080
+    PEER_NAME  = CRONOS | ARES
+    PEER_TAG   = Mid-NAS | Super-NAS
+
+The card fetches the peer's `/healthz` **from the browser** (client-side), because
+ARES's Flask runs in an LXC with no Tailscale route to the peer — your browser is
+on the tailnet and reaches both. `/healthz` is CORS-open (non-secret, tailnet-only).
+Caveat: load the dashboards over **http** (the IP links) — an https page can't
+fetch the http peer (mixed content), and the card would show "unreachable".
+
 ## Health / drift
 `curl -s http://100.100.29.36:8890/healthz` → `{ok, brand, caps, stamp}`.
 `stamp` is the git SHA of the code this box is running (written on each deploy).
