@@ -48,21 +48,6 @@
                 linear-gradient(90deg, var(--grid) 1px, transparent 1px);
             background-size:44px 44px, 44px 44px;
         }
-        body::after {
-            content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
-            background:
-                radial-gradient(120% 70% at 50% 118%, rgba(var(--ares-rgb),.16), transparent 62%),
-                radial-gradient(80% 50% at 50% -18%, rgba(194,48,31,.10), transparent 60%);
-            opacity:.85;   /* perf: static — a full-screen animated layer can't be
-                              snapshot-cached, so it fought the macOS Spaces compositor */
-        }
-
-        .scanline {
-            position:fixed; inset:0; z-index:900; pointer-events:none;
-            background:linear-gradient(rgba(18,6,4,0) 50%, rgba(0,0,0,.22) 50%);
-            background-size:100% 3px;
-        }
-
         .hud { position:relative; z-index:1; display:flex; flex-direction:column;
                min-height:100vh; min-height:100dvh; padding:calc(14px + var(--sat)) 16px calc(14px + var(--sab)); gap:14px; }
 
@@ -405,7 +390,6 @@
 </head>
 <body>
 
-<div class="scanline"></div>
 
 <script id="ares-boot" type="application/json">{{ boot|default(none)|tojson }}</script>
 <script>try{window.__BOOT=JSON.parse(document.getElementById('ares-boot').textContent);}catch(e){window.__BOOT=null;}</script>
@@ -473,20 +457,6 @@
                     <div class="fact"><div class="fact-k">Uptime</div><div class="fact-v"><span class="skeleton" id="h-uptime"></span></div></div>
                     <div class="fact"><div class="fact-k">Host</div><div class="fact-v" id="v-host-tag">—</div></div>
                 </div>
-            </section>
-
-            <section class="mod c-tl c-br" id="sister-card" style="display:none">
-                <div class="mod-head">
-                    <span class="mod-title">Sister node</span>
-                    <span class="mod-meta" id="sister-meta">—</span>
-                </div>
-                <a class="sister-body" id="sister-link" href="#" title="Open the sister box's dashboard">
-                    <span class="cdot" id="sister-dot"></span>
-                    <span class="sister-name" id="sister-name">—</span>
-                    <span class="sister-tag" id="sister-tag"></span>
-                    <svg class="op-arrow sister-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
-                    <span class="sister-stats" id="sister-stats"></span>
-                </a>
             </section>
 
             <section class="mod c-bl c-tr">
@@ -1171,11 +1141,9 @@ fitHud(); setTimeout(fitHud, 700); setTimeout(fitHud, 2500);
 // deferred to the end of this script (below), after HIST/_trace are initialized.
 if (!window.__BOOT) loadVitals();
 pollWin();
-pollPeer();
-setInterval(loadVitals, 2000);   // perf: 2s poll (was 1s)
+setInterval(loadVitals, 3000);   // perf: 3s poll
 document.addEventListener('visibilitychange', function(){ if (!document.hidden) loadVitals(); });   // refetch on return
 setInterval(pollWin, 20000);     // win status on its own slow loop
-setInterval(pollPeer, 12000);    // sister-node health on its own slow loop
 
 // === Instruments =========================================================
 // Everything below is driven by fields /api/system-info actually returns.

@@ -145,6 +145,47 @@ def _read_host_nvme():
     return out
 
 
+def _get_disks_physical():
+    """Per-physical-SSD usage for the array map (ZEUS: T5/T7/T9 behind the mergerfs
+    pool). Maps each disk's model to a friendly name (trailing T5/T7/T9 token), finds
+    its primary data/root mount, and reports usage. [] on any failure."""
+    try:
+        r = subprocess.run(["lsblk", "-J", "-b", "-o", "NAME,TYPE,MODEL,MOUNTPOINT"],
+                           capture_output=True, text=True, timeout=5)
+        data = json.loads(r.stdout) if r.returncode == 0 else {}
+    except Exception:
+        return []
+    import re as _re
+    out = []
+    for dev in data.get("blockdevices", [])[:30]:            # bounded
+        if dev.get("type") != "disk":
+            continue
+        model = (dev.get("model") or "").strip()
+        m = _re.search(r"\b(T[0-9])\b", model)
+        name = m.group(1) if m else (model.split()[-1] if model else dev.get("name", "?"))
+        mount = None
+        for ch in (dev.get("children") or [dev]):
+            mp = ch.get("mountpoint")
+            if mp and (mp.startswith("/srv") or mp == "/"):
+                mount = mp
+                break
+        if not mount:
+            continue
+        try:
+            u = os.statvfs(mount)
+        except OSError:
+            continue
+        total = u.f_blocks * u.f_frsize
+        used = total - (u.f_bfree * u.f_frsize)
+        if total <= 0:
+            continue
+        out.append({"name": name, "total": _format_bytes(total),
+                    "used": _format_bytes(used), "free": _format_bytes(u.f_bavail * u.f_frsize),
+                    "percent": round(used / total * 100, 1)})
+    out.sort(key=lambda d: d["name"])
+    return out
+
+
 def _get_disks():
     """Get disk info with time-based caching. Works on Linux NAS and macOS."""
     # Serve from cache if fresh enough
@@ -822,6 +863,8 @@ def get_system_info() -> dict:
     # waste an SSH connect-timeout every refresh and — same LAN — could even report
     # the WRONG box's numbers. Gate them on the proxmox capability.
     disks = _get_disks() + (_get_host_disks() if caps.get("proxmox") else [])
+    if os.getenv("HOST_BRAND", "").upper() == "ZEUS":
+        disks = disks + _get_disks_physical()   # per-SSD rows (T5/T7/T9) for the array map
 
     # Top-level folder sizes
     folders = _get_folder_sizes()
