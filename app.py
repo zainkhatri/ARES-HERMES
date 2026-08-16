@@ -385,7 +385,14 @@ def require_auth(f):
 def login_page():
     if session.get("authenticated"):
         return redirect(url_for("home"))
-    return render_template("login.html")
+    is_cronos = os.getenv("HOST_BRAND", "").upper() == "CRONOS"
+    return render_template(
+        "login.html",
+        brand_name="CRONOS" if is_cronos else "ARES",
+        brand_tag="Mid-NAS" if is_cronos else "Super-NAS",
+        sister_name="ARES" if is_cronos else "CRONOS",
+        sister_href="https://ares.tail3045df.ts.net/" if is_cronos else "/jump/hermes",
+    )
 
 
 @app.route("/api/login", methods=["POST"])
