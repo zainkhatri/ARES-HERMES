@@ -328,6 +328,16 @@
                  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .cwhen { font-size:9.5px; color:var(--text-3); text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
         .cwhen b { color:var(--text-2); font-weight:600; }
+        /* sister-node card — peer box health at a glance, tap to open its dashboard */
+        .sister-body { display:grid; grid-template-columns:8px auto auto 1fr; align-items:center;
+                       gap:9px; padding:9px 2px 2px; text-decoration:none; color:inherit; }
+        .sister-name { font-size:13px; font-weight:700; letter-spacing:.05em; color:var(--text-1); }
+        .sister-tag  { font-size:9px; color:var(--text-2); text-transform:uppercase; letter-spacing:.12em; }
+        .sister-arrow { color:var(--text-3); justify-self:end; transition:color .2s var(--ease-out), transform .2s var(--ease-out); }
+        .sister-body:hover .sister-arrow { color:var(--ares); transform:translateX(2px); }
+        .sister-body:hover .sister-name { color:var(--ares); }
+        .sister-stats { grid-column:1 / -1; margin-top:8px; font-size:10.5px; color:var(--text-2); }
+        .sister-stats b { color:var(--text-1); font-variant-numeric:tabular-nums; font-weight:700; }
         .arr-list { display:flex; flex-direction:column; gap:10px; }
         /* center Array map fills its panel: rows split the height, content centered */
         .col-mid .mod-body.arr-list { flex:1; justify-content:space-between; }
@@ -470,6 +480,20 @@
                     <div class="fact"><div class="fact-k">Uptime</div><div class="fact-v"><span class="skeleton" id="h-uptime"></span></div></div>
                     <div class="fact"><div class="fact-k">Host</div><div class="fact-v" id="v-host-tag">—</div></div>
                 </div>
+            </section>
+
+            <section class="mod c-tl c-br" id="sister-card" style="display:none">
+                <div class="mod-head">
+                    <span class="mod-title">Sister node</span>
+                    <span class="mod-meta" id="sister-meta">—</span>
+                </div>
+                <a class="sister-body" id="sister-link" href="#" title="Open the sister box's dashboard">
+                    <span class="cdot" id="sister-dot"></span>
+                    <span class="sister-name" id="sister-name">—</span>
+                    <span class="sister-tag" id="sister-tag"></span>
+                    <svg class="op-arrow sister-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                    <span class="sister-stats" id="sister-stats"></span>
+                </a>
             </section>
 
             <section class="mod c-bl c-tr">
@@ -857,6 +881,38 @@ function renderCrons(jobs) {
     if (m) m.textContent = bad ? (bad + ' failed') : (jobs.length + ' ok');
 }
 
+// Sister-node card: the peer box's health at a glance (via same-origin /api/peer
+// -> peer /healthz). Counts + %, tap to open its dashboard. Hidden if no peer.
+function renderSister(d) {
+    var card = document.getElementById('sister-card');
+    if (!card) return;
+    if (!d || !d.configured) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    document.getElementById('sister-dot').className = 'cdot ' + (d.up ? 'ok' : 'bad');
+    document.getElementById('sister-name').textContent = d.name || 'Sister';
+    document.getElementById('sister-tag').textContent = d.tag || '';
+    var link = document.getElementById('sister-link'); if (d.url) link.href = d.url;
+    document.getElementById('sister-meta').textContent = d.up ? 'online' : 'offline';
+    var stats = document.getElementById('sister-stats');
+    if (!d.up) { stats.innerHTML = '<span style="color:var(--ares)">unreachable</span>'; return; }
+    var s = d.summary || {}, bits = [];
+    if (s.cpu != null) bits.push('cpu <b>' + Math.round(s.cpu) + '%</b>');
+    if (s.mem != null) bits.push('mem <b>' + Math.round(s.mem) + '%</b>');
+    if (s.containers_total) bits.push('<b>' + s.containers_total + '</b> svc' +
+        (s.containers_down ? ' <span style="color:var(--ares)">(' + s.containers_down + ' down)</span>' : ''));
+    if (s.jobs_failed) bits.push('<span style="color:var(--ares)">' + s.jobs_failed + ' job' + (s.jobs_failed > 1 ? 's' : '') + ' failed</span>');
+    stats.innerHTML = bits.join('<span style="opacity:.35"> · </span>') || 'online';
+}
+
+var _peerBusy = false;
+async function pollPeer() {
+    if (_peerBusy) return;
+    _peerBusy = true;
+    try { var r = await fetch('/api/peer'); if (r.ok) renderSister(await r.json()); }
+    catch (e) {}
+    finally { _peerBusy = false; }
+}
+
 // Capability gating: hide panels this box lacks. No-op on ARES (all caps on).
 // Missing cap -> treated as present (undefined !== 0) so older payloads = ARES.
 var _capsApplied = false;
@@ -1121,8 +1177,10 @@ fitHud(); setTimeout(fitHud, 700); setTimeout(fitHud, 2500);
 // deferred to the end of this script (below), after HIST/_trace are initialized.
 if (!window.__BOOT) loadVitals();
 pollWin();
+pollPeer();
 setInterval(loadVitals, 1000);   // charts advance every 1s
 setInterval(pollWin, 20000);     // win status on its own slow loop
+setInterval(pollPeer, 12000);    // sister-node health on its own slow loop
 
 // === Instruments =========================================================
 // Everything below is driven by fields /api/system-info actually returns.
