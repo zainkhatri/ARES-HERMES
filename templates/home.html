@@ -173,6 +173,17 @@
         .op-arrow { color:var(--text-3); transition:color var(--dur), transform var(--dur); }
         .op:hover .op-name { color:var(--ares); }
         .op:hover .op-arrow { color:var(--ares); transform:translateX(3px); }
+        /* ZEUS outreach stats */
+        .outreach-list { display:flex; flex-direction:column; gap:11px; }
+        .oc-row { border:1px solid var(--ember-dim); background:var(--bg-1); padding:10px 12px 11px 14px; position:relative; }
+        .oc-row::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--ares); opacity:.4; }
+        .oc-top { display:flex; align-items:center; gap:8px; }
+        .oc-name { font-size:12.5px; font-weight:700; letter-spacing:.03em; color:var(--text-1); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .oc-nr { font-size:8.5px; letter-spacing:.06em; color:var(--amber); text-transform:uppercase; white-space:nowrap; }
+        .oc-stats { display:flex; gap:16px; margin-top:9px; }
+        .oc-stat { display:flex; flex-direction:column; gap:3px; }
+        .oc-stat b { font-size:16px; font-weight:700; color:var(--text-1); font-variant-numeric:tabular-nums; line-height:1; }
+        .oc-stat i { font-size:8px; letter-spacing:.13em; color:var(--text-3); text-transform:uppercase; font-style:normal; }
 
         /* ---- wordmark ----------------------------------------------------- */
         .mark { display:flex; align-items:flex-start; justify-content:center; flex:0 0 auto; padding:6px 0 4px; min-height:0; }
@@ -459,7 +470,7 @@
                 </div>
             </section>
 
-            <section class="mod c-bl c-tr">
+            <section class="mod c-bl c-tr" id="panel-ops">
                 <div class="mod-head">
                     <span class="mod-title">Operation modules</span>
                     <span class="mod-meta">04 active</span>
@@ -487,6 +498,17 @@
                             <svg class="op-arrow" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
                         </a>
                     </nav>
+                </div>
+            </section>
+
+            <!-- ZEUS: business outreach stats (replaces Operation modules). -->
+            <section class="mod c-bl c-tr" id="panel-outreach" style="display:none">
+                <div class="mod-head">
+                    <span class="mod-title">Outreach</span>
+                    <span class="mod-meta" id="outreach-meta">—</span>
+                </div>
+                <div class="mod-body outreach-list" id="outreach-list">
+                    <div class="arr-empty">loading…</div>
                 </div>
             </section>
         </div>
@@ -872,6 +894,36 @@ async function pollPeer() {
     finally { _peerBusy = false; }
 }
 
+function fmtN(n) { n = +n || 0; return n >= 1000 ? n.toLocaleString() : String(n); }
+
+// ZEUS outreach stats — per-client sent / reply-rate / meetings / opens (via /api/outreach).
+function renderOutreach(list) {
+    var el = document.getElementById('outreach-list');
+    if (!el) return;
+    if (!list || !list.length) { el.innerHTML = '<div class="arr-empty">no outreach data</div>'; return; }
+    el.innerHTML = list.map(function(c) {
+        var nr = c.needs_reply ? '<span class="oc-nr">' + c.needs_reply + ' to reply</span>' : '';
+        return '<div class="oc-row"><div class="oc-top">' +
+               '<span class="oc-name">' + esc(c.company) + '</span>' + nr + '</div>' +
+               '<div class="oc-stats">' +
+                 '<div class="oc-stat"><b>' + fmtN(c.sent) + '</b><i>sent</i></div>' +
+                 '<div class="oc-stat"><b>' + (c.reply_rate || 0) + '%</b><i>reply</i></div>' +
+                 '<div class="oc-stat"><b>' + (c.meetings || 0) + '</b><i>mtgs</i></div>' +
+                 '<div class="oc-stat"><b>' + fmtN(c.opens) + '</b><i>opens</i></div>' +
+               '</div></div>';
+    }).join('');
+    var m = document.getElementById('outreach-meta');
+    if (m) m.textContent = list.length + ' client' + (list.length > 1 ? 's' : '');
+}
+var _outreachBusy = false;
+async function pollOutreach() {
+    if (_outreachBusy || !(window.__CAPS && window.__CAPS.docker)) return;
+    _outreachBusy = true;
+    try { var r = await fetch('/api/outreach'); if (r.ok) renderOutreach(await r.json()); }
+    catch (e) {}
+    finally { _outreachBusy = false; }
+}
+
 // Capability gating: hide panels this box lacks. No-op on ARES (all caps on).
 // Missing cap -> treated as present (undefined !== 0) so older payloads = ARES.
 var _capsApplied = false;
@@ -887,6 +939,8 @@ function applyCaps(caps) {
     show('.op-photos', caps.photos !== 0);
     show('.op-journals', caps.journals !== 0);
     show('#panel-containers', caps.docker === 1);
+    show('#panel-ops', caps.docker !== 1);        // ARES: operation modules
+    show('#panel-outreach', caps.docker === 1);   // ZEUS: outreach stats
 }
 
 // Docker/FAI container health (ZEUS). Reuses the .crow/.cdot job-row styling.
@@ -1142,6 +1196,7 @@ fitHud(); setTimeout(fitHud, 700); setTimeout(fitHud, 2500);
 if (!window.__BOOT) loadVitals();
 pollWin();
 setInterval(loadVitals, 3000);   // perf: 3s poll
+setInterval(pollOutreach, 60000);   // ZEUS outreach stats (slow)
 document.addEventListener('visibilitychange', function(){ if (!document.hidden) loadVitals(); });   // refetch on return
 setInterval(pollWin, 20000);     // win status on its own slow loop
 
@@ -1385,6 +1440,7 @@ function updateInstruments(i, g, pool) {
 // (HIST/_trace/TRACE_MAX) is initialized, so the first paint shows real numbers
 // with no skeleton -> pop-in flash.
 if (window.__BOOT) { try { applyVitals(window.__BOOT); } catch(e) { console.error(e); } window.__BOOT = null; }
+pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
 
 </script>
 </body>

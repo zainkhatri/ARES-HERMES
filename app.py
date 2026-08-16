@@ -575,6 +575,52 @@ def api_peer():
                     "tag": os.getenv("PEER_TAG", ""), "url": url})
 
 
+# Snapshot ports for the FAI outreach apps (ZEUS). Override with OUTREACH_SNAPSHOTS.
+_OUTREACH_DEFAULT = ("http://localhost:8080/snapshot.json,"
+                     "http://localhost:8090/snapshot.json,"
+                     "http://127.0.0.1:8093/snapshot.json")
+
+
+@app.route("/api/outreach")
+@require_auth
+def api_outreach():
+    """ZEUS business-outreach roll-up: reads the FAI apps' local snapshot.json and
+    returns per-client headline metrics (sent / reply-rate / meetings / needs-reply
+    / opens). [] on any box that isn't ZEUS or has no snapshots reachable."""
+    if os.getenv("HOST_BRAND", "").upper() != "ZEUS":
+        return jsonify([])
+    import requests
+    out = []
+    for u in os.getenv("OUTREACH_SNAPSHOTS", _OUTREACH_DEFAULT).split(","):
+        u = u.strip()
+        if not u:
+            continue
+        try:
+            d = requests.get(u, timeout=4).json()
+        except Exception:
+            continue
+        if not isinstance(d, dict):
+            continue
+        s = d.get("summary") or {}
+        contacted = s.get("contacted") or 0
+        replied = s.get("replied") or 0
+        nr = d.get("needsReply")
+        opens = d.get("opens") or {}
+        out.append({
+            "company": d.get("company") or "?",
+            "sent": s.get("totalSends") or 0,
+            "contacted": contacted,
+            "replied": replied,
+            "reply_rate": round(100 * replied / contacted, 1) if contacted else 0,
+            "meetings": s.get("meetings") or 0,
+            "warm": s.get("warm") or 0,
+            "needs_reply": len(nr) if isinstance(nr, list) else (nr or 0),
+            "opens": opens.get("total") or 0,
+            "opens_unique": opens.get("unique") or 0,
+            "updated": d.get("updatedAt"),
+        })
+    return jsonify(out)
+
 
 @app.route("/drives")
 @require_auth
