@@ -516,6 +516,23 @@ def home():
     return render_template("home.html", boot=get_system_info())
 
 
+@app.route("/healthz")
+def healthz():
+    """Unauthenticated liveness + drift probe (no secrets). Reports brand, the
+    capability profile, and the deploy stamp (git SHA written by
+    deploy/sync-to-cronos.sh) so a deploy can assert the remote box is running
+    the code it just pushed — turning silent drift into a loud check."""
+    from system.system_info import _capabilities
+    stamp = "dev"
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".deploy_stamp")) as f:
+            stamp = f.read().strip() or "dev"
+    except OSError:
+        pass
+    return jsonify({"ok": True, "brand": os.getenv("HOST_BRAND", ""),
+                    "caps": _capabilities(), "stamp": stamp})
+
+
 
 @app.route("/drives")
 @require_auth

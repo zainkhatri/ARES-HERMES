@@ -78,8 +78,11 @@ _CAPS_CONSERVATIVE = {"gpu": 0, "proxmox": 0, "windows_vm": 0, "mordor": 0, "pho
 
 def _capabilities():
     """Feature panels this box shows. Brand-keyed defaults + optional
-    CAPS="gpu=0,docker=1" env override. No-op on ARES (all caps on)."""
-    brand = os.getenv("HOST_BRAND", "ARES").upper()
+    CAPS="gpu=0,docker=1" env override. Fail-safe: an unset/unknown HOST_BRAND
+    yields the CONSERVATIVE profile (terminal only), never full ARES access — a
+    misconfigured box locks down rather than exposing GPU/photos/PVE probes.
+    Both boxes set HOST_BRAND explicitly (ARES via .env, CRONOS via the unit)."""
+    brand = os.getenv("HOST_BRAND", "").upper()
     caps = dict(_CAPS_DEFAULTS.get(brand, _CAPS_CONSERVATIVE))
     for pair in os.getenv("CAPS", "").split(","):          # bounded by env length
         if "=" in pair:
@@ -811,15 +814,19 @@ def get_system_info() -> dict:
     # Memory
     mem = psutil.virtual_memory()
 
-    # Disks (cached) — local LXC mounts + Proxmox host disks (AIRDISK via SSH)
-    disks = _get_disks() + _get_host_disks()
+    caps = _capabilities()
+
+    # Disks (cached). The Proxmox-host probes (AIRDISK drives + real host CPU/mem
+    # over SSH) are ARES-LXC-only: ARES's Flask runs inside LXC 101 and reaches
+    # past its cgroup to the host. On a bare-metal box (e.g. CRONOS) they would
+    # waste an SSH connect-timeout every refresh and — same LAN — could even report
+    # the WRONG box's numbers. Gate them on the proxmox capability.
+    disks = _get_disks() + (_get_host_disks() if caps.get("proxmox") else [])
 
     # Top-level folder sizes
     folders = _get_folder_sizes()
 
-    # Prefer real host numbers over the LXC cgroup view. ARES is the whole box,
-    # not the 8 GB container slice it runs inside.
-    host_compute = _get_host_compute()
+    host_compute = _get_host_compute() if caps.get("proxmox") else {}
     out = {
         "hostname": os.getenv("HOST_BRAND", "ARES"),
         "folders": folders,
@@ -835,11 +842,11 @@ def get_system_info() -> dict:
         "uptime": uptime_str,
         "disks": disks,
         "python": platform.python_version(),
-        "mordor": _get_mordor_status(),
-        "gpu": _get_gpu_info(),
+        "mordor": _get_mordor_status() if caps.get("mordor") else {"online": False},
+        "gpu": _get_gpu_info() if caps.get("gpu") else {"online": False},
         "crons": _read_host_crons(),
-        "caps": _capabilities(),
+        "caps": caps,
     }
-    if out["caps"].get("docker"):
+    if caps.get("docker"):
         out["containers"] = _get_containers()
     return out
