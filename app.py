@@ -391,7 +391,7 @@ def login_page():
         brand_name="ZEUS" if is_zeus else "ARES",
         brand_tag="Mid-NAS" if is_zeus else "Super-NAS",
         sister_name="ARES" if is_zeus else "ZEUS",
-        sister_href="https://ares.tail3045df.ts.net/" if is_zeus else "/jump/zeus",
+        sister_href="http://100.77.42.110:8080/" if is_zeus else "/jump/zeus",
     )
 
 
@@ -501,7 +501,7 @@ def jump_zeus():
     """Hand off to ZEUS with a one-shot SSO token, skipping its login.
     Symmetric with ZEUS→ARES: both jumps use the tailnet IP (private, no funnel,
     no 'hermes' name). Route path stays /jump/zeus (internal); target is the ZEUS box IP."""
-    target_base = "http://100.100.29.36:8888"
+    target_base = "http://100.100.29.36:8890"
     s = _sso_serializer()
     if s is None:
         return redirect(target_base)

@@ -5,8 +5,8 @@
 (function () {
   const onAresLan = location.hostname === '192.168.20.213' || location.hostname === 'ares.local';
   const URLS = {
-    ARES:  onAresLan ? 'http://192.168.20.213:8080/' : 'https://ares.tail3045df.ts.net/',
-    ZEUS: 'https://zeus.tail3045df.ts.net/',
+    ARES:  'http://100.77.42.110:8080/',
+    ZEUS: 'http://100.100.29.36:8890/',
   };
   const NODES = {
     ZEUS: { letter: 'Z', name: 'ZEUS', tag: 'MID-NAS',  color: '#22d3ee' },

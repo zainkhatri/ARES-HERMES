@@ -423,7 +423,7 @@
         <div>
             {% set is_zeus = boot and (boot.hostname or '')|upper == 'ZEUS' %}
             <div class="nodes">
-                <a href="{{ 'https://ares.tail3045df.ts.net/' if is_zeus else '/' }}" class="chip{{ '' if is_zeus else ' is-active' }}"{{ '' if is_zeus else ' aria-current=page'|safe }} aria-label="ARES">
+                <a href="{{ 'http://100.77.42.110:8080/' if is_zeus else '/' }}" class="chip{{ '' if is_zeus else ' is-active' }}"{{ '' if is_zeus else ' aria-current=page'|safe }} aria-label="ARES">
                     <span class="chip-mark">A</span>
                     <span class="chip-name">ARES</span><span class="chip-tag">/ SUPER-NAS</span>
                 </a>
