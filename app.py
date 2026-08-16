@@ -385,13 +385,13 @@ def require_auth(f):
 def login_page():
     if session.get("authenticated"):
         return redirect(url_for("home"))
-    is_cronos = os.getenv("HOST_BRAND", "").upper() == "CRONOS"
+    is_zeus = os.getenv("HOST_BRAND", "").upper() == "ZEUS"
     return render_template(
         "login.html",
-        brand_name="CRONOS" if is_cronos else "ARES",
-        brand_tag="Mid-NAS" if is_cronos else "Super-NAS",
-        sister_name="ARES" if is_cronos else "CRONOS",
-        sister_href="https://ares.tail3045df.ts.net/" if is_cronos else "/jump/hermes",
+        brand_name="ZEUS" if is_zeus else "ARES",
+        brand_tag="Mid-NAS" if is_zeus else "Super-NAS",
+        sister_name="ARES" if is_zeus else "ZEUS",
+        sister_href="https://ares.tail3045df.ts.net/" if is_zeus else "/jump/zeus",
     )
 
 
@@ -428,7 +428,7 @@ def _authz():
 
 
 # ─── Cross-node SSO handoff ─────────────────────────────────────────────────
-# ARES and HERMES are twin apps with a shared SSO_SECRET. Clicking the other
+# ARES and ZEUS are twin apps with a shared SSO_SECRET. Clicking the other
 # node's tab issues a short-lived signed token, which the target node validates
 # and uses to bootstrap its own session. No second login prompt.
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -442,7 +442,7 @@ SSO_MAX_AGE = 60  # seconds — the handoff token is one-shot, tight window
 SSO_ALLOWED_HOSTS = {
     "ares.tail3045df.ts.net",
     "pve.tail3045df.ts.net",
-    "hermes.tail3045df.ts.net",
+    "zeus.tail3045df.ts.net",
     "cronos.tail3045df.ts.net",
     "192.168.20.213",
     "ares.local",
@@ -495,12 +495,12 @@ def sso_consume():
     return redirect(url_for("home"))
 
 
-@app.route("/jump/hermes")
+@app.route("/jump/zeus")
 @require_auth
-def jump_hermes():
-    """Hand off to CRONOS with a one-shot SSO token, skipping its login.
-    Symmetric with CRONOS→ARES: both jumps use the tailnet IP (private, no funnel,
-    no 'hermes' name). Route path stays /jump/hermes (internal); target is the CRONOS box IP."""
+def jump_zeus():
+    """Hand off to ZEUS with a one-shot SSO token, skipping its login.
+    Symmetric with ZEUS→ARES: both jumps use the tailnet IP (private, no funnel,
+    no 'hermes' name). Route path stays /jump/zeus (internal); target is the ZEUS box IP."""
     target_base = "http://100.100.29.36:8888"
     s = _sso_serializer()
     if s is None:
@@ -650,7 +650,7 @@ def breakdown_page():
 
 # Candidate roots where the FAI/business data tree might live. Each box
 # has it in a slightly different place — ARES sees /mnt/data/PROMETHEUS/WORK,
-# HERMES sees the mergerfs union plus a backup dir. We probe these in order
+# ZEUS sees the mergerfs union plus a backup dir. We probe these in order
 # and use the first path that exists per-file, so the same module works
 # on every box without environment-specific config.
 _WORK_CANDIDATES = [
@@ -2299,7 +2299,7 @@ def journal_page_image(name, page):
 @app.route("/api/alerts")
 @require_auth
 def hermes_alerts():
-    """HERMES health, pulled by the hermes-watchdog cron on the PVE host
+    """ZEUS health, pulled by the hermes-watchdog cron on the PVE host
     (/usr/local/bin/hermes-watchdog.sh) every 2 min. A stale file means the
     watchdog/ARES side is dead, which is itself critical."""
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_data", "hermes_health.json")
@@ -2318,7 +2318,7 @@ def hermes_alerts():
     if age > 300:
         worse("red"); reasons.append("watchdog stale (%ds old) — ARES probe not running" % int(age))
     if not d.get("ssh_ok"):
-        worse("red"); reasons.append("HERMES unreachable over SSH")
+        worse("red"); reasons.append("ZEUS unreachable over SSH")
     else:
         l1 = d.get("load1") or 0
         if l1 > 20: worse("red"); reasons.append("load %s" % l1)
@@ -3312,12 +3312,12 @@ _VAULT_PATH      = os.path.join(_APP_DIR, "ai_data", "vault.json")
 
 # Original files vault dir — dot-dir inside PHOTOS_ROOT so:
 #  (a) invisible to SMB/Finder  (b) stays on same fs → atomic rename
-#  (c) inside PHOTOS tree → nightly rsync to HERMES still backs it up
+#  (c) inside PHOTOS tree → nightly rsync to ZEUS still backs it up
 _VAULT_ORIGINALS_DIR = os.path.join(PHOTOS_ROOT, ".vault")
 try:
     os.makedirs(_VAULT_ORIGINALS_DIR, exist_ok=True)
 except OSError:
-    # ponytail: non-ARES deployments (e.g. CRONOS, photos:0) have no writable
+    # ponytail: non-ARES deployments (e.g. ZEUS, photos:0) have no writable
     # PHOTOS_ROOT — vault is unused there, so don't crash import. Vault ops on
     # ARES still create/verify this dir on first use.
     pass

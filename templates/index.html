@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content, viewport-fit=cover">
-    <title>ARES & NEXUS</title>
+    <title>ARES & ZEUS</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="apple-touch-icon" href="/static/icon-180.png">
@@ -963,7 +963,7 @@ setInterval(loadSystemInfo, 5000);
         // Hide any .fixed.top-0 titlebar-style headers (defensive)
         document.querySelectorAll('.fixed.top-0.left-0.right-0').forEach(function(el){ el.style.display='none'; });
         var wrap = document.createElement('div');
-        wrap.innerHTML = '<header class="navbar">\n    <div class="navbar-left">\n        <a href="/" class="nbr nbr-self">\n            <div class="nbr-mark m-a">A</div>\n            <div class="nbr-id">\n                <span class="nbr-name n-a">ARES</span>\n                <span class="nbr-sep">/</span>\n                <span class="nbr-tag">TERMINAL</span>\n            </div>\n        </a>\n        <button onclick="openSessions()" class="back-chip" style="background:none;cursor:pointer">\n            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>\n            <span>Sessions</span>\n        </button>\n    </div>\n    <a href="/jump/nexus" class="nbr nbr-other">\n        <div class="nbr-mark m-n">N</div>\n        <div class="nbr-id">\n            <span class="nbr-name n-n">NEXUS</span>\n            <span class="nbr-sep">/</span>\n            <span class="nbr-tag">MINI-NAS</span>\n        </div>\n    </a>\n</header>';
+        wrap.innerHTML = '<header class="navbar">\n    <div class="navbar-left">\n        <a href="/" class="nbr nbr-self">\n            <div class="nbr-mark m-a">A</div>\n            <div class="nbr-id">\n                <span class="nbr-name n-a">ARES</span>\n                <span class="nbr-sep">/</span>\n                <span class="nbr-tag">TERMINAL</span>\n            </div>\n        </a>\n        <button onclick="openSessions()" class="back-chip" style="background:none;cursor:pointer">\n            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>\n            <span>Sessions</span>\n        </button>\n    </div>\n    <a href="/jump/zeus" class="nbr nbr-other">\n        <div class="nbr-mark m-h">Z</div>\n        <div class="nbr-id">\n            <span class="nbr-name n-h">ZEUS</span>\n            <span class="nbr-sep">/</span>\n            <span class="nbr-tag">MID-NAS</span>\n        </div>\n    </a>\n</header>';
         document.body.insertBefore(wrap.firstChild, document.body.firstChild);
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject);

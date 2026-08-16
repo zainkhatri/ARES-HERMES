@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Sync the dashboard CODE to CRONOS (the unified "one codebase, two deployments"
+# Sync the dashboard CODE to ZEUS (the unified "one codebase, two deployments"
 # setup). Runs from ARES. Ships code+templates+small static assets ONLY — never
 # the photo library, media caches, ML venvs, vault, or runtime state.
 #
 # The excludes are load-bearing: an earlier run that missed them copied 200G+ of
 # static/video_cache + hls + a 5G clip venv. Keep this list authoritative.
 #
-# Usage:  ./deploy/sync-to-cronos.sh [--restart]
-#   --restart  also restart the cronos-dashboard user service after syncing.
+# Usage:  ./deploy/sync-to-zeus.sh [--restart]
+#   --restart  also restart the zeus-dashboard user service after syncing.
 set -euo pipefail
 
 SRC="/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/"
@@ -15,7 +15,7 @@ DEST="zain@100.100.29.36:/home/zain/ARES-DASHBOARD/"
 
 # Heavy / host-specific / secret paths that must never leave ARES.
 EXCLUDES=(
-  --exclude='.venv'                 # per-box venv; CRONOS builds its own
+  --exclude='.venv'                 # per-box venv; ZEUS builds its own
   --exclude='clip-gpu-venv'         # 5G CLIP/torch venv — photo-only
   --exclude='ai_data'               # embeddings, face clusters, vault_auth
   --exclude='vault_enc' --exclude='vault_*'   # My Eyes Only encrypted originals
@@ -31,7 +31,7 @@ EXCLUDES=(
   --exclude='.git'
 )
 
-echo "→ syncing code to CRONOS (code+templates+small static only)…"
+echo "→ syncing code to ZEUS (code+templates+small static only)…"
 rsync -az --delete "${EXCLUDES[@]}" "$SRC" "$DEST"
 
 # Stamp the remote with the source git SHA so /healthz can prove no drift.
@@ -51,8 +51,8 @@ if [ "${SIZE:-0}" -lt 5 ]; then
 fi
 
 if [ "${1:-}" = "--restart" ]; then
-  echo "→ restarting cronos-dashboard user service…"
-  ssh zain@100.100.29.36 'XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user restart cronos-dashboard && sleep 4 && systemctl --user is-active cronos-dashboard'
+  echo "→ restarting zeus-dashboard user service…"
+  ssh zain@100.100.29.36 'XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user restart zeus-dashboard && sleep 4 && systemctl --user is-active zeus-dashboard'
   # Drift check: the running box must report the stamp we just pushed.
   REMOTE=$(ssh zain@100.100.29.36 'curl -s http://100.100.29.36:8890/healthz' | grep -o '"stamp":"[^"]*"' | cut -d'"' -f4)
   if [ "$REMOTE" = "$STAMP" ]; then echo "✓ /healthz stamp matches ($STAMP) — no drift"; else

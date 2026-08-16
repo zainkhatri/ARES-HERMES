@@ -1,21 +1,21 @@
 // Twin-brand node switcher: clones the existing brand block for the OTHER node,
 // tucks it in right next to it in the top-bar. Click the inactive twin → SSO
 // handoff via /api/sso/issue → you land on the other site already logged in.
-// Set window.__NODE = 'ARES' or 'HERMES' in the page before loading.
+// Set window.__NODE = 'ARES' or 'ZEUS' in the page before loading.
 (function () {
   const onAresLan = location.hostname === '192.168.20.213' || location.hostname === 'ares.local';
   const URLS = {
     ARES:  onAresLan ? 'http://192.168.20.213:8080/' : 'https://ares.tail3045df.ts.net/',
-    HERMES: 'https://hermes.tail3045df.ts.net/',
+    ZEUS: 'https://zeus.tail3045df.ts.net/',
   };
   const NODES = {
-    HERMES: { letter: 'H', name: 'HERMES', tag: 'MID-NAS',  color: '#6495ed' },
+    ZEUS: { letter: 'Z', name: 'ZEUS', tag: 'MID-NAS',  color: '#22d3ee' },
     ARES:  { letter: 'A', name: 'ARES',  tag: 'SUPER-NAS', color: '#ef4444' },
   };
 
   const current = (window.__NODE ||
-    (location.hostname === 'hermes.tail3045df.ts.net' || location.href.indexOf('100.100.29.36') !== -1 ? 'HERMES' : 'ARES')).toUpperCase();
-  const other = current === 'HERMES' ? 'ARES' : 'HERMES';
+    (location.hostname === 'zeus.tail3045df.ts.net' || location.href.indexOf('100.100.29.36') !== -1 ? 'ZEUS' : 'ARES')).toUpperCase();
+  const other = current === 'ZEUS' ? 'ARES' : 'ZEUS';
 
   // Purge any prior incarnations of this switcher.
   const stale = document.getElementById('node-switcher');

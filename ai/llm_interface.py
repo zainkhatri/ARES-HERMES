@@ -29,7 +29,7 @@ You are talking to **Zain**. He owns this homelab. Be direct and conversational.
 
 ## Picking the right tool
 - `gpu_info` — any GPU question (temp, util, VRAM, power).
-- `homelab_status` — VM states, GPU driver binding, NEXUS reachability.
+- `homelab_status` — VM states, GPU driver binding, ZEUS reachability.
 - `run_command` — shell on the ARES LXC. **Do not use for RAM / CPU / hardware questions** — that reports the LXC's tiny cgroup slice, not the real 48 GB / Ryzen 7 5700X machine. For hardware specs, answer from the facts below (you already know them).
 - `search_chatgpt_history` — **ALWAYS use this for any personal question about Zain** ("where do I work", "what do you know about me", "what did I say about X", "my salary", "my job", "my school", "my family"). You have NO other source of truth about his life — **do not guess, do not make up plausible details**. If the tool returns nothing relevant, say you don't have that info. The archive has 3,689 of his past ChatGPT conversations going back years.
 
@@ -44,7 +44,7 @@ You are talking to **Zain**. He owns this homelab. Be direct and conversational.
 - Currently a **Software Engineering Intern at NASA Ames Research Center** (Mountain View, CA), started **June 2025**. Builds tools that turn engineering diagrams into runnable simulations.
 - Prior: **ML Engineer at UC Berkeley College of Engineering Research** (Jun 2024 – Mar 2025), worked on fall detection for Parkinson's patients.
 - Prior: **ML Intern at NASA Ames** (Apr 2023 – Sep 2024), autonomous rover navigation (C++, GPS + ultrasonic).
-- Personal projects: **Mania** (AI styled journal app), **Theology LLM Evaluation** (Islamic AI benchmark), the **ARES/NEXUS homelab** you live in.
+- Personal projects: **Mania** (AI styled journal app), **Theology LLM Evaluation** (Islamic AI benchmark), the **ARES/ZEUS homelab** you live in.
 - Languages: Python, JavaScript, C++, Swift. Tools: PyTorch, LangChain, React, Docker, Proxmox.
 - Only use `search_chatgpt_history` for specifics you don't already know (e.g. "what did I say about X on Y date", "my car insurance", "what company made me offer Z"). Don't search for the facts above — you already have them.
 
@@ -60,7 +60,7 @@ You have deep, specific knowledge of the homelab topology and can run commands d
 - VM 300 `ollama-llm` — Debian 13 at 192.168.20.212, runs ollama (that is YOU). Claims the 3080 when Windows is off. GPU-swap hookscript handles the handoff automatically.
 - LXC 101 `ares` — this container at 192.168.20.213, serves `/mnt/nvme/PROMETHEUS` as SMB share `ARES` and runs this web UI.
 
-**NEXUS** (Zain's remote mini-NAS):
+**ZEUS** (Zain's remote mid-NAS):
 - OpenMediaVault box at 10.0.1.90 / Tailscale 100.100.29.36
 - Ryzen 3 4300U, 16 GB RAM, no GPU
 - mergerfs pool at /srv/mergerfs/PROMETHEUS on AirDisk/T7/T9 drives
@@ -71,7 +71,7 @@ You have deep, specific knowledge of the homelab topology and can run commands d
 
 ## What you can do
 - `gpu_info` — RTX 3080 live stats (temp, util, VRAM, power). ALWAYS use this for GPU questions. Do NOT try `nvidia-smi` via run_command — it isn't installed here.
-- `homelab_status` — snapshot of VMs, GPU driver binding, and NEXUS reachability. Use for any "what's running / is X up" question.
+- `homelab_status` — snapshot of VMs, GPU driver binding, and ZEUS reachability. Use for any "what's running / is X up" question.
 - `run_command` — shell on the ARES LXC. For host state or GPU specifics, prefer the tools above. SSH targets available: `root@192.168.20.51` (Proxmox host), `zain@192.168.20.212` (VM 300 / GPU).
 - `search_chatgpt_history` — search Zain's past ChatGPT conversations.
 - `trash_file` / `list_trash` / `restore_from_trash` — safe delete.
@@ -172,7 +172,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "homelab_status",
-            "description": "Snapshot of the whole homelab: Proxmox VM states (win11 + ollama-llm), ARES container, GPU binding, link to NEXUS (Tailscale reachability). Use this for any 'what's running' / 'is X up' / 'who owns the GPU' question.",
+            "description": "Snapshot of the whole homelab: Proxmox VM states (win11 + ollama-llm), ARES container, GPU binding, link to ZEUS (Tailscale reachability). Use this for any 'what's running' / 'is X up' / 'who owns the GPU' question.",
             "parameters": {"type": "object", "properties": {}}
         }
     },
@@ -284,7 +284,7 @@ def _handle_tool_call(tool_name: str, tool_input: dict) -> str:
                 return f"ERR: {e}"
         vm_states = run("qm list | awk 'NR>1 {print $2\":\"$3}'", host="root@192.168.20.51")
         gpu_bind = run("lspci -k -s 06:00.0 | grep -i 'Kernel driver in use'", host="root@192.168.20.51")
-        nexus_ping = run("tailscale ping -c 1 100.100.29.36 2>&1 | head -1", host="root@192.168.20.51")
+        zeus_ping = run("tailscale ping -c 1 100.100.29.36 2>&1 | head -1", host="root@192.168.20.51")
         from system.system_info import _get_gpu_info
         g = _get_gpu_info()
         gpu_line = "offline" if not g.get("online") else f"{g['name']} · {g['temp_c']}°C · {g['util_pct']}% util"
@@ -293,7 +293,7 @@ def _handle_tool_call(tool_name: str, tool_input: dict) -> str:
             f"  VMs (on PVE):\n    {vm_states or '(none)'}\n"
             f"  GPU driver: {gpu_bind or '(unknown)'}\n"
             f"  GPU stats: {gpu_line}\n"
-            f"  NEXUS link: {nexus_ping or '(unreachable)'}\n"
+            f"  ZEUS link: {zeus_ping or '(unreachable)'}\n"
         )
 
     return f"Unknown tool: {tool_name}"

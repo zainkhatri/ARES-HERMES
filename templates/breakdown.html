@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ARES & HERMES · Finance</title>
+    <title>ARES & ZEUS · Finance</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="apple-touch-icon" href="/static/icon-180.png">
@@ -595,10 +595,10 @@
                 <span>Home</span>
             </a>
         </div>
-        <a href="/jump/hermes" class="nbr nbr-other">
-            <div class="nbr-mark m-h">H</div>
+        <a href="/jump/zeus" class="nbr nbr-other">
+            <div class="nbr-mark m-h">Z</div>
             <div class="nbr-id">
-                <span class="nbr-name n-h">HERMES</span>
+                <span class="nbr-name n-h">ZEUS</span>
                 <span class="nbr-sep">/</span>
                 <span class="nbr-tag">MID-NAS</span>
             </div>
@@ -712,52 +712,53 @@
     </style>
 
     <style>
-    /* Elite Picks — ranked conviction list, same component language as home. */
-    .ep-list { border:1px solid var(--line-1); background:var(--line-1); display:flex; flex-direction:column; gap:1px; }
-    .ep-row { background:var(--bg-1); display:grid; grid-template-columns:auto 1fr auto; grid-template-rows:auto auto;
-        column-gap:16px; row-gap:12px; align-items:start; padding:15px 18px 13px; position:relative; }
-    .ep-row::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--ares); opacity:.35; }
-    .ep-row:first-child::before { opacity:1; }
-    .ep-rank { font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:22px; color:var(--text-3); font-variant-numeric:tabular-nums; min-width:30px; text-align:center; line-height:1.05; }
-    .ep-row:first-child .ep-rank { color:var(--ares); }
-    .ep-id { min-width:0; }
-    .ep-tk { font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:16px; letter-spacing:.02em; color:var(--text-1); text-decoration:none; }
+    /* Elite Picks — bento card grid (ARES tiles: 1px gaps, top accent stripe). */
+    .ep-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line-1); border:1px solid var(--line-1); }
+    .ep-card { background:var(--bg-1); padding:16px 16px 14px; position:relative; display:flex; flex-direction:column; min-width:0;
+        transition:background .18s ease; }
+    .ep-card:hover { background:var(--bg-2); }
+    .ep-card::before { content:''; position:absolute; left:0; top:0; right:0; height:2px; background:var(--ares); opacity:.35; transition:opacity .18s ease; }
+    .ep-card:hover::before { opacity:.75; }
+    .ep-card.top::before { opacity:1; box-shadow:0 0 12px var(--ares); }
+    @keyframes epcard { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    .ep-card.ep-in { animation:epcard .45s cubic-bezier(0.16,1,0.3,1) both; }
+    @media (prefers-reduced-motion:reduce) { .ep-card.ep-in { animation:none; opacity:1; } }
+
+    .ep-chead { display:flex; align-items:baseline; gap:9px; min-width:0; }
+    .ep-rank { font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:13px; color:var(--text-3); font-variant-numeric:tabular-nums; letter-spacing:.02em; }
+    .ep-card.top .ep-rank { color:var(--ares); }
+    .ep-tk { font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:21px; letter-spacing:.01em; color:var(--text-1); text-decoration:none; line-height:1; }
     .ep-tk:hover { color:var(--ares); }
-    .ep-nm { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .ep-firms { margin-top:7px; font-family:'JetBrains Mono',monospace; font-size:10.5px; line-height:1.6; color:var(--text-3); letter-spacing:.01em; }
-    .ep-reason { margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:11px; font-style:italic; color:var(--text-2); line-height:1.5; }
-    .ep-firm.hh { color:var(--ares-bright); font-weight:500; text-decoration:underline; text-decoration-color:var(--ares); text-underline-offset:2px; }
-    .ep-chips { display:flex; gap:6px; margin-top:9px; flex-wrap:wrap; }
-    .ep-chip.hh { color:var(--ares); border-color:var(--ares); }
-    .ep-chip { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.08em; text-transform:uppercase; padding:2px 7px; border:1px solid var(--line-2); color:var(--text-2); white-space:nowrap; }
-    .ep-chip.mom { color:var(--up); border-color:rgba(16,185,129,.3); }
-    .ep-chip.mom.dn { color:var(--down); border-color:rgba(248,113,113,.3); }
+    .ep-nm { font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--text-3); text-transform:uppercase; letter-spacing:.05em; margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-    /* right column — recommended buy is the headline metric */
-    .ep-metrics { text-align:right; white-space:nowrap; }
-    .ep-alloc { font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:22px; color:var(--ares-bright); font-variant-numeric:tabular-nums; line-height:1; letter-spacing:-.02em; }
-    .ep-alloc-u { margin-top:5px; font-family:'JetBrains Mono',monospace; font-size:8.5px; color:var(--text-3); text-transform:uppercase; letter-spacing:.14em; }
-    .ep-elites { margin-top:8px; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-2); font-variant-numeric:tabular-nums; }
-    .ep-elites b { color:var(--text-1); font-weight:500; }
+    /* the big money — headline metric of each tile */
+    .ep-alloc { font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:30px; color:var(--ares-bright); font-variant-numeric:tabular-nums; line-height:1; letter-spacing:-.03em; margin-top:15px; }
+    .ep-card.top .ep-alloc { text-shadow:0 0 20px rgba(248,113,113,.4); }
+    .ep-alloc.off { color:var(--text-4); }
+    .ep-alloc-u { margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:8.5px; color:var(--text-3); text-transform:uppercase; letter-spacing:.12em; }
 
-    /* per-row weighted-conviction meter (echoes home's segmented level bars) */
-    .ep-bar { grid-column:1 / -1; height:6px; background:var(--bg-3); position:relative; overflow:hidden; border:1px solid var(--line-1); }
-    .ep-bar > span { display:block; height:100%; background:linear-gradient(90deg, var(--ares) 0%, var(--ares-bright) 100%); }
+    /* conviction meter (echoes home's segmented level bars) */
+    .ep-bar { height:6px; background:var(--bg-3); position:relative; overflow:hidden; border:1px solid var(--line-1); margin-top:13px; }
+    .ep-bar > span { display:block; height:100%; background:linear-gradient(90deg, var(--ares) 0%, var(--ares-bright) 100%); box-shadow:0 0 8px rgba(239,68,68,.45); }
+    .ep-card.top .ep-bar > span { box-shadow:0 0 13px rgba(239,68,68,.7); }
+    .ep-card.off .ep-bar > span { background:var(--text-4); opacity:.5; box-shadow:none; }
     .ep-bar::after { content:''; position:absolute; inset:0; pointer-events:none;
         background:repeating-linear-gradient(to right, transparent 0 9px, var(--bg-1) 9px 10px); }
 
-    /* positions selector — how many picks to actually fund */
-    .ep-seg { display:inline-flex; height:34px; border:1px solid var(--line-2); }
-    .ep-seg button { background:var(--bg-1); border:none; border-left:1px solid var(--line-2); color:var(--text-2);
-        font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase;
-        padding:0 11px; min-width:34px; transition:color .15s, background .15s; }
-    .ep-seg button:first-child { border-left:none; }
-    .ep-seg button:hover { color:var(--ares); }
-    .ep-seg button.on { background:var(--ares); color:var(--bg-0); font-weight:700; }
+    .ep-elites { margin-top:11px; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-2); font-variant-numeric:tabular-nums; }
+    .ep-elites b { color:var(--text-1); font-weight:500; }
+    .ep-reason { margin-top:9px; font-family:'JetBrains Mono',monospace; font-size:11px; font-style:italic; color:var(--text-2); line-height:1.5; }
+    .ep-firms { margin-top:9px; font-family:'JetBrains Mono',monospace; font-size:10px; line-height:1.6; color:var(--text-3); letter-spacing:.01em; }
+    .ep-firm.hh { color:var(--ares-bright); font-weight:500; text-decoration:underline; text-decoration-color:var(--ares); text-underline-offset:2px; }
+    .ep-chips { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
+    .ep-chip { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.08em; text-transform:uppercase; padding:2px 7px; border:1px solid var(--line-2); color:var(--text-2); white-space:nowrap; }
+    .ep-chip.hh { color:var(--ares); border-color:var(--ares); }
+    .ep-chip.mom { color:var(--up); border-color:rgba(16,185,129,.3); }
+    .ep-chip.mom.dn { color:var(--down); border-color:rgba(248,113,113,.3); }
 
-    /* unfunded rows: keep the ranking + roster, mute the money column */
-    .ep-alloc.off { color:var(--text-4); font-weight:600; }
-    .ep-row.off .ep-bar > span { background:var(--text-4); opacity:.5; }
+    /* hero narrative — top pick's llama reason when scoring is live */
+    .ep-hero-reason { margin-top:14px; font-family:'JetBrains Mono',monospace; font-size:12px; font-style:italic; color:var(--text-2); line-height:1.55; max-width:54ch; }
+    .ep-hero-reason:empty { display:none; }
 
     /* budget control in the section head */
     .ep-budget { display:inline-flex; align-items:center; height:34px; border:1px solid var(--line-2); background:var(--bg-1); padding:0 4px 0 11px; transition:border-color .15s; }
@@ -766,19 +767,19 @@
     .ep-budget input { width:78px; height:100%; background:none; border:none; color:var(--text-1); font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:14px; font-variant-numeric:tabular-nums; text-align:left; padding:0 6px; outline:none; }
     .ep-budget input::-webkit-outer-spin-button, .ep-budget input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
     .ep-budget input { -moz-appearance:textfield; }
-
     .ep-note { margin:16px 2px 0; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-4); letter-spacing:.04em; }
 
-    .ep-deep-wrap { margin-top:9px; }
-    .ep-deep-btn { background:none; border:1px solid var(--line-2); color:var(--text-3); font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; padding:3px 9px; transition:color .15s,border-color .15s; }
+    /* deep research — pinned to the tile's bottom, expands in place */
+    .ep-deep-wrap { margin-top:auto; padding-top:13px; }
+    .ep-deep-btn { background:none; border:1px solid var(--line-2); color:var(--text-3); font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; padding:5px 10px; transition:color .15s,border-color .15s; }
     .ep-deep-btn:hover:not(:disabled) { color:var(--ares); border-color:var(--ares); }
     .ep-deep-btn:disabled { opacity:.6; }
-    .ep-deep { }
+    .fx-btn:active, .ep-deep-btn:active:not(:disabled) { transform:scale(.97); }
     .ep-deep-load, .ep-deep-err { margin-top:8px; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-3); }
     .ep-deep-err { color:var(--down); }
     .ep-deep-card { margin-top:10px; border:1px solid var(--line-2); background:var(--bg-2); padding:12px 14px; }
     .ep-deep-sum { font-family:'JetBrains Mono',monospace; font-size:11px; line-height:1.6; color:var(--text-1); }
-    .ep-deep-cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:10px; }
+    .ep-deep-cols { display:grid; grid-template-columns:1fr; gap:12px; margin-top:10px; }
     .ep-deep-h { font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:11px; letter-spacing:.06em; text-transform:uppercase; margin-bottom:4px; }
     .ep-deep-h.up { color:var(--up); } .ep-deep-h.dn { color:var(--down); }
     .ep-deep-cols ul { list-style:none; display:flex; flex-direction:column; gap:5px; }
@@ -786,12 +787,8 @@
     .ep-deep-cols li::before { content:'·'; position:absolute; left:0; color:var(--text-3); }
     .ep-deep-foot { margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text-4); letter-spacing:.06em; }
 
-    @media (max-width:560px) {
-        .ep-row { column-gap:12px; padding:14px 14px 12px; }
-        .ep-alloc { font-size:19px; } .ep-rank { font-size:19px; min-width:22px; }
-        .ep-nm { white-space:normal; }
-        .ep-deep-cols { grid-template-columns:1fr; }
-    }
+    @media (max-width:1024px) { .ep-grid { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width:620px)  { .ep-grid { grid-template-columns:1fr; } .ep-deep-btn { padding:8px 12px; } }
     </style>
 
     <main>
@@ -803,6 +800,7 @@
                     <div class="fx-hero-label">This Week's Top Conviction</div>
                     <div class="fx-hero-net" id="ep-top">••••</div>
                     <div class="fx-hero-gain" id="ep-topsub"><span class="span">Loading…</span></div>
+                    <div class="ep-hero-reason" id="ep-hero-reason"></div>
                 </div>
                 <div class="fx-hero-meta" id="ep-sources"></div>
             </section>
@@ -817,7 +815,7 @@
                     <button class="fx-btn" id="ep-refresh" onclick="refresh()">Refresh</button>
                 </div>
             </div>
-            <div class="ep-list fx-in" id="ep-list" style="animation-delay:.14s"></div>
+            <div class="ep-grid fx-in" id="ep-list" style="animation-delay:.14s"></div>
             <p class="ep-note">Suggested amounts split your budget by weighted conviction (heavy hitters count 3×). Ranked from public 13F filings. Not financial advice.</p>
         </div>
     </main>
@@ -856,7 +854,7 @@ function allocate(picks) {
     return allocateBudget(picks, budget, { BAR: 65, GAMMA: 2, MAX_FUNDED: 10 });
 }
 
-function rowHtml(p, a) {
+function rowHtml(p, a, i, stagger) {
     const chips = [];
     if (p.heavies) chips.push(`<span class="ep-chip hh">${p.heavies} heavyweight${p.heavies > 1 ? 's' : ''}</span>`);
     if (p.congress) chips.push(`<span class="ep-chip">${p.congress} congress</span>`);
@@ -871,23 +869,25 @@ function rowHtml(p, a) {
     const alloc = a.funded
         ? `<div class="ep-alloc">${USD0.format(a.amount)}</div><div class="ep-alloc-u">conviction ${p.llm_score}</div>`
         : `<div class="ep-alloc off">—</div><div class="ep-alloc-u">below bar · ${p.llm_score}</div>`;
-    return `<div class="ep-row${a.funded ? '' : ' off'}">
-        <div class="ep-rank">${p.rank}</div>
-        <div class="ep-id">
+    const anim = stagger ? ` ep-in" style="animation-delay:${(i * 0.03).toFixed(2)}s` : '';
+    const rank = String(p.rank).padStart(2, '0');
+    return `<div class="ep-card${a.funded ? '' : ' off'}${i === 0 ? ' top' : ''}${anim}">
+        <div class="ep-chead">
+            <span class="ep-rank">${rank}</span>
             <a class="ep-tk" href="${dr}" target="_blank" rel="noopener">${esc(p.ticker)}</a>
-            <div class="ep-nm">${esc(p.name)}</div>
-            ${reason}
-            <div class="ep-firms">${firms || '—'}</div>
-            ${chipHtml ? `<div class="ep-chips">${chipHtml}</div>` : ''}
-            <div class="ep-deep-wrap"><button class="ep-deep-btn" onclick="deepResearch('${esc(p.ticker)}', this)">Deep research ↗</button><div class="ep-deep" id="deep-${esc(p.ticker)}"></div></div>
         </div>
-        <div class="ep-metrics">${alloc}
-            <div class="ep-elites"><b>${p.buyers}</b> elites${p.heavies ? ` · <b>${p.heavies}</b> heavy` : ''}</div>
-        </div>
+        <div class="ep-nm">${esc(p.name)}</div>
+        ${alloc}
         <div class="ep-bar" role="img" aria-label="Conviction ${a.barPct.toFixed(0)} of 100"><span style="width:${a.barPct.toFixed(1)}%"></span></div>
+        <div class="ep-elites"><b>${p.buyers}</b> elites${p.heavies ? ` · <b>${p.heavies}</b> heavy` : ''}</div>
+        ${reason}
+        <div class="ep-firms">${firms || '—'}</div>
+        ${chipHtml ? `<div class="ep-chips">${chipHtml}</div>` : ''}
+        <div class="ep-deep-wrap"><button class="ep-deep-btn" onclick="deepResearch('${esc(p.ticker)}', this)">Deep research →</button><div class="ep-deep" id="deep-${esc(p.ticker)}"></div></div>
     </div>`;
 }
 
+let drawn = false;
 function draw() {
     const picks = DATA.picks || [], sources = DATA.sources || {}, top = picks[0];
     document.getElementById('ep-top').textContent = top ? top.ticker : '—';
@@ -900,6 +900,7 @@ function draw() {
         sub.className = 'fx-hero-gain';
         sub.innerHTML = '<span class="span">' + (DATA.error ? 'Source unavailable — try Refresh' : 'No data') + '</span>';
     }
+    document.getElementById('ep-hero-reason').textContent = (top && top.llm_reason) ? '“' + top.llm_reason + '”' : '';
     document.getElementById('ep-sources').innerHTML =
         `<div class="fx-hm-row"><span class="fx-hm-key">Budget</span><span class="fx-hm-val">${USD0.format(budget)}</span></div>`
         + `<div class="fx-hm-row"><span class="fx-hm-key">Scoring</span><span class="fx-hm-val ${sources.llm ? 'up' : ''}"${sources.llm ? '' : ' style="color:var(--text-4)"'}>${sources.llm ? 'LLAMA' : 'DATA-ONLY'}</span></div>`
@@ -911,8 +912,10 @@ function draw() {
         + `<div class="fx-hm-row"><span class="fx-hm-key">As of</span><span class="fx-hm-val">${esc(DATA.quarter || '—')}</span></div>`;
 
     const allocs = allocate(picks);
+    const stagger = !drawn;           // reveal-animate rows only on the first paint, not on every budget keystroke
+    drawn = true;
     document.getElementById('ep-list').innerHTML = picks.length
-        ? picks.map((p, i) => rowHtml(p, allocs[i])).join('')
+        ? picks.map((p, i) => rowHtml(p, allocs[i], i, stagger)).join('')
         : '<div class="fx-empty">No picks available — try Refresh.</div>';
 }
 

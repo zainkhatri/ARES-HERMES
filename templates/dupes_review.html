@@ -11,18 +11,21 @@
 <meta name="theme-color" content="#04070d">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg-0:#04070d;--bg-1:#070c16;--bg-2:#0a121f;--bg-3:#0d1726;--line-1:rgba(239,68,68,0.08);--line-2:rgba(239,68,68,0.18);--text-1:#e8f0f8;--text-2:#8ba3c0;--text-3:#4a5d78;--text-4:#2d3a4e;--blue:#6495ed;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--ares:#ef4444;--ares-bright:#f87171;}
+:root{--bg-0:#04070d;--bg-1:#070c16;--bg-2:#0a121f;--bg-3:#0d1726;--line-1:rgba(239,68,68,0.08);--line-2:rgba(239,68,68,0.18);--text-1:#e8f0f8;--text-2:#8ba3c0;--text-3:#4a5d78;--text-4:#2d3a4e;--blue:#6495ed;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--ares:#ef4444;--ares-bright:#f87171;--zeus:#22d3ee;}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{min-height:100%;background:var(--bg-0);color:var(--text-1);font-family:"JetBrains Mono",monospace;-webkit-font-smoothing:antialiased;}
 ::selection{background:var(--ares);color:var(--bg-0);}
 .navbar{position:sticky;top:0;z-index:100;background:rgba(4,7,13,0.92);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line-1);padding:14px 24px;padding-top:calc(14px + env(safe-area-inset-top,0px));display:flex;align-items:center;justify-content:space-between;gap:20px;font-family:"Bricolage Grotesque",sans-serif;}
 .navbar-left{display:flex;align-items:center;gap:16px;}
-.nbr{display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit;transition:opacity 0.18s;}
-.nbr-other{opacity:0.7;}.nbr-other:hover{opacity:1;}
-.nbr-mark{width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:1px solid;font-weight:800;font-size:14px;line-height:1;}
-.m-a{border-color:var(--ares);color:var(--ares);}.m-h{border-color:var(--blue);color:var(--blue);}
+.nbr{display:inline-flex;align-items:center;gap:12px;text-decoration:none;opacity:.45;transition:opacity 0.18s,transform 0.18s;}
+.nbr.is-active{opacity:1;}
+.nbr:not(.is-active):hover{opacity:1;transform:translateY(-1px);}
+.nbr.node-ares{color:var(--ares);}.nbr.node-zeus{color:var(--zeus);}
+.nbr-mark{width:26px;height:26px;min-height:40px;display:flex;align-items:center;justify-content:center;border:1px solid currentColor;font-weight:800;font-size:14px;line-height:1;transition:box-shadow 0.18s;}
+.nbr.is-active .nbr-mark{box-shadow:0 0 14px -4px currentColor;}
+.nbr:hover .nbr-mark{box-shadow:0 0 14px -3px currentColor;}
 .nbr-id{display:flex;align-items:baseline;gap:8px;}
-.nbr-name{font-weight:700;font-size:14px;letter-spacing:0.02em;}.n-a{color:var(--ares);}.n-h{color:var(--blue);}
+.nbr-name{color:currentColor;font-weight:700;font-size:14px;letter-spacing:0.02em;}
 .nbr-sep{color:var(--text-3);font-size:11px;}.nbr-tag{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--text-2);letter-spacing:0.1em;text-transform:uppercase;}
 .back-chip{display:inline-flex;align-items:center;gap:6px;font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--text-2);text-decoration:none;letter-spacing:0.15em;text-transform:uppercase;padding:5px 11px;border:1px solid var(--line-2);transition:color 0.15s,border-color 0.15s,background 0.15s;}
 .back-chip:hover{color:var(--ares);border-color:var(--ares);background:rgba(239,68,68,0.05);}
@@ -58,10 +61,10 @@ main{max-width:1400px;margin:0 auto;padding:28px 24px;}
 <body>
 <header class="navbar">
   <div class="navbar-left">
-    <a href="/" class="nbr">
-      <div class="nbr-mark m-a">A</div>
+    <a href="/" class="nbr node-ares is-active" aria-current="page">
+      <div class="nbr-mark">A</div>
       <div class="nbr-id">
-        <span class="nbr-name n-a">ARES</span>
+        <span class="nbr-name">ARES</span>
         <span class="nbr-sep">/</span>
         <span class="nbr-tag">DUPES</span>
       </div>
@@ -71,10 +74,10 @@ main{max-width:1400px;margin:0 auto;padding:28px 24px;}
       <span>Photos</span>
     </a>
   </div>
-  <a href="/jump/hermes" class="nbr nbr-other">
-    <div class="nbr-mark m-h">H</div>
+  <a href="/jump/zeus" class="nbr node-zeus" aria-label="Switch to ZEUS">
+    <div class="nbr-mark">Z</div>
     <div class="nbr-id">
-      <span class="nbr-name n-h">HERMES</span>
+      <span class="nbr-name">ZEUS</span>
       <span class="nbr-sep">/</span>
       <span class="nbr-tag">MID-NAS</span>
     </div>
