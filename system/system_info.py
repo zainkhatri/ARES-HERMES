@@ -53,6 +53,95 @@ def _format_bytes(b: int) -> str:
     return f"{b:.1f} PiB"
 
 
+HOST_DRIVES_FILE = os.path.join(PROJECT_ROOT, ".host_drives.json")
+HOST_CRONS_FILE = os.path.join(PROJECT_ROOT, ".host_crons.json")
+
+
+def _read_host_crons():
+    """Scheduled-job status from the host collector (ops/cron-status.py). The LXC
+    can't see host systemd timers, so the host writes them here. [] if missing."""
+    try:
+        with open(HOST_CRONS_FILE) as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return []
+    return data.get("jobs", []) if isinstance(data, dict) else []
+
+
+# --- capability profiles: which feature panels this box should show ----------
+_CAPS_DEFAULTS = {
+    "ARES":   {"gpu": 1, "proxmox": 1, "windows_vm": 1, "mordor": 1, "photos": 1, "journals": 1, "finance": 1, "terminal": 1, "docker": 0},
+    "CRONOS": {"gpu": 0, "proxmox": 0, "windows_vm": 0, "mordor": 0, "photos": 0, "journals": 0, "finance": 1, "terminal": 1, "docker": 1},
+}
+_CAPS_CONSERVATIVE = {"gpu": 0, "proxmox": 0, "windows_vm": 0, "mordor": 0, "photos": 0, "journals": 0, "finance": 0, "terminal": 1, "docker": 0}
+
+
+def _capabilities():
+    """Feature panels this box shows. Brand-keyed defaults + optional
+    CAPS="gpu=0,docker=1" env override. No-op on ARES (all caps on)."""
+    brand = os.getenv("HOST_BRAND", "ARES").upper()
+    caps = dict(_CAPS_DEFAULTS.get(brand, _CAPS_CONSERVATIVE))
+    for pair in os.getenv("CAPS", "").split(","):          # bounded by env length
+        if "=" in pair:
+            k, v = pair.split("=", 1)
+            caps[k.strip()] = 1 if v.strip().lower() in ("1", "true", "yes", "on") else 0
+    assert isinstance(caps, dict)
+    return caps
+
+
+_containers_holder = {}
+def _compute_containers():
+    """Docker containers via `docker ps` (name, state, status). [] if docker is
+    absent/unreachable. Only called when the docker capability is on."""
+    try:
+        r = subprocess.run(
+            ["docker", "ps", "-a", "--no-trunc",
+             "--format", "{{.Names}}\t{{.State}}\t{{.Status}}"],
+            capture_output=True, text=True, timeout=6,
+        )
+    except Exception:
+        return []
+    if r.returncode != 0:
+        return []
+    out = []
+    for line in r.stdout.strip().split("\n")[:60]:         # bounded
+        parts = line.split("\t")
+        if len(parts) < 3 or not parts[0]:
+            continue
+        out.append({"name": parts[0], "state": parts[1], "status": parts[2],
+                    "ok": parts[1] == "running"})
+    out.sort(key=lambda c: (not c["ok"], c["name"]))        # unhealthy first
+    return out
+
+
+def _get_containers():
+    return _swr(_containers_holder, _compute_containers, lambda v: 8, cold=[])
+
+
+def _read_host_nvme():
+    """Physical NVMe drives (990 PRO + 970 EVO) from the host collector
+    (ops/drive-vitals.sh). The LXC can't read device temps or true per-drive
+    usage, so the host writes them here. Returns [] if missing/garbage."""
+    try:
+        with open(HOST_DRIVES_FILE) as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return []
+    out = []
+    for d in data.get("drives", []):
+        total = d.get("total_bytes", 0)
+        used = d.get("used_bytes", 0)
+        out.append({
+            "name": d.get("name", "?"),
+            "total": _format_bytes(total),
+            "used": _format_bytes(used),
+            "free": _format_bytes(total - used),
+            "percent": d.get("percent", 0),
+            "temp_c": d.get("temp_c"),
+        })
+    return out
+
+
 def _get_disks():
     """Get disk info with time-based caching. Works on Linux NAS and macOS."""
     # Serve from cache if fresh enough
@@ -143,6 +232,12 @@ def _get_disks_linux():
     if entry:
         disks.append(entry)
         seen_names.add("PROMETHEUS")
+
+    # Physical NVMe drives (990 PRO + 970 EVO) fed by the host collector.
+    for d in _read_host_nvme():
+        if d["name"] not in seen_names:
+            disks.append(d)
+            seen_names.add(d["name"])
 
     # Individual drives by device path (also written to shared file for Mac clients)
     drive_entries = []
@@ -517,50 +612,74 @@ def _compute_host_disks() -> list:
     return drives
 
 
+_GPU_QUERY = "nvidia-smi --query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw --format=csv,noheader,nounits"
+
+
+def _parse_gpu_csv(stdout: str):
+    """Parse one nvidia-smi CSV line into a GPU dict, or None if unparseable."""
+    parts = [p.strip() for p in stdout.strip().splitlines()[0].split(",")]
+    if len(parts) < 6:
+        return None
+    def _to_float(v):
+        try: return float(v)
+        except ValueError: return 0.0
+    name, temp, util, vmu, vmt, pwr = parts[:6]
+    return {
+        "online": True,
+        "name": name,
+        "temp_c": _to_float(temp),
+        "util_pct": _to_float(util),
+        "vram_used_mib": int(_to_float(vmu)),
+        "vram_total_mib": int(_to_float(vmt)),
+        "power_w": _to_float(pwr),
+    }
+
+
 def _compute_gpu_info() -> dict:
-    """SSH to VM 300 (192.168.20.212) and query nvidia-smi.
-    Returns {'online': bool, 'name', 'temp_c', 'util_pct', 'vram_used_mib', 'vram_total_mib', 'power_w'}
-    or {'online': False, 'reason': '...'} if unreachable. (No caching here —
-    wrapped by _get_gpu_info in a stale-while-revalidate cache.)
+    """Query nvidia-smi for the 3080. Tries the local card first (works when the
+    GPU is home in this LXC), then falls back to SSH into VM 300 (when the GPU is
+    loaned out to the gaming VM). Returns the parsed dict or {'online': False}.
+    (No caching here — wrapped by _get_gpu_info in a stale-while-revalidate cache.)
     """
+    reason = "no gpu"
+
+    # Local card (GPU not on loan) — fast path, no network.
+    try:
+        proc = subprocess.run(_GPU_QUERY.split(), capture_output=True, text=True, timeout=4)
+        if proc.returncode == 0 and proc.stdout.strip():
+            parsed = _parse_gpu_csv(proc.stdout)
+            if parsed:
+                return parsed
+        reason = proc.stderr.strip()[:120] or "local nvidia-smi failed"
+    except FileNotFoundError:
+        reason = "no local nvidia-smi"
+    except subprocess.TimeoutExpired:
+        reason = "local timeout"
+    except Exception as e:
+        reason = str(e)[:120]
+
+    # Loaned out — ask VM 300 over SSH.
     host = os.getenv("GPU_HOST", "zain@192.168.20.212")
-    result = {"online": False}
     try:
         proc = subprocess.run(
             [
                 "ssh", "-o", "ConnectTimeout=2", "-o", "StrictHostKeyChecking=no",
                 "-o", "BatchMode=yes", "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "LogLevel=ERROR",
-                host,
-                "nvidia-smi --query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw --format=csv,noheader,nounits"
+                "-o", "LogLevel=ERROR", host, _GPU_QUERY,
             ],
             capture_output=True, text=True, timeout=4,
         )
         if proc.returncode == 0 and proc.stdout.strip():
-            # Take first line (single GPU in VM 300).
-            parts = [p.strip() for p in proc.stdout.strip().splitlines()[0].split(",")]
-            if len(parts) >= 6:
-                def _to_float(v):
-                    try: return float(v)
-                    except ValueError: return 0.0
-                name, temp, util, vmu, vmt, pwr = parts[:6]
-                result = {
-                    "online": True,
-                    "name": name,
-                    "temp_c": _to_float(temp),
-                    "util_pct": _to_float(util),
-                    "vram_used_mib": int(_to_float(vmu)),
-                    "vram_total_mib": int(_to_float(vmt)),
-                    "power_w": _to_float(pwr),
-                }
-        else:
-            result = {"online": False, "reason": proc.stderr.strip()[:120] or "nvidia-smi failed"}
+            parsed = _parse_gpu_csv(proc.stdout)
+            if parsed:
+                return parsed
+        reason = proc.stderr.strip()[:120] or "nvidia-smi failed"
     except subprocess.TimeoutExpired:
-        result = {"online": False, "reason": "timeout"}
+        reason = "timeout"
     except Exception as e:
-        result = {"online": False, "reason": str(e)[:120]}
+        reason = str(e)[:120]
 
-    return result
+    return {"online": False, "reason": reason}
 
 
 _gpu_holder = {}
@@ -718,5 +837,9 @@ def get_system_info() -> dict:
         "python": platform.python_version(),
         "mordor": _get_mordor_status(),
         "gpu": _get_gpu_info(),
+        "crons": _read_host_crons(),
+        "caps": _capabilities(),
     }
+    if out["caps"].get("docker"):
+        out["containers"] = _get_containers()
     return out

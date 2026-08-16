@@ -436,6 +436,7 @@ SSO_ALLOWED_HOSTS = {
     "ares.tail3045df.ts.net",
     "pve.tail3045df.ts.net",
     "hermes.tail3045df.ts.net",
+    "cronos.tail3045df.ts.net",
     "192.168.20.213",
     "ares.local",
     "100.100.29.36",
@@ -490,8 +491,10 @@ def sso_consume():
 @app.route("/jump/hermes")
 @require_auth
 def jump_hermes():
-    """Hand off to HERMES with a one-shot SSO token, skipping its login."""
-    target_base = "https://hermes.tail3045df.ts.net"
+    """Hand off to CRONOS with a one-shot SSO token, skipping its login.
+    Symmetric with CRONOS→ARES: both jumps use the tailnet IP (private, no funnel,
+    no 'hermes' name). Route path stays /jump/hermes (internal); target is the CRONOS box IP."""
+    target_base = "http://100.100.29.36:8888"
     s = _sso_serializer()
     if s is None:
         return redirect(target_base)
@@ -508,7 +511,9 @@ def girlfriend_day():
 @app.route("/")
 @require_auth
 def home():
-    return render_template("home.html")
+    # Inline the first system-info snapshot so the page paints with real vitals
+    # instead of skeletons that pop in after the client-side fetch. Cached (~35ms).
+    return render_template("home.html", boot=get_system_info())
 
 
 
@@ -567,7 +572,10 @@ def terminal():
 @app.route("/breakdown")
 @require_auth
 def breakdown_page():
-    return render_template("breakdown.html")
+    # no-store so the SW/browser never pins a stale copy of this dynamic page
+    resp = make_response(render_template("breakdown.html"))
+    resp.headers["Cache-Control"] = "no-store, must-revalidate"
+    return resp
 
 
 # ───────────────────────────────────────────────────────────────────────
@@ -1778,6 +1786,24 @@ def list_journals():
         except Exception:
             pass
 
+    # Page counts without opening every PDF on every request: the full-text index
+    # already stores each page ("<pdf>:<n>") tagged with the PDF's mtime, so the
+    # count is just how many pages that PDF has in the index. Opening multi-GB
+    # notebooks per request (fitz.open) was the whole slow-load bottleneck. Fall
+    # back to fitz only when a PDF is missing/stale in the index (mtime guard; the
+    # 60s watcher self-heals a stale entry within a minute).
+    idx_counts = {}   # pdf filename -> (page_count, indexed_mtime)
+    try:
+        with open(os.path.join(JOURNALS_DIR, "journal_text_index.json")) as fh:
+            for v in json.load(fh).get("pages", {}).values():
+                pdf = v.get("pdf")
+                if not pdf:
+                    continue
+                cnt, _ = idx_counts.get(pdf, (0, v.get("mtime", 0)))
+                idx_counts[pdf] = (cnt + 1, v.get("mtime", 0))
+    except Exception:
+        pass
+
     # Scan PDFs on disk
     pdf_info = {}
     if os.path.isdir(JOURNALS_DIR):
@@ -1785,12 +1811,16 @@ def list_journals():
             if f.startswith(".") or not f.lower().endswith(".pdf"):
                 continue
             path = os.path.join(JOURNALS_DIR, f)
-            try:
-                doc = fitz.open(path)
-                pages = doc.page_count
-                doc.close()
-            except Exception:
-                pages = 0
+            hit = idx_counts.get(f)
+            if hit and abs(hit[1] - os.path.getmtime(path)) < 1:
+                pages = hit[0]
+            else:
+                try:
+                    doc = fitz.open(path)
+                    pages = doc.page_count
+                    doc.close()
+                except Exception:
+                    pages = 0
             key = f.lower().replace(".pdf", "").replace("-pdf", "")
             pdf_info[key] = {"name": f, "pages": pages, "size": os.path.getsize(path),
                              "mtime": os.path.getmtime(path)}
@@ -3225,7 +3255,13 @@ _VAULT_PATH      = os.path.join(_APP_DIR, "ai_data", "vault.json")
 #  (a) invisible to SMB/Finder  (b) stays on same fs → atomic rename
 #  (c) inside PHOTOS tree → nightly rsync to HERMES still backs it up
 _VAULT_ORIGINALS_DIR = os.path.join(PHOTOS_ROOT, ".vault")
-os.makedirs(_VAULT_ORIGINALS_DIR, exist_ok=True)
+try:
+    os.makedirs(_VAULT_ORIGINALS_DIR, exist_ok=True)
+except OSError:
+    # ponytail: non-ARES deployments (e.g. CRONOS, photos:0) have no writable
+    # PHOTOS_ROOT — vault is unused there, so don't crash import. Vault ops on
+    # ARES still create/verify this dir on first use.
+    pass
 
 # Vault thumb directories (NOT under static/ — Caddy cannot serve these)
 _VAULT_THUMB_DIR      = os.path.join(_APP_DIR, "vault_thumbs")
@@ -3326,6 +3362,7 @@ def _vault_auth_load():
 def _vault_auth_save(data):
     """Atomically write vault_auth.json."""
     tmp = _VAULT_AUTH_PATH + ".tmp"
+    os.makedirs(os.path.dirname(_VAULT_AUTH_PATH), exist_ok=True)
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, _VAULT_AUTH_PATH)
