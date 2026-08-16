@@ -404,22 +404,6 @@
         </style>
 </head>
 <body>
-<!-- ZEUS watchdog banner (2026-07-06): polls /api/alerts; hidden when level=ok -->
-<div id="hermes-alert-banner" onclick="this.style.display='none'" title="tap to dismiss" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:10px 16px;font:600 14px/1.4 system-ui,sans-serif;color:#fff;text-align:center;cursor:pointer;"></div>
-<script>
-(function(){
-  var el=document.getElementById("hermes-alert-banner");
-  function poll(){
-    fetch("/api/alerts",{credentials:"same-origin"}).then(function(r){return r.json();}).then(function(a){
-      if(a.level==="ok"){el.style.display="none";return;}
-      el.style.background=a.level==="red"?"#dc2626":"#d97706";
-      el.textContent="ZEUS "+a.level.toUpperCase()+": "+(a.reasons||[]).join(" \u00b7 ");
-      el.style.display="block";
-    }).catch(function(){});
-  }
-  poll(); setInterval(poll, 60000);
-})();
-</script>
 
 <div class="scanline"></div>
 
