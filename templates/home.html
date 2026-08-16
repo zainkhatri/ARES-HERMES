@@ -16,7 +16,7 @@
     <style>
         :root {
             --bg-0:#070403; --bg-1:#0d0605; --bg-2:#140807; --bg-3:#1c0c09;
-            --ares:#f5402d; --ares-rgb:245,64,45; --ares-bright:#ff7a45; --ember:#c2301f; --ember-dim:rgba(var(--ares-rgb),.28);
+            --ares:#f5402d; --ares-rgb:245,64,45; --panel-rgb:20,8,7; --ares-bright:#ff7a45; --ember:#c2301f; --ember-dim:rgba(var(--ares-rgb),.28);
             --grid:rgba(var(--ares-rgb),.055);
             --text-1:#f6ece9; --text-2:#c99a90; --text-3:#8d6259; --text-4:#5a3d37;
             --green:#10b981; --amber:#f59e0b; --red:#ef4444;
@@ -29,7 +29,7 @@
             --bg-0:#03060b; --bg-1:#060b14; --bg-2:#0a1220; --bg-3:#0e1a2e;
             --ares:#38bdf8; --ares-rgb:56,189,248; --ares-bright:#7dd3fc; --ember:#0ea5e9;
             --text-1:#e9f2fb; --text-2:#90aecb; --text-3:#5a7690; --text-4:#374a5e;
-            --amber:#22d3ee;
+            --amber:#22d3ee; --panel-rgb:10,18,32;
         }
         * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         html, body {
@@ -71,7 +71,7 @@
            `content` so a panel with no corner class renders nothing; an
            unpositioned pseudo-element lands in the static flow and covers text.
            Equal specificity throughout so the border-side resets still win. */
-        .mod { position:relative; contain:layout paint; border:1px solid var(--ember-dim); background:rgba(20,8,7,.55);
+        .mod { position:relative; contain:layout paint; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.55);
                box-shadow:inset 0 0 22px rgba(var(--ares-rgb),.045); }
         .mod::before, .mod::after {
             position:absolute; width:11px; height:11px; border:2px solid var(--ares); pointer-events:none;
@@ -171,17 +171,22 @@
         .trace-fill { fill:rgba(var(--ares-rgb),.13); stroke:none; }
 
         /* ---- operation modules ------------------------------------------- */
-        .ops { display:flex; flex-direction:column; gap:9px; }
-        .op { position:relative; display:flex; align-items:center; gap:12px; padding:11px 13px; text-decoration:none;
-              border:1px solid var(--ember-dim); background:rgba(20,8,7,.5); color:var(--text-1);
-              transition:all var(--dur) var(--ease-out); }
-        .op:hover { border-color:var(--ares); background:rgba(var(--ares-rgb),.1); transform:translateX(3px); }
-        .op-num { font-size:9px; letter-spacing:.14em; color:var(--ares); }
+        .ops { display:flex; flex-direction:column; gap:10px; }
+        .op { position:relative; display:flex; align-items:center; gap:14px; padding:12px 14px 12px 17px; text-decoration:none;
+              border:1px solid var(--ember-dim); background:var(--bg-1); color:var(--text-1); overflow:hidden;
+              transition:border-color var(--dur) var(--ease-out), background var(--dur) var(--ease-out); }
+        .op::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px;
+                      background:var(--ares); opacity:.32; transition:opacity var(--dur), width var(--dur); }
+        .op:hover { border-color:var(--ares); background:rgba(var(--ares-rgb),.06); }
+        .op:hover::before { opacity:1; width:3px; }
+        .op-num { flex:0 0 auto; width:27px; height:27px; display:grid; place-items:center;
+                  font-size:10px; font-weight:700; letter-spacing:.06em; color:var(--ares);
+                  border:1px solid rgba(var(--ares-rgb),.32); }
         .op-body { flex:1; min-width:0; display:block; }
-        /* label above name — these are spans, so they need explicit block display */
-        .op-lab { display:block; font-size:8.5px; letter-spacing:.16em; color:var(--text-3); text-transform:uppercase; }
-        .op-name { display:block; font-size:17px; font-weight:600; letter-spacing:.02em; margin-top:1px; }
+        .op-lab { display:block; font-size:8.5px; letter-spacing:.18em; color:var(--text-3); text-transform:uppercase; }
+        .op-name { display:block; font-size:16px; font-weight:600; letter-spacing:.02em; margin-top:2px; }
         .op-arrow { color:var(--text-3); transition:color var(--dur), transform var(--dur); }
+        .op:hover .op-name { color:var(--ares); }
         .op:hover .op-arrow { color:var(--ares); transform:translateX(3px); }
 
         /* ---- wordmark ----------------------------------------------------- */
@@ -197,7 +202,7 @@
         /* ---- vitals tiles (markup emitted by loadVitals) -------------------- */
         .vitals { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
         .v-tile { position:relative; padding:11px 13px 12px; border:1px solid var(--ember-dim);
-                  background:rgba(20,8,7,.6); overflow:hidden;
+                  background:rgba(var(--panel-rgb),.6); overflow:hidden;
                   transition:border-color var(--dur), background var(--dur); }
         .v-tile:hover { border-color:var(--ares); }
         .v-tile-key { display:flex; align-items:center; justify-content:space-between; gap:8px;
@@ -1085,19 +1090,23 @@ function applyVitals(i) {
             document.getElementById('v-uptime').textContent = i.uptime || '\u2014';
             document.getElementById('v-host-tag').textContent = i.hostname || 'ARES';
 
+            var _BR = document.documentElement.getAttribute('data-brand');
+            var TC = (_BR === 'ZEUS')
+                ? {temp:'#22d3ee', cpu:'#38bdf8', mem:'#818cf8', gpu:'#38bdf8', pool:'#0ea5e9'}
+                : {temp:'#fb923c', cpu:'#ef4444', mem:'#f43f5e', gpu:'#eab308', pool:'#ea580c'};
             var tiles = [];
             if (i.cpu_temp != null) {
-                tiles.push({k:'temp', key:'TEMP', tag:'CPU', num:i.cpu_temp.toFixed(0), unit:'\u00b0C', meta:'<span class="lo">cool</span><span>90\u00b0</span>', pct:Math.min(100,(i.cpu_temp/90)*100), color:'#fb923c'});
+                tiles.push({k:'temp', key:'TEMP', tag:'CPU', num:i.cpu_temp.toFixed(0), unit:'\u00b0C', meta:'<span class="lo">cool</span><span>90\u00b0</span>', pct:Math.min(100,(i.cpu_temp/90)*100), color:TC.temp});
             }
-            tiles.push({k:'cpu', key:'CPU', tag:'load', num:i.cpu_percent, unit:'%', meta:'<span class="lo">idle</span><span>peak</span>', pct:i.cpu_percent, color:'#ef4444'});
-            tiles.push({k:'mem', key:'MEM', tag:'usage', num:i.memory_percent, unit:'%', meta:'<span>' + i.memory_used + '</span><span class="lo">/ ' + i.memory_total + '</span>', pct:i.memory_percent, color:'#f43f5e'});
+            tiles.push({k:'cpu', key:'CPU', tag:'load', num:i.cpu_percent, unit:'%', meta:'<span class="lo">idle</span><span>peak</span>', pct:i.cpu_percent, color:TC.cpu});
+            tiles.push({k:'mem', key:'MEM', tag:'usage', num:i.memory_percent, unit:'%', meta:'<span>' + i.memory_used + '</span><span class="lo">/ ' + i.memory_total + '</span>', pct:i.memory_percent, color:TC.mem});
             if (g.online) {
-                tiles.push({k:'gpu', key:'GPU', tag:(g.name ? g.name.replace('NVIDIA GeForce ','') : 'GPU'), num:g.temp_c, unit:'\u00b0C ' + g.util_pct + '%', meta:'<span>' + g.power_w.toFixed(0) + 'W</span><span class="lo">VRAM ' + (g.vram_used_mib/1024).toFixed(1) + '/' + (g.vram_total_mib/1024).toFixed(0) + 'G</span>', pct:(g.vram_total_mib ? Math.min(100,(g.vram_used_mib/g.vram_total_mib)*100) : g.util_pct), color:'#eab308'});
+                tiles.push({k:'gpu', key:'GPU', tag:(g.name ? g.name.replace('NVIDIA GeForce ','') : 'GPU'), num:g.temp_c, unit:'\u00b0C ' + g.util_pct + '%', meta:'<span>' + g.power_w.toFixed(0) + 'W</span><span class="lo">VRAM ' + (g.vram_used_mib/1024).toFixed(1) + '/' + (g.vram_total_mib/1024).toFixed(0) + 'G</span>', pct:(g.vram_total_mib ? Math.min(100,(g.vram_used_mib/g.vram_total_mib)*100) : g.util_pct), color:TC.gpu});
             } else {
                 tiles.push({k:'gpu', key:'GPU', tag:'RTX 3080', num:'\u2014', unit:'', meta:'<span class="lo">in VM 200</span><span></span>', pct:0, color:'#2d3a4e'});
             }
             if (pool) {
-                tiles.push({k:'pool', key:'POOL', tag:DRIVE_TAG['PROMETHEUS'], num:pool.percent, unit:'%', meta:'<span>' + pool.used + '</span><span class="lo">/ ' + pool.total + '</span>', pct:pool.percent, color:'#ea580c'});
+                tiles.push({k:'pool', key:'POOL', tag:DRIVE_TAG['PROMETHEUS'], num:pool.percent, unit:'%', meta:'<span>' + pool.used + '</span><span class="lo">/ ' + pool.total + '</span>', pct:pool.percent, color:TC.pool});
             }
             renderVitals(tiles, winTile());
 
