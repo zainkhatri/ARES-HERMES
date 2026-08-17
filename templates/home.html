@@ -36,21 +36,13 @@
         html[data-brand="ZEUS"] .hud { gap:10px; padding-top:calc(10px + var(--sat)); padding-bottom:calc(10px + var(--sab)); }
         html[data-brand="ZEUS"] .col { gap:10px; }
         html[data-brand="ZEUS"] .hud-grid { gap:11px; }
-        /* BOTH boxes fit on one screen — never scroll. Pin the shell to the viewport
-           and let the flex chain shrink (min-height:0 unlocks it) so the flex-fill
-           panels absorb the squeeze instead of overflowing. Lists inside clip their
-           tail rather than push the page taller. */
-        .hud { height:100vh; height:100dvh; overflow:hidden; }
-        .hud-grid, .col { min-height:0; }
-        /* Force the single grid row to fill the grid height so EVERY column stretches
-           full-height (not just to the tallest column's content). Without this, when
-           one column is short the flex-fill panels in the others stop growing and clip. */
+        /* BOTH boxes fit on one screen — never scroll. The layout renders at its
+           natural size and JS (fitScale) scales the whole .hud down to the viewport
+           height. No clipping, no per-panel shrinking games. Columns fill evenly so
+           there's no dead space at full size. */
         .hud-grid { grid-template-rows: minmax(0, 1fr); }
-        /* Right column: let its panels grow/shrink to share the column height (ARES:
-           jobs/gpu/thermals/telemetry; ZEUS: thermals/telemetry) — no dead space, and
-           they compress on a short viewport instead of clipping. */
         .hud-grid > .col:last-child > .mod { flex:1 1 auto; }
-        .col > .mod, .col > .mod > .mod-body { min-height:0; }
+        .hud { transform-origin: top center; }
         html[data-brand="ZEUS"] .outreach-list, html[data-brand="ZEUS"] .reply-list,
         html[data-brand="ZEUS"] #panel-containers .mod-body, html[data-brand="ZEUS"] #panel-jobs .arr { overflow:hidden; }
         /* ZEUS shrink-to-fit: the wordmark is decorative and the array map has 4
@@ -113,10 +105,9 @@
         .mod-body  { padding:12px; }
 
         /* ---- header ----------------------------------------------------- */
-        /* Single-screen by design, but never clip: if content exceeds the viewport
-           (ZEUS has more panels than ARES), allow vertical scroll instead of hiding
-           the overflow. Fits-on-screen boxes show no scrollbar. */
-        html, body { overflow-x:hidden; overflow-y:auto; }
+        /* Single-screen by design — never scroll. fitScale() shrinks the .hud to fit
+           the viewport height, so nothing overflows. */
+        html, body { overflow:hidden; }
         .hud-top { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
         /* Flex/grid children default to min-width:auto and refuse to shrink below
            their content, which pushes the console wider than a phone viewport. */
@@ -148,7 +139,7 @@
                     align-items:start; align-content:center; }
         .hud-grid > * { min-width:0; }
                 /* left column fills to the footer: Operations panel + nav cards grow */
-        .hud-grid > .col:first-child { align-self:stretch; }
+        .hud-grid > .col { align-self:stretch; }
         /* The last VISIBLE left-column panel fills the leftover column height so
            there's no dead space beneath it. `:last-child` can't be used — the
            box-specific panels are display:none but still in the DOM, so it lands on
@@ -1289,9 +1280,25 @@ function applyVitals(i) {
                 if (i.caps && i.caps.docker) renderContainers(i.containers || []);
             }
             var fb = document.getElementById('foot-brand'); if (fb) fb.textContent = i.hostname || 'ARES';
+            requestAnimationFrame(fitScale);   // content heights may have changed
         }
         _vtick++;
 }
+
+// Scale-to-fit: render at natural size, then shrink the whole .hud to the viewport
+// height so everything shows on one screen with no scroll and no clipping.
+function fitScale() {
+    var hud = document.querySelector('.hud');
+    if (!hud) return;
+    hud.style.transform = 'none';                 // measure natural height
+    var vh = window.innerHeight, natural = hud.scrollHeight;
+    var k = natural > vh + 1 ? vh / natural : 1;
+    hud.style.transform = k < 1 ? 'scale(' + k.toFixed(4) + ')' : 'none';
+}
+var _fitT;
+window.addEventListener('resize', function () { clearTimeout(_fitT); _fitT = setTimeout(fitScale, 80); });
+window.addEventListener('load', fitScale);
+setTimeout(fitScale, 400);   // after fonts settle
 
 
 
