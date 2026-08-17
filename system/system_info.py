@@ -234,7 +234,8 @@ def _get_disks_physical():
             continue
         out.append({"name": name, "total": _format_bytes(total),
                     "used": _format_bytes(used), "free": _format_bytes(u.f_bavail * u.f_frsize),
-                    "percent": round(used / total * 100, 1)})
+                    "percent": round(used / total * 100, 1),
+                    "_tb": total, "_ub": used})   # raw bytes so PROMETHEUS can sum the pool
     out.sort(key=lambda d: d["name"])
     return out
 
@@ -440,7 +441,8 @@ def _compute_folder_sizes():
 
     try:
         subdirs = [d for d in os.listdir(POOL_ROOT)
-                    if os.path.isdir(os.path.join(POOL_ROOT, d))]
+                    if os.path.isdir(os.path.join(POOL_ROOT, d))
+                    and not d.startswith(".") and d != "lost+found"]
     except OSError:
         return _folder_cache.get("data") or []
 
@@ -917,7 +919,22 @@ def get_system_info() -> dict:
     # the WRONG box's numbers. Gate them on the proxmox capability.
     disks = _get_disks() + (_get_host_disks() if caps.get("proxmox") else [])
     if os.getenv("HOST_BRAND", "").upper() == "ZEUS":
-        disks = disks + _get_disks_physical()   # per-SSD rows (T5/T7/T9) for the array map
+        phys = _get_disks_physical()            # per-SSD rows (T5/T7/T9) for the array map
+        disks = disks + phys
+        # PROMETHEUS = the whole pool: mergerfs' statvfs only reports one branch, so
+        # sum the physical SSDs for the true total capacity/used.
+        tot = sum(d.get("_tb", 0) for d in phys)
+        usd = sum(d.get("_ub", 0) for d in phys)
+        if tot > 0:
+            for d in disks:
+                if d.get("name") == "PROMETHEUS":
+                    d["total"] = _format_bytes(tot)
+                    d["used"] = _format_bytes(usd)
+                    d["free"] = _format_bytes(tot - usd)
+                    d["percent"] = round(usd / tot * 100, 1)
+                    break
+        for d in phys:                          # drop raw helper keys
+            d.pop("_tb", None); d.pop("_ub", None)
 
     # Top-level folder sizes
     folders = _get_folder_sizes()
