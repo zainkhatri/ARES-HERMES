@@ -440,9 +440,13 @@ def _compute_folder_sizes():
     disk_cache = _load_folder_cache()
 
     try:
+        # Skip hidden dirs, lost+found, and backup mirrors — the latter are huge
+        # (du exceeds the timeout, so they never cache) and aren't "where active data
+        # lives" anyway. Matches ARES, which shows active folders, not backups.
         subdirs = [d for d in os.listdir(POOL_ROOT)
                     if os.path.isdir(os.path.join(POOL_ROOT, d))
-                    and not d.startswith(".") and d != "lost+found"]
+                    and not d.startswith(".") and d != "lost+found"
+                    and "BACKUP" not in d.upper()]
     except OSError:
         return _folder_cache.get("data") or []
 
