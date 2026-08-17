@@ -26,6 +26,8 @@ EXCLUDES=(
   --exclude='photo_index*'          # photo DB/json — ARES only
   --exclude='*.db' --exclude='*.db-wal' --exclude='*.db-shm'
   --exclude='.host_*.json'          # host-collector runtime state (per box)
+  --exclude='.folder_sizes.json'    # per-box folder-size cache (slow du — must persist)
+  --exclude='.disk_stats.json' --exclude='.nas_drives.json'   # per-box disk caches
   --exclude='.env'                  # secrets stay per box
   --exclude='__pycache__' --exclude='*.pyc'
   --exclude='.git'
