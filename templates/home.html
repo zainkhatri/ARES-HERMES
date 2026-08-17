@@ -42,6 +42,10 @@
            clip their tail rather than push the page taller. */
         html[data-brand="ZEUS"] .hud { height:100vh; height:100dvh; overflow:hidden; }
         html[data-brand="ZEUS"] .hud-grid, html[data-brand="ZEUS"] .col { min-height:0; }
+        /* Force the single grid row to fill the grid height so EVERY column stretches
+           full-height (not just to the tallest column's content). Without this, when
+           one column is short the flex-fill panels in the others stop growing and clip. */
+        html[data-brand="ZEUS"] .hud-grid { grid-template-rows: minmax(0, 1fr); }
         html[data-brand="ZEUS"] .col > .mod, html[data-brand="ZEUS"] .col > .mod > .mod-body { min-height:0; }
         html[data-brand="ZEUS"] .outreach-list, html[data-brand="ZEUS"] .reply-list,
         html[data-brand="ZEUS"] #panel-containers .mod-body, html[data-brand="ZEUS"] #panel-jobs .arr { overflow:hidden; }
@@ -145,9 +149,9 @@
            there's no dead space beneath it. `:last-child` can't be used — the
            box-specific panels are display:none but still in the DOM, so it lands on
            a hidden panel. Target the two candidates explicitly: #panel-ops (ARES),
-           #panel-reply (ZEUS). The hidden one is a no-op. */
-        #panel-ops, #panel-reply { flex:1 1 0; display:flex; flex-direction:column; }
-        #panel-ops > .mod-body, #panel-reply > .mod-body { flex:1; display:flex; flex-direction:column; }
+           #panel-outreach (ZEUS). The hidden one is a no-op. */
+        #panel-ops, #panel-outreach { flex:1 1 0; display:flex; flex-direction:column; }
+        #panel-ops > .mod-body, #panel-outreach > .mod-body { flex:1; display:flex; flex-direction:column; }
         #panel-ops .ops { flex:1; display:flex; flex-direction:column; justify-content:space-between; }
         #panel-ops .op { flex:1 1 0; }
         #panel-ops .op-body { justify-content:center; }
@@ -1072,7 +1076,7 @@ function applyCaps(caps) {
     show('#panel-outreach', caps.docker === 1);   // ZEUS: outreach stats
     show('#panel-attention', caps.docker === 1);  // ZEUS: needs-attention rollup
     show('#panel-weekly', caps.docker === 1);     // ZEUS: weekly trend
-    show('#panel-reply', caps.docker === 1);      // ZEUS: reply queue
+    show('#panel-reply', false);                  // reply queue removed (not useful)
 }
 
 // Docker/FAI container health (ZEUS). Reuses the .crow/.cdot job-row styling.
