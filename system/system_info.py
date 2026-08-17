@@ -145,6 +145,39 @@ def _read_host_nvme():
     return out
 
 
+def _read_crontab_jobs():
+    """ZEUS scheduled jobs from the user crontab (the FAI automation). Name from the
+    script/business, schedule label, last-run from the redirected log's mtime; jobs
+    with no run in >3 days are flagged. Most-recent first, capped. [] on failure."""
+    import re as _re
+    try:
+        r = subprocess.run(["crontab", "-l"], capture_output=True, text=True, timeout=5)
+        lines = r.stdout.splitlines() if r.returncode == 0 else []
+    except Exception:
+        return []
+    now = int(time.time())
+    jobs = []
+    for line in lines[:80]:                                   # bounded
+        line = line.strip()
+        if not line or line.startswith("#") or _re.match(r"^[A-Z_]+=", line):
+            continue
+        m = _re.match(r"^((?:[\d\*/,\-]+\s+){4}[\d\*/,\-]+)\s+(.*)$", line)
+        if not m:
+            continue
+        sched, cmd = m.group(1), m.group(2)
+        fm = _re.search(r"([\w.-]+)\.(?:sh|js|mjs|py)\b", cmd)
+        base = os.path.basename(fm.group(1) if fm else cmd.split()[0]).replace("_", " ").replace("-", " ").strip(". ")
+        tag = next((t for t in ("FAMILYCARESF", "FCSF", "FAI", "IBTAKAR", "whynow") if t.lower() in cmd.lower()), "")
+        name = (("FCSF" if tag == "FAMILYCARESF" else tag) + ": " + base) if tag else base
+        lm = _re.search(r">>?\s*(/[\w./-]+\.log)", cmd)
+        last = int(os.path.getmtime(lm.group(1))) if (lm and os.path.exists(lm.group(1))) else None
+        ok = last is not None and (now - last) < 3 * 86400
+        jobs.append({"name": name[:38], "sched": sched, "last": last,
+                     "ok": ok, "running": False, "next": None})
+    jobs.sort(key=lambda j: (j["last"] is None, -(j["last"] or 0)))   # recent first, unknown last
+    return jobs[:12]
+
+
 def _get_disks_physical():
     """Per-physical-SSD usage for the array map (ZEUS: T5/T7/T9 behind the mergerfs
     pool). Maps each disk's model to a friendly name (trailing T5/T7/T9 token), finds
@@ -887,7 +920,7 @@ def get_system_info() -> dict:
         "python": platform.python_version(),
         "mordor": _get_mordor_status() if caps.get("mordor") else {"online": False},
         "gpu": _get_gpu_info() if caps.get("gpu") else {"online": False},
-        "crons": _read_host_crons(),
+        "crons": _read_crontab_jobs() if os.getenv("HOST_BRAND", "").upper() == "ZEUS" else _read_host_crons(),
         "caps": caps,
     }
     if caps.get("docker"):
