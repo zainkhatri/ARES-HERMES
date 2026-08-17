@@ -352,6 +352,18 @@
         .spark { flex:1; min-width:0; height:48px; display:block;
                  background:linear-gradient(180deg, rgba(var(--ares-rgb),.04), transparent); }
         .spark-val { flex:none; width:60px; text-align:right; font-size:14px; font-weight:700; color:var(--text-1); }
+        /* Network / Disk I/O rows (ZEUS) */
+        .io-body { display:flex; flex-direction:column; justify-content:center; gap:13px; }
+        .io-row { display:flex; align-items:center; gap:12px; }
+        .io-lab { flex:none; width:52px; font-size:9.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--text-3); }
+        .io-bar { flex:1; height:6px; background:rgba(var(--ares-rgb),.13); overflow:hidden; min-width:0; }
+        .io-bar > i { display:block; height:100%; width:0; background:var(--ares); transition:width var(--dur) var(--ease-out); }
+        .io-val { flex:none; width:78px; text-align:right; font-size:14px; font-weight:700; color:var(--text-1); font-variant-numeric:tabular-nums; }
+        .io-load { display:flex; align-items:center; gap:12px; margin-top:2px; padding-top:11px; border-top:1px solid var(--ember-dim); }
+        .io-load::before { content:'LOAD'; flex:none; width:52px; font-size:9.5px; letter-spacing:.13em; color:var(--text-3); }
+        .io-load-bar { flex:1; height:6px; background:rgba(var(--ares-rgb),.13); overflow:hidden; min-width:0; }
+        .io-load-bar > i { display:block; height:100%; width:0; background:var(--amber); transition:width var(--dur) var(--ease-out); }
+        .io-load-v { flex:none; width:78px; text-align:right; font-size:12px; font-weight:700; color:var(--text-2); font-variant-numeric:tabular-nums; }
         .sp-line { fill:none; stroke-width:1.6; vector-effect:non-scaling-stroke; }
         .sp-fill { stroke:none; }
         .sp-c-cpu.sp-line { stroke:var(--ares); }
@@ -740,11 +752,30 @@
                 </div>
             </section>
 
-            <!-- Thermal history — CPU package vs GPU core, same observed samples. -->
-            
+            <!-- ZEUS: live network throughput (fills the right column). -->
+            <section class="mod c-bl c-br" id="panel-net" style="display:none">
+                <div class="mod-head">
+                    <span class="mod-title">Network</span>
+                    <span class="mod-meta" id="net-meta">—</span>
+                </div>
+                <div class="mod-body io-body">
+                    <div class="io-row"><span class="io-lab">Down</span><span class="io-bar"><i id="net-down-bar"></i></span><span class="io-val" id="net-down">—</span></div>
+                    <div class="io-row"><span class="io-lab">Up</span><span class="io-bar"><i id="net-up-bar"></i></span><span class="io-val" id="net-up">—</span></div>
+                </div>
+            </section>
 
-            <!-- Every disk the API reports, not a hardcoded pair. -->
-            
+            <!-- ZEUS: disk I/O + system load. -->
+            <section class="mod c-bl c-br" id="panel-diskio" style="display:none">
+                <div class="mod-head">
+                    <span class="mod-title">Disk I/O</span>
+                    <span class="mod-meta" id="load-meta">load —</span>
+                </div>
+                <div class="mod-body io-body">
+                    <div class="io-row"><span class="io-lab">Read</span><span class="io-bar"><i id="disk-r-bar"></i></span><span class="io-val" id="disk-r">—</span></div>
+                    <div class="io-row"><span class="io-lab">Write</span><span class="io-bar"><i id="disk-w-bar"></i></span><span class="io-val" id="disk-w">—</span></div>
+                    <div class="io-load"><span class="io-load-bar"><i id="load-bar"></i></span><span class="io-load-v" id="load-val">—</span></div>
+                </div>
+            </section>
         </div>
     </div>
 
@@ -1080,6 +1111,8 @@ function applyCaps(caps) {
     show('#panel-gpu', caps.gpu !== 0);
     show('#tel-gpu-row', caps.gpu !== 0);
     show('#th-gpu-key', caps.gpu !== 0);
+    show('#panel-net', caps.docker === 1);        // ZEUS: network throughput
+    show('#panel-diskio', caps.docker === 1);     // ZEUS: disk I/O + load
     show('.op-photos', caps.photos !== 0);
     show('.op-journals', caps.journals !== 0);
     show('#panel-containers', false);             // Services panel removed on ZEUS
@@ -1092,6 +1125,33 @@ function applyCaps(caps) {
 }
 
 // Docker/FAI container health (ZEUS). Reuses the .crow/.cdot job-row styling.
+// Live network + disk throughput + load (ZEUS right column).
+function _fmtRate(bps) {
+    bps = bps || 0;
+    if (bps < 1024) return Math.round(bps) + ' B/s';
+    if (bps < 1048576) return (bps / 1024).toFixed(bps < 10240 ? 1 : 0) + ' K/s';
+    if (bps < 1073741824) return (bps / 1048576).toFixed(bps < 10485760 ? 1 : 0) + ' M/s';
+    return (bps / 1073741824).toFixed(1) + ' G/s';
+}
+var _ioMax = { net: 1024, disk: 1048576 };
+function renderIO(io) {
+    if (!io) return;
+    var nd = io.net_down || 0, nu = io.net_up || 0, dr = io.disk_r || 0, dw = io.disk_w || 0;
+    _ioMax.net = Math.max(_ioMax.net * 0.85, nd, nu, 1024);       // decaying rolling peak
+    _ioMax.disk = Math.max(_ioMax.disk * 0.85, dr, dw, 1048576);
+    var sv = function (id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+    var sw = function (id, f) { var e = document.getElementById(id); if (e) e.style.width = Math.min(100, f * 100).toFixed(1) + '%'; };
+    sv('net-down', _fmtRate(nd)); sv('net-up', _fmtRate(nu));
+    sw('net-down-bar', nd / _ioMax.net); sw('net-up-bar', nu / _ioMax.net);
+    sv('disk-r', _fmtRate(dr)); sv('disk-w', _fmtRate(dw));
+    sw('disk-r-bar', dr / _ioMax.disk); sw('disk-w-bar', dw / _ioMax.disk);
+    var nm = document.getElementById('net-meta'); if (nm) nm.textContent = '↓ ' + _fmtRate(nd);
+    if (io.load) {
+        sv('load-val', io.load.join('  ')); sw('load-bar', (io.load_pct || 0) / 100);
+        var lm = document.getElementById('load-meta'); if (lm) lm.textContent = 'load ' + io.load[0];
+    }
+}
+
 function renderContainers(list) {
     var el = document.getElementById('ctr-list');
     if (!el) return;
@@ -1633,6 +1693,7 @@ function updateInstruments(i, g, pool) {
     pushHist('gtemp', (g && g.online && g.temp_c != null) ? g.temp_c : null);
     drawCharts();
     updateGpu(g);
+    renderIO(i.io);            // live network/disk/load (ZEUS panels)
     saveGraphState();          // persist so a reload shows the last-known trend
 }
 
