@@ -36,6 +36,15 @@
         html[data-brand="ZEUS"] .hud { gap:10px; padding-top:calc(10px + var(--sat)); padding-bottom:calc(10px + var(--sab)); }
         html[data-brand="ZEUS"] .col { gap:10px; }
         html[data-brand="ZEUS"] .hud-grid { gap:11px; }
+        /* ZEUS fits on one screen — never scroll. Pin the shell to the viewport and
+           let the flex chain shrink (min-height:0 unlocks it) so the flex-fill panels
+           (telemetry, reply) absorb the squeeze instead of overflowing. Lists inside
+           clip their tail rather than push the page taller. */
+        html[data-brand="ZEUS"] .hud { height:100vh; height:100dvh; overflow:hidden; }
+        html[data-brand="ZEUS"] .hud-grid, html[data-brand="ZEUS"] .col { min-height:0; }
+        html[data-brand="ZEUS"] .col > .mod, html[data-brand="ZEUS"] .col > .mod > .mod-body { min-height:0; }
+        html[data-brand="ZEUS"] .outreach-list, html[data-brand="ZEUS"] .reply-list,
+        html[data-brand="ZEUS"] #panel-containers .mod-body, html[data-brand="ZEUS"] #panel-jobs .arr { overflow:hidden; }
         * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         html, body {
             min-height:100%; background:var(--bg-0); color:var(--text-1);
