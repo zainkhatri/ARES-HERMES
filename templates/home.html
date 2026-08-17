@@ -36,37 +36,38 @@
         html[data-brand="ZEUS"] .hud { gap:10px; padding-top:calc(10px + var(--sat)); padding-bottom:calc(10px + var(--sab)); }
         html[data-brand="ZEUS"] .col { gap:10px; }
         html[data-brand="ZEUS"] .hud-grid { gap:11px; }
-        /* ZEUS fits on one screen — never scroll. Pin the shell to the viewport and
-           let the flex chain shrink (min-height:0 unlocks it) so the flex-fill panels
-           (telemetry, reply) absorb the squeeze instead of overflowing. Lists inside
-           clip their tail rather than push the page taller. */
-        html[data-brand="ZEUS"] .hud { height:100vh; height:100dvh; overflow:hidden; }
-        html[data-brand="ZEUS"] .hud-grid, html[data-brand="ZEUS"] .col { min-height:0; }
+        /* BOTH boxes fit on one screen — never scroll. Pin the shell to the viewport
+           and let the flex chain shrink (min-height:0 unlocks it) so the flex-fill
+           panels absorb the squeeze instead of overflowing. Lists inside clip their
+           tail rather than push the page taller. */
+        .hud { height:100vh; height:100dvh; overflow:hidden; }
+        .hud-grid, .col { min-height:0; }
         /* Force the single grid row to fill the grid height so EVERY column stretches
            full-height (not just to the tallest column's content). Without this, when
            one column is short the flex-fill panels in the others stop growing and clip. */
-        html[data-brand="ZEUS"] .hud-grid { grid-template-rows: minmax(0, 1fr); }
-        /* ZEUS right column (jobs/services/gpu removed): let Thermals + Telemetry grow
-           to share the column height so there's no dead space (charts keep their size). */
-        html[data-brand="ZEUS"] .hud-grid > .col:last-child > .mod { flex:1 1 auto; }
-        html[data-brand="ZEUS"] .col > .mod, html[data-brand="ZEUS"] .col > .mod > .mod-body { min-height:0; }
+        .hud-grid { grid-template-rows: minmax(0, 1fr); }
+        /* Right column: let its panels grow/shrink to share the column height (ARES:
+           jobs/gpu/thermals/telemetry; ZEUS: thermals/telemetry) — no dead space, and
+           they compress on a short viewport instead of clipping. */
+        .hud-grid > .col:last-child > .mod { flex:1 1 auto; }
+        .col > .mod, .col > .mod > .mod-body { min-height:0; }
         html[data-brand="ZEUS"] .outreach-list, html[data-brand="ZEUS"] .reply-list,
         html[data-brand="ZEUS"] #panel-containers .mod-body, html[data-brand="ZEUS"] #panel-jobs .arr { overflow:hidden; }
         /* ZEUS shrink-to-fit: the wordmark is decorative and the array map has 4
            volumes — compress both so the center column fits without clipping. */
-        html[data-brand="ZEUS"] .mark { padding:2px 0; }
-        html[data-brand="ZEUS"] .mark pre { font-size:clamp(8px, 1.35vw, 17px); }
+        [data-brand] .mark { padding:2px 0; }
+        [data-brand] .mark pre { font-size:clamp(8px, 1.35vw, 17px); }
         html[data-brand="ZEUS"] .v-drive { padding:7px 12px; }
         html[data-brand="ZEUS"] .v-drive-bar { margin-top:6px; }
         html[data-brand="ZEUS"] .v-drive-stats { margin-top:5px; }
-        /* ZEUS array map: compact rows (drop the redundant %/temp line, slim bar) so
-           all volumes fit without clipping. used/total + the fill bar remain. */
-        html[data-brand="ZEUS"] .col-mid .arr-meta { display:none; }
-        html[data-brand="ZEUS"] .col-mid .arr-bar { height:7px; margin-top:5px; }
-        html[data-brand="ZEUS"] .arr-list { gap:7px; }
-        /* Array map has 4 volumes vs the vitals' 3 tiles — give it the larger share
-           of the center column so every volume shows. */
-        html[data-brand="ZEUS"] .col-mid > .mod:last-child { flex:1.7 1 0; }
+        /* Array map: compact rows (drop the redundant %/temp line, slim bar) so all
+           volumes fit without clipping (both boxes). used/total + the fill bar remain. */
+        .col-mid .arr-meta { display:none; }
+        .col-mid .arr-bar { height:7px; margin-top:5px; }
+        .arr-list { gap:7px; }
+        /* Array map has more rows than the vitals tiles need — give it the larger
+           share of the center column so every volume shows (both boxes). */
+        .col-mid > .mod:last-child { flex:2.4 1 0; }
         * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         html, body {
             min-height:100%; background:var(--bg-0); color:var(--text-1);
