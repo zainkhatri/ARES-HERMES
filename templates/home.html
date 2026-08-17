@@ -46,6 +46,9 @@
            full-height (not just to the tallest column's content). Without this, when
            one column is short the flex-fill panels in the others stop growing and clip. */
         html[data-brand="ZEUS"] .hud-grid { grid-template-rows: minmax(0, 1fr); }
+        /* ZEUS right column (jobs/services/gpu removed): let Thermals + Telemetry grow
+           to share the column height so there's no dead space (charts keep their size). */
+        html[data-brand="ZEUS"] .hud-grid > .col:last-child > .mod { flex:1 1 auto; }
         html[data-brand="ZEUS"] .col > .mod, html[data-brand="ZEUS"] .col > .mod > .mod-body { min-height:0; }
         html[data-brand="ZEUS"] .outreach-list, html[data-brand="ZEUS"] .reply-list,
         html[data-brand="ZEUS"] #panel-containers .mod-body, html[data-brand="ZEUS"] #panel-jobs .arr { overflow:hidden; }
@@ -1071,7 +1074,8 @@ function applyCaps(caps) {
     show('#th-gpu-key', caps.gpu !== 0);
     show('.op-photos', caps.photos !== 0);
     show('.op-journals', caps.journals !== 0);
-    show('#panel-containers', caps.docker === 1);
+    show('#panel-containers', false);             // Services panel removed on ZEUS
+    show('#panel-jobs', caps.docker !== 1);       // Scheduled jobs: ARES only (removed on ZEUS)
     show('#panel-ops', caps.docker !== 1);        // ARES: operation modules
     show('#panel-outreach', caps.docker === 1);   // ZEUS: outreach stats
     show('#panel-attention', caps.docker === 1);  // ZEUS: needs-attention rollup
@@ -1268,8 +1272,12 @@ function applyVitals(i) {
 
             renderArray(i.disks || []);
             renderFolders(i.folders || []);
-            renderCrons(i.crons || []);
-            if (i.caps && i.caps.docker) renderContainers(i.containers || []);
+            // ZEUS: Scheduled jobs + Services panels removed — skip their renders
+            // (renderCrons/renderContainers force the panel visible from data).
+            if (_BR !== 'ZEUS') {
+                renderCrons(i.crons || []);
+                if (i.caps && i.caps.docker) renderContainers(i.containers || []);
+            }
             var fb = document.getElementById('foot-brand'); if (fb) fb.textContent = i.hostname || 'ARES';
         }
         _vtick++;
