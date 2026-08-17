@@ -106,14 +106,34 @@ def _compute_containers():
         return []
     if r.returncode != 0:
         return []
+    # Live CPU/mem per container (one docker stats snapshot). Best-effort.
+    stats = {}
+    try:
+        sr = subprocess.run(
+            ["docker", "stats", "--no-stream", "--format", "{{.Name}}\t{{.CPUPerc}}\t{{.MemPerc}}"],
+            capture_output=True, text=True, timeout=8,
+        )
+        if sr.returncode == 0:
+            for sl in sr.stdout.strip().split("\n"):
+                sp = sl.split("\t")
+                if len(sp) == 3:
+                    stats[sp[0]] = (sp[1].rstrip("%"), sp[2].rstrip("%"))
+    except Exception:
+        pass
     out = []
     for line in r.stdout.strip().split("\n")[:60]:         # bounded
         parts = line.split("\t")
         if len(parts) < 3 or not parts[0]:
             continue
+        cpu, mem = stats.get(parts[0], (None, None))
+        try:
+            cpu = round(float(cpu), 1) if cpu is not None else None
+            mem = round(float(mem), 1) if mem is not None else None
+        except ValueError:
+            cpu = mem = None
         out.append({"name": parts[0], "state": parts[1], "status": parts[2],
-                    "ok": parts[1] == "running"})
-    out.sort(key=lambda c: (not c["ok"], c["name"]))        # unhealthy first
+                    "ok": parts[1] == "running", "cpu": cpu, "mem": mem})
+    out.sort(key=lambda c: (not c["ok"], -(c.get("mem") or 0)))   # down first, then hungriest
     return out
 
 

@@ -184,6 +184,15 @@
         .oc-stat { display:flex; flex-direction:column; gap:3px; }
         .oc-stat b { font-size:16px; font-weight:700; color:var(--text-1); font-variant-numeric:tabular-nums; line-height:1; }
         .oc-stat i { font-size:8px; letter-spacing:.13em; color:var(--text-3); text-transform:uppercase; font-style:normal; }
+        /* needs-attention rollup */
+        .att-list { display:flex; flex-direction:column; gap:9px; }
+        .att-item, .att-clear { display:flex; align-items:center; gap:10px; font-size:11.5px; color:var(--text-2); }
+        .att-item .adot, .att-clear .adot { width:7px; height:7px; border-radius:50%; flex:0 0 auto; }
+        .att-item.warn .adot { background:var(--amber); box-shadow:0 0 8px -1px var(--amber); }
+        .att-item.crit .adot { background:var(--red); box-shadow:0 0 8px -1px var(--red); }
+        .att-item b { color:var(--text-1); font-weight:700; }
+        .att-clear { color:var(--green); }
+        .att-clear .adot { background:var(--green); box-shadow:0 0 8px -1px var(--green); }
 
         /* ---- wordmark ----------------------------------------------------- */
         .mark { display:flex; align-items:flex-start; justify-content:center; flex:0 0 auto; padding:6px 0 4px; min-height:0; }
@@ -556,6 +565,14 @@
 
         <!-- ── right: jobs + GPU ─────────────────────────────────────────── -->
         <div class="col">
+            <!-- ZEUS: one-glance "needs attention" rollup -->
+            <section class="mod c-tr c-br" id="panel-attention" style="display:none">
+                <div class="mod-head">
+                    <span class="mod-title">Needs attention</span>
+                    <span class="mod-meta" id="att-meta">—</span>
+                </div>
+                <div class="mod-body att-list" id="att-list"></div>
+            </section>
             <section class="mod c-tr c-bl" id="panel-jobs">
                 <div class="mod-head">
                     <span class="mod-title">Scheduled jobs</span>
@@ -851,6 +868,7 @@ function renderCrons(jobs) {
     }).join('');
     var m = document.getElementById('jobs-meta');
     if (m) m.textContent = bad ? (bad + ' failed') : (jobs.length + ' ok');
+    __att.jstale = bad; renderAttention();
 }
 
 // Sister-node card: the peer box's health at a glance (via same-origin /api/peer
@@ -895,6 +913,24 @@ async function pollPeer() {
 
 function fmtN(n) { n = +n || 0; return n >= 1000 ? n.toLocaleString() : String(n); }
 
+// Needs-attention rollup (ZEUS): aggregates issues already on the page — down/hot
+// containers, stale jobs, contacts to reply — into a one-glance morning check.
+var __att = { cdown: 0, chot: 0, jstale: 0, reply: 0 };
+function renderAttention() {
+    var el = document.getElementById('att-list');
+    if (!el) return;
+    var items = [];
+    if (__att.cdown) items.push({ lvl: 'crit', t: '<b>' + __att.cdown + '</b> container' + (__att.cdown > 1 ? 's' : '') + ' down' });
+    if (__att.jstale) items.push({ lvl: 'crit', t: '<b>' + __att.jstale + '</b> job' + (__att.jstale > 1 ? 's' : '') + ' stale' });
+    if (__att.chot) items.push({ lvl: 'warn', t: '<b>' + __att.chot + '</b> container' + (__att.chot > 1 ? 's' : '') + ' high mem' });
+    if (__att.reply) items.push({ lvl: 'warn', t: '<b>' + __att.reply + '</b> to reply' });
+    el.innerHTML = items.length
+        ? items.map(function(i){ return '<div class="att-item ' + i.lvl + '"><span class="adot"></span>' + i.t + '</div>'; }).join('')
+        : '<div class="att-clear"><span class="adot"></span>all clear</div>';
+    var m = document.getElementById('att-meta');
+    if (m) m.textContent = items.length ? (items.length + ' issue' + (items.length > 1 ? 's' : '')) : 'ok';
+}
+
 // ZEUS outreach stats — per-client sent / reply-rate / meetings / opens (via /api/outreach).
 function renderOutreach(list) {
     var el = document.getElementById('outreach-list');
@@ -913,6 +949,7 @@ function renderOutreach(list) {
     }).join('');
     var m = document.getElementById('outreach-meta');
     if (m) m.textContent = list.length + ' client' + (list.length > 1 ? 's' : '');
+    __att.reply = list.reduce(function(a, c){ return a + (c.needs_reply || 0); }, 0); renderAttention();
 }
 var _outreachBusy = false;
 async function pollOutreach() {
@@ -940,6 +977,7 @@ function applyCaps(caps) {
     show('#panel-containers', caps.docker === 1);
     show('#panel-ops', caps.docker !== 1);        // ARES: operation modules
     show('#panel-outreach', caps.docker === 1);   // ZEUS: outreach stats
+    show('#panel-attention', caps.docker === 1);  // ZEUS: needs-attention rollup
 }
 
 // Docker/FAI container health (ZEUS). Reuses the .crow/.cdot job-row styling.
@@ -947,15 +985,23 @@ function renderContainers(list) {
     var el = document.getElementById('ctr-list');
     if (!el) return;
     if (!list || !list.length) { el.innerHTML = '<div class="arr-empty">no containers</div>'; return; }
-    var down = 0;
+    var down = 0, hot = 0;
     el.innerHTML = list.slice(0, 14).map(function(c) {
         if (!c.ok) down++;
+        var right;
+        if (c.cpu != null || c.mem != null) {
+            var memHot = c.mem != null && c.mem >= 85;
+            if (memHot) hot++;
+            right = 'cpu ' + (c.cpu != null ? c.cpu : '—') + '% · <span' + (memHot ? ' style="color:var(--red)"' : '') +
+                    '>mem ' + (c.mem != null ? c.mem : '—') + '%</span>';
+        } else { right = esc(c.status); }
         return '<div class="crow"><span class="cdot ' + (c.ok ? 'ok' : 'bad') + '"></span>' +
                '<span class="cname">' + esc(c.name) + '</span>' +
-               '<span class="cwhen">' + esc(c.status) + '</span></div>';
+               '<span class="cwhen">' + right + '</span></div>';
     }).join('');
     var m = document.getElementById('ctr-meta');
-    if (m) m.textContent = down ? (down + ' down') : (list.length + ' up');
+    if (m) m.textContent = down ? (down + ' down') : (hot ? (hot + ' hot') : (list.length + ' up'));
+    __att.cdown = down; __att.chot = hot; renderAttention();
 }
 
 // Logical storage: top folders by size, bars scaled to the largest folder.
