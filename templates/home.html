@@ -48,10 +48,12 @@
            page is never flat black. */
         /* grid removed: a full-screen fixed gradient layer is a large retina raster
            surface for a subtle effect. Background is flat var(--bg-0). */
-        /* box-switch wipe — one-shot: this box's accent washes away on load, and
-           washes in (in the TARGET box's accent) when you tap the other chip. */
-        #page-fx { position:fixed; inset:0; z-index:9999; background:var(--ares); pointer-events:none;
-                   animation:fx-reveal .5s var(--ease-out) forwards; transition:opacity .32s var(--ease-out); }
+        /* box-switch fade — one-shot: the page reveals from the dark background on
+           load, and fades back to that same dark before navigating to the other box.
+           Dark (not a bright accent) so the two documents join seamlessly and the
+           cross-box network gap reads as a calm fade, not a harsh colour flash. */
+        #page-fx { position:fixed; inset:0; z-index:9999; background:var(--bg-0); pointer-events:none;
+                   animation:fx-reveal .38s var(--ease-out) forwards; transition:opacity .24s var(--ease-out); }
         @keyframes fx-reveal { from { opacity:1; } to { opacity:0; } }
 
         .hud { position:relative; z-index:1; display:flex; flex-direction:column;
@@ -1547,14 +1549,13 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
             var href = ch.getAttribute('href');
             if (!href) return;
             e.preventDefault();
-            fx.style.animation = 'none';
-            fx.style.background = ch.getAttribute('data-fx');
+            fx.style.animation = 'none';    // keep the dark --bg-0 fill (no accent flash)
             fx.style.pointerEvents = 'auto';
             void fx.offsetWidth;            // reflow so the transition runs
             fx.style.opacity = '1';
             var done = false, go = function () { if (done) return; done = true; window.location.href = href; };
             fx.addEventListener('transitionend', go, { once: true });
-            setTimeout(go, 480);            // fallback if transitionend doesn't fire
+            setTimeout(go, 300);            // fallback if transitionend doesn't fire (~ transition dur)
         });
     });
 })();
