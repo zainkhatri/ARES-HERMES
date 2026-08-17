@@ -54,6 +54,12 @@
   .phase .mins { font-size:.82rem; font-weight:700; color:var(--mut); }
 
   hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+
+  .kayla { background:rgba(255,105,180,.08); border-left:4px solid #ff69b4;
+           padding:10px 14px; border-radius:0 8px 8px 0; margin:10px 0; }
+  .kayla .label { font-size:.7rem; font-weight:800; text-transform:uppercase;
+                  letter-spacing:.08em; color:#ff69b4; margin-bottom:4px; }
+  .kayla .say { font-size:.95rem; color:#e6edf3; }
 </style>
 </head>
 <body>
@@ -61,36 +67,42 @@
 
 <h1>Full Demo Script — Sigma Panel</h1>
 <p class="mut">Thu Aug 13 · 116 New Montgomery #700 SF · <b style="color:var(--good)">Green = say this</b> · <b style="color:var(--purple)">Purple = do this</b> · <b style="color:var(--acc)">Blue = ask this</b> · <b style="color:var(--bad)">Red = they ask this</b></p>
-<p class="mut">Workbooks open before you walk in: <b>WB1-Live, WB1-Done, WB2-Live, WB2-Done</b> — all four tabs.</p>
+<p class="mut">Panel: <b>Kayla, Josh, Marissa</b> (Adam's boss) · Personas: CEO, data analyst, business side · Direct questions at the executive or data analyst.</p>
+<p class="mut">Workbooks open before you walk in: <b>WB1-Live, WB1-Done, WB2-Live, WB2-Done</b> — all four tabs. CSV file ready to upload.</p>
 
 <!-- ═══════════════════════════════════════════ -->
 <div class="phase"><span class="title">Opening</span><span class="mins">~90 seconds · verbal, no slide</span></div>
 
-<div class="tip">You're sitting down. 4 Sigma people across from you. AE is sick. You were on the discovery call. Don't re-introduce yourself or explain who Sigma is — get to their problem in sentence two.</div>
+<div class="tip">3 people: Kayla, Josh, Marissa. AE is sick. Note who plays which persona when they introduce themselves — CEO, data analyst, business side. Direct discovery questions at the executive or analyst, not all three.</div>
 
 <div class="say-block">
   <div class="label">Say</div>
   <div class="say">
-    "Really appreciate everyone making the time. [AE name] sends his apologies — he's out sick, but I was on our discovery call so I have full context and nothing falls through the cracks.<br><br>
-    I want to make sure we use this time well, so I'm going to skip the company overview. What I heard last time was this: you've got solid data in Snowflake, a BI team stretched thin, and merchandisers making inventory calls on data that's sometimes two days old. With Q4 coming up, that lag is costing you.<br><br>
-    Your CIO put it in a way that stuck with me — <i>'Can Sigma make our Snowflake investment pay off for the people making decisions, not just the people maintaining pipelines?'</i> That's what today is about. Quick slides to set the stage, then I want to show you something live on your actual data. Treat this like a working session — stop me at any point."
+    "Hey everyone — I'm Zain, Solutions Engineer at Sigma. Really appreciate you all making the time. Before I get into anything — can everyone just say who they are and what they do day to day? I want to make sure what I'm showing is relevant to what you're actually dealing with."<br><br>
+    [let them go around the table — note who's the merchandiser, who's BI, who's the CIO]<br><br>
+    "Perfect. I'm Zain — I'm a Solutions Engineer at Sigma. My job is basically to bridge the gap between what the product can do and what your team actually needs. I was on our discovery call, so I have full context — and [AE name] sends his apologies, he's out sick today.<br><br>
+    What I heard last time was: your BI team is buried, merchandisers are waiting days for answers, and by the time a report comes back, the decision's already been made. Q4 is three months away and that's still the situation.<br><br>
+    Your CIO said something that stuck with me — <i>'Can Sigma make our Snowflake investment pay off for the people making decisions, not just the people maintaining pipelines?'</i> That's what I want to answer today. Few slides, then something live on your actual data. Stop me whenever."
   </div>
 </div>
 
-<div class="tip">Don't pause. Go straight to slide 1.</div>
+<div class="kayla">
+  <div class="label">Kayla said</div>
+  <div class="say">Spend ~15 minutes on slides doing discovery. Have 4-5 questions prepared. Don't zoom through — this is as important as the product demo.</div>
+</div>
 
 <!-- ═══════════════════════════════════════════ -->
-<div class="phase"><span class="title">Slides</span><span class="mins">~3 minutes · 5 slides, move fast</span></div>
+<div class="phase"><span class="title">Slides + Discovery</span><span class="mins">~15 minutes · 3 slides · slow down, ask questions, let them talk</span></div>
 
 <h2>Slide 1 — What We Heard</h2>
 
 <div class="say-block">
   <div class="label">Say</div>
   <div class="say">
-    "So here's what we took away from our last conversation. Three things.<br><br>
-    Midwest is your lowest-margin region — and you don't know why. That question is sitting in a ticket queue right now.<br><br>
-    Your BI team is fielding 30 to 40 ad-hoc requests a week. Merchandisers wait days for answers, sometimes longer.<br><br>
-    And Q4 sourcing decisions are being made on data that's 48 hours old. Last November, a supplier disruption hit your best-selling TV line and by the time the report came back, the buying decision had already been made."
+    "Three things we took away from our last call.<br><br>
+    Midwest is your lowest-margin region and nobody knows why. That question is sitting in a ticket queue right now — hasn't been answered yet.<br><br>
+    Your BI team is fielding 30 to 40 requests a week. Most of them are one-off questions that take days to come back.<br><br>
+    And your Q4 sourcing decisions are being made on data that's 48 hours old. Last November, a supplier disruption hit your best-selling TV line. By the time the report landed, the buying call had already been made."
   </div>
 </div>
 
@@ -99,62 +111,88 @@
   <div class="say">"Does that reflect what your team was dealing with going into last Q4?"</div>
 </div>
 
-<div class="tip">Wait for the answer. Nod. Then: "That's exactly what I want to show you." Move to slide 2.</div>
+<div class="tip">Wait for the answer. Nod. Use what they say.</div>
+
+<div class="dq">
+  <div class="label">Ask — exec</div>
+  <div class="say">"Is that ticket queue situation something that's gotten better or worse going into this year?"</div>
+</div>
+
+<div class="dq">
+  <div class="label">Ask — exec</div>
+  <div class="say">"When a merchandiser needs an answer and it takes four days — what actually happens in the meantime? Does the decision get made anyway, or does it just wait?"</div>
+</div>
+
+<div class="tip">"Got it — let me show you what that looks like solved." Move to slide 2.</div>
 
 <h2>Slide 2 — Current vs. Future State</h2>
 
 <div class="say-block">
   <div class="label">Say</div>
   <div class="say">
-    "So today — your merchandiser has a question, files a ticket, waits four days, gets an answer that might already be stale. Her decision is reactive at best.<br><br>
-    With Sigma — same question, answered live, in the meeting, on data that's current as of right now. No ticket, no wait. And when the decision gets made, it doesn't disappear into Slack — it writes back into the data. Auditable, timestamped, visible to the whole team.<br><br>
+    "Today: your merchandiser has a question, files a ticket, waits four days, gets a spreadsheet back. By then everyone's moved on.<br><br>
+    With Sigma: same question, answered while everyone's still in the meeting. And when a call gets made — it doesn't disappear into a Slack thread nobody finds in February. It goes back into the data. The whole team sees it. It's tracked.<br><br>
     The workflow changes. The data infrastructure doesn't."
   </div>
 </div>
+
+<div class="dq">
+  <div class="label">Ask — business side</div>
+  <div class="say">"When you're in a meeting and a data question comes up that nobody can answer — what do you do? Do you table the decision, or just go with your gut?"</div>
+</div>
+
+<div class="dq">
+  <div class="label">Ask — exec</div>
+  <div class="say">"How often does a sourcing decision get made on data that's more than a day or two old?"</div>
+</div>
+
+<div class="tip">Let them answer. Nod. "That's exactly what this changes." Move to slide 3.</div>
 
 <h2>Slide 3 — Sigma and the CDW</h2>
 
 <div class="say-block">
   <div class="label">Say</div>
   <div class="say">
-    "One thing I want your data team to hear before we get into the product. Sigma doesn't move your data. Doesn't copy it, doesn't store it anywhere. It runs a live query directly on Snowflake, inherits your existing permissions, result shows up in the browser. Every query is in your warehouse history. Your governance doesn't change."
+    "Before I get into the product — one thing your data team is going to want to know. Sigma doesn't move your data. It doesn't copy anything, doesn't store anything on our end. It queries Snowflake directly, your permissions carry over, and every query shows up in your warehouse history. Nothing changes on the backend."
   </div>
 </div>
 
-<div class="tip">20 seconds max. Aimed at the Head of BI. Don't dwell — next slide immediately.</div>
+<div class="dq">
+  <div class="label">Ask — data analyst</div>
+  <div class="say">"How locked down is your Snowflake environment right now — is access pretty tightly controlled, or can most people already get in?"</div>
+</div>
+
+<div class="dq">
+  <div class="label">Ask — data analyst</div>
+  <div class="say">"When your team gets a request like 'what's driving Midwest underperformance' — how long does that actually take to turn around?"</div>
+</div>
+
+<div class="tip">Let them answer. Use the number they give you during the drill-down.</div>
 
 <h2>Slide 4 — Demo Roadmap</h2>
 
 <div class="say-block">
   <div class="label">Say</div>
   <div class="say">
-    "Here's what I'm going to show you. Three things. First — your merchandiser building her own analysis on live Snowflake data, no SQL, no ticket. Second — AI reading 5,600 product reviews inside your Snowflake and surfacing which brands to cut for Q4. Third — that recommendation written directly back into your data warehouse. Auditable. Shared with the whole team. Let's get into it."
+    "Here's what I'm going to show you — three things.<br><br>
+    First, your merchandiser answering a question on their own, on live data, no ticket, no SQL.<br><br>
+    Second, AI reading 5,600 customer reviews inside Snowflake and telling you which brands to cut for Q4.<br><br>
+    Third, that decision written directly back into your data warehouse — tracked, visible to the whole team.<br><br>
+    Let me just show you. It's easier to see it than explain it."
   </div>
 </div>
 
-<div class="tip">Don't pause. Go to the vocab slide.</div>
-
-<h2>Slide 5 — Sigma Syntax (30 seconds, then open Sigma)</h2>
-
-<div class="say-block">
-  <div class="label">Say</div>
-  <div class="say">
-    "One slide before I get into the product — this is literally all the syntax you'll see me use today.<br><br>
-    Square brackets mean column. Operators work exactly like Excel. Functions wrap the column. And when I call an AI model, it's the same structure — function name, then what to feed it. That's it. Everything else is point and click."
-  </div>
+<div class="do-block">
+  <div class="label">Do</div>
+  Open Sigma → WB1-Live tab.
 </div>
-
-<table>
-  <tr><th>Syntax</th><th>What it means</th></tr>
-  <tr><td><code>[Column Name]</code></td><td>How you reference a column — same as clicking a cell in Excel</td></tr>
-  <tr><td><code>[Price] * [Quantity]</code></td><td>Operators work exactly like Excel — multiply, subtract, divide</td></tr>
-  <tr><td><code>Sum([Profit])</code></td><td>Functions wrap the column — Sum, Avg, CountDistinct</td></tr>
-  <tr><td><code>CallNumber("model", [Column])</code></td><td>How you call AI — same structure, model name instead of math</td></tr>
-</table>
-
-<div class="tip">30 seconds max. Don't take questions here. "Let me show you all of these in the product." Switch to Sigma. Open WB1-Live tab.</div>
 
 <!-- ═══════════════════════════════════════════ -->
+<div class="kayla">
+  <div class="label">Kayla said</div>
+  <div class="say">Build things live. People who are successful actively click and build in the product — that's the job every day. Show both building AND end-user interaction (drill down, filter). Keep asking questions throughout — don't monologue.</div>
+</div>
+
 <div class="phase"><span class="title">Demo — Workbook 1</span><span class="mins">~6 minutes · build live</span></div>
 
 <h2>Step 1 — Open the table — show scale, show live connection</h2>
@@ -167,8 +205,8 @@
 <div class="say-block">
   <div class="label">Say</div>
   <div class="say">
-    "This is your full point-of-sale dataset. 4.6 million transactions, running live against your Snowflake right now. Nothing was copied, nothing ran overnight. This is today's data.<br><br>
-    Same data your BI team has. Difference is — your merchandiser just opened it herself."
+    "This is your full point-of-sale dataset. 4.6 million rows, querying Snowflake right now. Nothing was pulled overnight, nothing's cached — this is live.<br><br>
+    Same data your BI team works with. The difference is your merchandiser just opened it themselves."
   </div>
 </div>
 
@@ -193,17 +231,27 @@
 <div class="say-block">
   <div class="label">Say — while building</div>
   <div class="say">
-    "Cost times quantity — what Plugs paid for the product. Price times quantity — what they made selling it. Revenue minus COGS — profit. Same syntax as Excel.<br><br>
-    [after Profit lands] Your merchandiser just calculated profit across 4.6 million rows. No SQL. No ticket. No waiting."
+    "Cost times quantity — what they paid for it. Price times quantity — what they sold it for. Revenue minus COGS — profit. Same thing you'd type in Excel.<br><br>
+    [after Profit lands] That's profit across 4.6 million rows. No SQL. Didn't ask anyone. Didn't wait on anyone."
   </div>
 </div>
 
 <div class="dq">
-  <div class="label">Ask — Head of BI</div>
-  <div class="say">"How many calculation requests like this does your team field in a given week?"</div>
+  <div class="label">Ask — data analyst</div>
+  <div class="say">"How many requests like this — just basic calculations — does your team get in a week?"</div>
+</div>
+
+<div class="dq">
+  <div class="label">Ask — business side</div>
+  <div class="say">"Is this the kind of thing your team would normally have to ask BI for, or do you have a way to get here yourself today?"</div>
 </div>
 
 <h2>Step 3 — Bar chart → Midwest is the problem → drill down</h2>
+
+<div class="kayla">
+  <div class="label">Kayla said</div>
+  <div class="say">Storytelling during drill-down. Don't just click — narrate WHY before every drill. "I know Midwest is worst, so I'm going to look at product types to find why." Have a story, not a walkthrough.</div>
+</div>
 
 <div class="tip">This is your biggest WB1 moment. Narrate before every click. Pause after each drill. Don't rush it.</div>
 
@@ -216,11 +264,16 @@
 <div class="say-block">
   <div class="label">Say — as the chart renders</div>
   <div class="say">
-    "Profit by region. Live, right now.<br><br>
-    [pause — let them see it]<br><br>
-    Look at that. Midwest is your lowest performing region. Not by a little — West is doing over $450 billion in profit, Midwest is dramatically below that. That gap is your Q4 problem.<br><br>
-    Now here's the question a merchandiser would ask in this meeting: what's dragging Midwest down? Is it one product category? One store? Before Sigma, that question goes to your BI team and comes back in four days. Watch what happens now."
+    "Profit by region.<br><br>
+    [pause]<br><br>
+    There's Midwest. Look at that gap — West is doing dramatically more. That's the question you flagged last call. Nobody knows why yet.<br><br>
+    So the natural follow-up: what's dragging it down? Is it one product category? One store? Normally that question goes to BI and comes back in four days. Watch this."
   </div>
+</div>
+
+<div class="say-block">
+  <div class="label">Say — before clicking</div>
+  <div class="say">"I know Midwest is the worst region. What I want to understand is whether this is a product problem — is there a category that's just not selling? So I'm going to drill into product families first."</div>
 </div>
 
 <div class="do-block">
@@ -229,44 +282,48 @@
 </div>
 
 <div class="say-block">
-  <div class="label">Say</div>
+  <div class="label">Say — after it loads</div>
   <div class="say">
-    "Midwest only. Which product families are the problem?<br><br>
-    [pause, let it update] You can see right away what's underperforming. Let me go one level deeper."
+    "There it is. TV and Home Theater is going negative — that's the drag. Now I want to know if this is a store problem. Is it every store selling TVs in the Midwest, or just a few bad ones?"
   </div>
 </div>
 
 <div class="do-block">
   <div class="label">Do</div>
-  Right-click the lowest performing product family → <b>Drill down…</b> → <b>Store Name</b>
+  Right-click <b>TV &amp; Home Theater</b> → <b>Drill down…</b> → <b>Store Name</b>
 </div>
 
 <div class="say-block">
-  <div class="label">Say</div>
-  <div class="say">"Which specific stores? Now I want to know profit per customer — not just total store profit."</div>
+  <div class="label">Say — after it loads</div>
+  <div class="say">"Okay — so it's concentrated in specific stores. Now I want to know who's actually shopping there. Are these stores serving unprofitable customers, or is the product the problem?"</div>
 </div>
 
 <div class="do-block">
   <div class="label">Do</div>
-  Click <b>Sum of Profit</b> column header in the table below → update formula to <code>Sum([Profit]) / CountDistinct([Customer Name])</code> → rename <b>Avg Cust Profit</b>
-</div>
-
-<div class="do-block">
-  <div class="label">Do</div>
-  Right-click the worst store → <b>Drill down…</b> → <b>Customer Name</b> → sort descending by Avg Cust Profit
+  Right-click the worst store → <b>Drill down…</b> → <b>Customer Name</b>
 </div>
 
 <div class="say-block">
-  <div class="label">Say</div>
+  <div class="label">Say — after it loads</div>
   <div class="say">
-    "There it is. Region — product family — store — ranked list of least profitable customers. Under three minutes. On 4.6 million live rows.<br><br>
-    That's the question your merchandiser was waiting four days to answer last Q4. Here's what it looks like when she answers it herself, in the meeting."
+    "There's your answer. Region → product family → store → individual customers. The whole investigation — three minutes.<br><br>
+    That was the question sitting in your ticket queue."
   </div>
 </div>
 
 <div class="dq">
-  <div class="label">Ask — Merchandiser</div>
-  <div class="say">"Is this the kind of analysis your team was waiting on your BI team to build for them?"</div>
+  <div class="label">Ask — business side</div>
+  <div class="say">"Is this the kind of question your team was waiting days on BI to answer?"</div>
+</div>
+
+<div class="dq">
+  <div class="label">Ask — exec</div>
+  <div class="say">"If you had this available last Q4, what would you have done differently with the Midwest sourcing call?"</div>
+</div>
+
+<div class="dq">
+  <div class="label">Ask — data analyst</div>
+  <div class="say">"How would your team typically get to this level of detail today — what does that process look like?"</div>
 </div>
 
 <div class="tip">Stop clicking. Hands down. Let it land. Five seconds of silence is fine — don't fill it.</div>
@@ -289,18 +346,23 @@
 <div class="say-block">
   <div class="label">Say</div>
   <div class="say">
-    "Before I get into the next part — I want to address something I know your data team is thinking. 'Great, now everyone's making their own numbers.'<br><br>
-    Your engineers still control what tables are exposed in Snowflake. That doesn't change. Everything your merchandiser just did — Sigma turned into SQL, ran it on your warehouse. You can see it in your query history. One source of truth. The only difference is more people can reach it — without going through your team every single time.<br><br>
-    Your BI team doesn't disappear. They just stop spending their day pulling CSVs for people who could answer the question themselves."
+    "Before we move on — I know what your data team is thinking. 'If everyone can just go build their own analysis, how do we make sure they're all looking at the same numbers?'<br><br>
+    Short answer: your engineers still control what's accessible. They decide which tables get exposed in Snowflake — nothing changes there. And everything that just happened on screen? Sigma turned that into SQL and ran it on your warehouse. Same query history, same source of truth, just more people who can reach it without filing a ticket.<br><br>
+    Your BI team doesn't go away. They just stop being a bottleneck."
   </div>
 </div>
 
 <div class="dq">
-  <div class="label">Ask — Head of BI</div>
-  <div class="say">"Who controls what your business users can actually access today?"</div>
+  <div class="label">Ask — data analyst</div>
+  <div class="say">"Who controls what your business users can actually access in Snowflake today?"</div>
 </div>
 
-<div class="tip">Let them answer, then: "Right — so that doesn't change with Sigma. Let me show you something different." Switch to WB2-Live.</div>
+<div class="dq">
+  <div class="label">Ask — exec</div>
+  <div class="say">"Is shadow analytics something you've run into — people downloading CSVs and building their own spreadsheets outside the warehouse?"</div>
+</div>
+
+<div class="tip">"Right — so that doesn't change with Sigma. Let me show you something different." Switch to WB2-Live.</div>
 
 <div class="panel-q">
   <div class="label">They might ask here</div>
@@ -311,7 +373,7 @@
 <div class="panel-q">
   <div class="label">They might ask here</div>
   <div class="q">"How does our data team control what people can see?"</div>
-  <div class="a">"Your engineers decide what tables are exposed in Snowflake — same as today. Once they grant access, the merchandiser can reach the data herself. She can't get to anything that hasn't been explicitly opened up. Guardrails stay. Bottleneck goes."</div>
+  <div class="a">"Your engineers decide what tables are exposed in Snowflake — same as today. Once they grant access, the merchandiser can reach the data themselves. They can't get to anything that hasn't been explicitly opened up. Guardrails stay. Bottleneck goes."</div>
 </div>
 
 <!-- ═══════════════════════════════════════════ -->
@@ -321,15 +383,32 @@
 
 <div class="do-block">
   <div class="label">Do</div>
-  Switch to <b>WB2-Live</b> tab. Already built: bar chart (Profit by Brand, filtered to Computers &amp; Tablets), Product Reviews table (Brand, Review columns, no Rating yet), Brand Recommendations table (empty).
+  Switch to <b>WB2-Live</b> tab. Bar chart already built (Profit by Brand, Computers &amp; Tablets). No reviews table yet — you're importing the CSV live.
 </div>
 
 <div class="say-block">
   <div class="label">Say</div>
   <div class="say">
-    "Different scenario. You need to decide which computer brands to invest in for Q4 — and which to cut. You have the financial data in Snowflake. You also have 5,600 customer reviews sitting in a spreadsheet that's never been connected to that data.<br><br>
-    Profit by brand is already here — Apple and Samsung leading, some brands going negative. Now I want to read every one of those reviews. Without reading them."
+    "Different scenario. Q4 sourcing — which computer brands do you invest in, which do you cut?<br><br>
+    You've got the profit data right here. You've also got 5,600 customer reviews sitting in a spreadsheet that's never been connected to any of this. Watch what happens when we bring them together."
   </div>
+</div>
+
+<div class="do-block">
+  <div class="label">Do</div>
+  Click <b>+</b> to add a new element → <b>Table</b> → <b>CSV</b> → upload the reviews CSV file → save it (this writes to Snowflake)
+</div>
+
+<div class="say-block">
+  <div class="label">Say</div>
+  <div class="say">
+    "That just uploaded your spreadsheet directly into Snowflake. It's not floating around in someone's Google Drive anymore — it's in the warehouse, next to your POS data, queryable like any other table."
+  </div>
+</div>
+
+<div class="dq">
+  <div class="label">Ask — exec</div>
+  <div class="say">"Where do your customer reviews live today — is anyone actually reading through them systematically, or does that data mostly just sit there?"</div>
 </div>
 
 <h2>Step 5 — Type the AI formula live</h2>
@@ -346,8 +425,8 @@
 <div class="say-block">
   <div class="label">Say — while typing</div>
   <div class="say">
-    "One formula. <code>CallNumber — applications.sigma.sentiment</code> — column Review. That's it.<br><br>
-    What this just did: ran a large language model against every customer review in this dataset. Inside your Snowflake. Sigma isn't sending your customer data to OpenAI, not making an external API call. This is Snowflake Cortex — native AI that lives in your warehouse. Your data never left."
+    "One formula. CallNumber — the model — the column. That's it.<br><br>
+    [while it runs] What this is doing: running a language model against every review in this dataset. Inside Snowflake. Not sending anything to OpenAI, not making any external call. This is Snowflake Cortex — it lives in your warehouse. Your data doesn't go anywhere."
   </div>
 </div>
 
@@ -356,15 +435,20 @@
 <div class="say-block">
   <div class="label">Say — after scores appear</div>
   <div class="say">
-    "Negative one is terrible. Positive one is great. Look at the Brand Recommendations table — scores are populating by brand.<br><br>
-    Apple at 87%. Samsung at 79%. Strong products, strong margins — your data already told you that.<br><br>
-    Now look at the bottom. CyberPowerPC — 2%. Lenovo — negative 44%. Your customers hate these products. That's across thousands of reviews your merchandiser didn't have time to read.<br><br>
-    And HP — look at this. 84% customer rating, but negative profit margin. Customers love the product. You're underpricing it. That's a completely different problem — and you'd never see it if you looked at the financial data alone."
+    "Negative one is terrible, positive one is great. Scores are coming in by brand now.<br><br>
+    Apple at 87%. Samsung at 79%. Makes sense — those were already your best margin brands.<br><br>
+    Now look at the bottom. CyberPowerPC — 2%. Lenovo — negative 44%. Customers hate these products. That's across thousands of reviews nobody had time to read.<br><br>
+    And then HP. 84% customer rating — but negative profit margin. Customers love the product. You're just underpricing it. That's not a product problem, that's a pricing problem. You'd never catch that if you only looked at the financial data."
   </div>
 </div>
 
 <div class="dq">
-  <div class="label">Ask — CIO</div>
+  <div class="label">Ask — exec</div>
+  <div class="say">"Looking at CyberPowerPC and Lenovo — is that consistent with what your team has been hearing from customers, or does that surprise you?"</div>
+</div>
+
+<div class="dq">
+  <div class="label">Ask — exec</div>
   <div class="say">"Does your compliance team push back on AI tools that touch customer data?"</div>
 </div>
 
@@ -382,7 +466,12 @@
 
 <h2>Step 6 — Linked Input Table → type a recommendation → Publish</h2>
 
-<div class="tip">Third wow moment. Slow down here. This is the one nobody else can do.</div>
+<div class="kayla">
+  <div class="label">Kayla said</div>
+  <div class="say">Input Table is a key Sigma differentiator — call it out explicitly by name. "This is what we call an Input Table." Don't just demo it, name it.</div>
+</div>
+
+<div class="tip">Third wow moment. Slow down here. This is the one nobody else can do. Call out "Input Table" by name.</div>
 
 <div class="do-block">
   <div class="label">Do</div>
@@ -393,42 +482,87 @@
 </div>
 
 <div class="say-block">
-  <div class="label">Say</div>
+  <div class="label">Say — before filling in</div>
   <div class="say">
-    "Watch what happens when your merchandiser makes a call.<br><br>
+    "This is what Sigma calls an Input Table — and it's one of our biggest differentiators. No other BI tool does this. Your merchandiser can make a decision directly inside the product, and it writes back to Snowflake. Keep, drop, add a comment — all captured, all tracked."
+  </div>
+</div>
+
+<div class="say-block">
+  <div class="label">Say — while filling in</div>
+  <div class="say">
+    "We've got the financials, we've got the AI scores — now the call gets made.<br><br>
     CyberPowerPC — Drop. 'Customers are unhappy, remove from Q4 buying plan.'<br><br>
-    HP — Keep. 'Great reviews, negative margin — pricing problem, not a product problem. Raise prices before Q4.'<br><br>
+    HP — Keep. 'Great reviews, pricing problem not a product problem. Raise prices before Q4.'<br><br>
     [hit Publish]<br><br>
-    That just wrote back to Snowflake. Timestamped. Auditable. Every buyer on her team sees it the moment they open this workbook. It's not in a Slack thread nobody can find in February. It's not in her inbox. It's in the data — next to the profit numbers, next to the AI scores, in the same place every other business decision lives.<br><br>
-    No other BI tool does this. The loop closes."
+    That just wrote back to Snowflake — into its own table. Your source data is untouched. Every buyer on the team sees it the second they open this workbook. It's not in a Slack thread. It's not buried in someone's inbox. It's in the data — where it belongs."
   </div>
 </div>
 
 <div class="dq">
   <div class="label">Ask — the room</div>
-  <div class="say">"Where do decisions like this actually live after they're made in a meeting today?"</div>
+  <div class="say">"Where do decisions like this actually live after they're made in a meeting today — like a sourcing call, where does it go?"</div>
 </div>
 
-<div class="tip">Stop clicking. Put your hands on the table. Let the room react. Do not say anything until someone speaks.</div>
+<div class="tip">Stop clicking. Put your hands on the table. Do not say anything until someone speaks. The silence is intentional.</div>
+
+<div class="panel-q">
+  <div class="label">They might ask here</div>
+  <div class="q">"If every merchandiser is clicking around, how do we make sure nobody's looking at conflicting numbers?"</div>
+  <div class="a">"The data's the same for everyone — it all comes from the same Snowflake tables. And Sigma has publishing controls, so drafts stay drafts until someone approves them. Nobody's presenting a rogue workbook in a meeting unless someone let them."</div>
+</div>
 
 <!-- ═══════════════════════════════════════════ -->
-<div class="phase"><span class="title">Close</span><span class="mins">~1 minute · then slide 5 — Next Steps</span></div>
+<div class="kayla">
+  <div class="label">Kayla said</div>
+  <div class="say">Sigma Agents is a newer feature — you don't need to deep demo it, but showing awareness is a strong move. Having it open in the workbook and asking it one question live is enough.</div>
+</div>
+
+<div class="phase"><span class="title">Agents — live demo</span><span class="mins">~1 minute · open agent panel in WB2-Done</span></div>
 
 <div class="say-block">
   <div class="label">Say</div>
   <div class="say">
-    "So — to come back to the question your CIO asked us. 'Can Sigma make our Snowflake investment pay off for the people making decisions, not just the people maintaining pipelines.'<br><br>
-    Your merchandiser identified Midwest as the problem region, drilled to specific customers, AI read every product review she didn't have time to read, and a sourcing recommendation got written back into the data — all in one session. No tickets. No exports. No waiting.<br><br>
-    What makes the most sense as a next step — a technical session with your data team, or a pilot on a real slice of your data?"
+    "One more thing — Sigma just launched Agents. Instead of building a formula or drilling down, your analyst just asks a question in plain English."
   </div>
 </div>
 
-<div class="tip">End on the question. Do not say "so yeah, that's Sigma." Do not add anything. Wait.</div>
+<div class="do-block">
+  <div class="label">Do</div>
+  Open agent panel in WB2-Done (chat bubble icon, top right) → type: <b>"Which brands have the worst customer ratings?"</b>
+</div>
+
+<div class="say-block">
+  <div class="label">Say — while it responds</div>
+  <div class="say">
+    "Same answer your BI team would have taken days to produce. No formula, no ticket, no waiting — just a question."
+  </div>
+</div>
+
+<div class="tip">Don't ask it to create a chart — it can't and it kills the moment. Stick to data questions.</div>
+
+<div class="kayla">
+  <div class="label">Kayla said</div>
+  <div class="say">Close strong. Go back to slides. Don't just stand there and say "okay." Thank the panel, invite questions, mention next steps. She's seen people bomb this part.</div>
+</div>
+
+<div class="phase"><span class="title">Close</span><span class="mins">~1 minute · return to slides</span></div>
 
 <div class="do-block">
   <div class="label">Do</div>
-  Go to <b>Slide 5 — Next Steps</b>. Let them read it while you wait for their answer.
+  Go back to slides — Next Steps slide.
 </div>
+
+<div class="say-block">
+  <div class="label">Say</div>
+  <div class="say">
+    "Coming back to what your CIO asked — 'Can Sigma make our Snowflake investment pay off for the people making decisions, not just the people maintaining pipelines.'<br><br>
+    We just answered that. On your data. Plugs found the Midwest problem, drilled to the exact stores and customers dragging it down, AI read 5,600 reviews nobody had time to read, and a Q4 sourcing decision went straight back into Snowflake — timestamped, visible to the whole team. One session. No tickets. No waiting.<br><br>
+    I'm really excited about what this could look like for Plugs. Thank you all so much for the time today — does anyone have questions?"
+  </div>
+</div>
+
+<div class="tip">Hands on the table. Smile. Wait. Do not fill the silence. Do NOT say "please feel free to bug me" — stop at "does anyone have questions?"</div>
 
 <!-- ═══════════════════════════════════════════ -->
 <hr>
@@ -450,7 +584,7 @@
 <div class="panel-q">
   <div class="label">Most likely</div>
   <div class="q">"Why not just give our power users SQL access directly to Snowflake?"</div>
-  <div class="a">"You could — and your data team already does. The problem is your merchandiser can't write SQL. Every question she has goes through a data scientist who has 30 other requests. Sigma doesn't replace Snowflake or your data team — it lets the business reach what's already there, without going through your BI team every time."</div>
+  <div class="a">"You could — and your data team already does. The problem is your merchandiser can't write SQL. Every question they have goes through a data scientist who has 30 other requests. Sigma doesn't replace Snowflake or your data team — it lets the business reach what's already there, without going through your BI team every time."</div>
 </div>
 
 <div class="panel-q">
@@ -491,8 +625,8 @@
   <tr><td><code>[Cost] * [Quantity]</code></td><td>COGS</td><td>Step 2, first</td></tr>
   <tr><td><code>[Price] * [Quantity]</code></td><td>Revenue</td><td>Step 2, second</td></tr>
   <tr><td><code>[Revenue] - [COGS]</code></td><td>Profit</td><td>Step 2, third</td></tr>
-  <tr><td><code>Sum([Profit]) / CountDistinct([Customer Name])</code></td><td>Avg Profit per Customer</td><td>Step 3, after drilling to Store</td></tr>
   <tr><td><code>CallNumber("applications.sigma.sentiment", [Review])</code></td><td>AI sentiment score per review — runs on Snowflake Cortex</td><td>Step 5, the live formula moment</td></tr>
+  <tr><td><code>Lookup(Avg([Product Reviews/Rating]), [Brand], [Product Reviews/Brand])</code></td><td>Pulls the average AI rating from the Product Reviews table into Brand Recommendations, matched by Brand. Args: (value to pull, key in current table, key in source table). Pre-built — you don't type this live.</td><td>Already in WB2-Live — populates Avg Rating column automatically once CallNumber runs</td></tr>
 </table>
 
 <!-- ═══════════════════════════════════════════ -->
