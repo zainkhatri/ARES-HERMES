@@ -829,6 +829,28 @@ def _compute_gpu_info() -> dict:
     except Exception as e:
         reason = str(e)[:120]
 
+    # Loaned to the Windows gaming VM (200) — SSH in and run nvidia-smi.exe.
+    # Off by default; set WIN_GPU_HOST=user@win-ip once OpenSSH is enabled in Windows.
+    win = os.getenv("WIN_GPU_HOST", "").strip()
+    if win:
+        try:
+            proc = subprocess.run(
+                ["ssh", "-o", "ConnectTimeout=2", "-o", "StrictHostKeyChecking=no",
+                 "-o", "BatchMode=yes", "-o", "UserKnownHostsFile=/dev/null",
+                 "-o", "LogLevel=ERROR", win] + _GPU_QUERY.split(),
+                capture_output=True, text=True, timeout=5,
+            )
+            if proc.returncode == 0 and proc.stdout.strip():
+                parsed = _parse_gpu_csv(proc.stdout)
+                if parsed:
+                    parsed["where"] = "windows"     # tag so the UI can badge it
+                    return parsed
+            reason = proc.stderr.strip()[:120] or "win nvidia-smi failed"
+        except subprocess.TimeoutExpired:
+            reason = "win timeout"
+        except Exception as e:
+            reason = str(e)[:120]
+
     return {"online": False, "reason": reason}
 
 
