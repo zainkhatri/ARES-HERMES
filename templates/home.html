@@ -42,7 +42,7 @@
            there's no dead space at full size. */
         .hud-grid { grid-template-rows: minmax(0, 1fr); }
         .hud-grid > .col:last-child > .mod { flex:1 1 auto; }
-        .hud { transform-origin: top center; }
+        .hud { transform-origin: top left; }
         /* ZEUS right column has only Thermals + Telemetry (no jobs/gpu), so let their
            charts grow to fill the column — no big empty gap, looks full like ARES. */
         html[data-brand="ZEUS"] .hud-grid > .col:last-child .mod-body { display:flex; flex-direction:column; }
@@ -1292,20 +1292,26 @@ function applyVitals(i) {
         _vtick++;
 }
 
-// Scale-to-fit: render at natural size, then shrink the whole .hud to the viewport
-// height so everything shows on one screen with no scroll and no clipping. Both boxes
-// are tuned to the same natural height, so a given screen scales them identically ->
-// same zoom, and each fills the width at 1.0 when it fits natively.
+// Scale-to-fit: when content is taller than the viewport, widen the .hud by 1/k first,
+// THEN scale by k — so it shrinks to fit the height AND still fills the full width
+// (no side letterbox). Origin is top-left so the widened box aligns to the edges.
 function fitScale() {
     var hud = document.querySelector('.hud');
     if (!hud) return;
     hud.style.transform = 'none';
+    hud.style.width = '';
     hud.style.minHeight = '0';                     // measure TRUE content (not inflated to viewport)
     var content = hud.scrollHeight;
     hud.style.minHeight = '';
     var vh = window.innerHeight;
     var k = content > vh + 1 ? vh / content : 1;
-    hud.style.transform = k < 1 ? 'scale(' + k.toFixed(4) + ')' : 'none';
+    if (k < 1) {
+        hud.style.width = (100 / k).toFixed(3) + '%';   // widen so scaling brings it back to full width
+        hud.style.transform = 'scale(' + k.toFixed(4) + ')';
+    } else {
+        hud.style.width = '';
+        hud.style.transform = 'none';
+    }
 }
 var _fitT;
 window.addEventListener('resize', function () { clearTimeout(_fitT); _fitT = setTimeout(fitScale, 80); });
