@@ -809,6 +809,20 @@ def _compute_gpu_info() -> dict:
     except Exception as e:
         reason = str(e)[:120]
 
+    # Loaned to the Windows gaming VM (200) — the host reads nvidia-smi via the QEMU
+    # guest agent (ops/gpu-windows.py) and drops it here. Checked before the VM 300
+    # SSH so a Windows-loaned GPU resolves fast with no network timeout.
+    try:
+        with open(HOST_GPU_FILE) as f:
+            gd = json.load(f)
+        if time.time() - gd.get("ts", 0) < 120:            # fresh (collector runs each minute)
+            parsed = _parse_gpu_csv(gd.get("csv", ""))
+            if parsed:
+                parsed["where"] = "windows"
+                return parsed
+    except (OSError, ValueError):
+        pass
+
     # Loaned out — ask VM 300 over SSH.
     host = os.getenv("GPU_HOST", "zain@192.168.20.212")
     try:
@@ -829,20 +843,6 @@ def _compute_gpu_info() -> dict:
         reason = "timeout"
     except Exception as e:
         reason = str(e)[:120]
-
-    # Loaned to the Windows gaming VM (200) — the host reads nvidia-smi via the QEMU
-    # guest agent (ops/gpu-windows.py) and drops it here. Primary Windows source
-    # (works even when SSH into the guest doesn't).
-    try:
-        with open(HOST_GPU_FILE) as f:
-            gd = json.load(f)
-        if time.time() - gd.get("ts", 0) < 120:            # fresh (collector runs each minute)
-            parsed = _parse_gpu_csv(gd.get("csv", ""))
-            if parsed:
-                parsed["where"] = "windows"
-                return parsed
-    except (OSError, ValueError):
-        pass
 
     # Loaned to the Windows gaming VM (200) — SSH in and run nvidia-smi.exe.
     # Off by default; set WIN_GPU_HOST=user@win-ip once OpenSSH is enabled in Windows.
