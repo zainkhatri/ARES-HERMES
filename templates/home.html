@@ -1048,7 +1048,7 @@ function renderWeekly(list) {
         agg[i] = agg[i] || { sent: 0, replied: 0 }; agg[i].sent += (w.sent || 0); agg[i].replied += (w.replied || 0);
     }); });
     if (!agg.length) { svg.innerHTML = ''; return; }
-    var W = 300, H = 56, n = agg.length, bw = W / n;
+    var W = 300, H = 38, n = agg.length, bw = W / n;   // H must match the svg viewBox (300x38) or bars clip/misscale
     var max = Math.max(1, Math.max.apply(null, agg.map(function(w){ return w.sent; })));
     svg.innerHTML = agg.map(function(w, i){
         var x = i * bw, sh = (w.sent / max) * (H - 2), rh = (w.replied / max) * (H - 2);
