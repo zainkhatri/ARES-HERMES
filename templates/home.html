@@ -31,6 +31,11 @@
             --text-1:#e9f2fb; --text-2:#90aecb; --text-3:#5a7690; --text-4:#374a5e;
             --amber:#22d3ee; --panel-rgb:10,18,32;
         }
+        /* ZEUS density: it carries more panels than ARES, so tighten the gaps a
+           touch to fit shorter MacBook viewports without scroll (no transform:scale). */
+        html[data-brand="ZEUS"] .hud { gap:10px; padding-top:calc(10px + var(--sat)); padding-bottom:calc(10px + var(--sab)); }
+        html[data-brand="ZEUS"] .col { gap:10px; }
+        html[data-brand="ZEUS"] .hud-grid { gap:11px; }
         * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         html, body {
             min-height:100%; background:var(--bg-0); color:var(--text-1);
@@ -41,13 +46,8 @@
 
         /* Console ground: faint ember grid + a slow vertical ember wash so the
            page is never flat black. */
-        body::before {
-            content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
-            background-image:
-                linear-gradient(var(--grid) 1px, transparent 1px),
-                linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-            background-size:44px 44px, 44px 44px;
-        }
+        /* grid removed: a full-screen fixed gradient layer is a large retina raster
+           surface for a subtle effect. Background is flat var(--bg-0). */
         /* box-switch wipe — one-shot: this box's accent washes away on load, and
            washes in (in the TARGET box's accent) when you tap the other chip. */
         #page-fx { position:fixed; inset:0; z-index:9999; background:var(--ares); pointer-events:none;
@@ -199,7 +199,9 @@
         .att-clear { color:var(--green); }
         .att-clear .adot { background:var(--green); box-shadow:0 0 8px -1px var(--green); }
         /* weekly trend + reply queue */
-        .wk-chart { display:block; width:100%; height:56px; }
+        .oc-weekly { margin-top:11px; padding-top:11px; border-top:1px solid var(--ember-dim); }
+        .oc-wk-head { display:flex; justify-content:space-between; font-size:8.5px; letter-spacing:.14em; color:var(--text-3); text-transform:uppercase; margin-bottom:7px; }
+        .wk-chart { display:block; width:100%; height:40px; }
         .wk-key { display:inline-block; width:8px; height:8px; vertical-align:middle; margin:0 3px 0 7px; }
         .wk-key.wk-sent { background:rgba(var(--ares-rgb),.3); }
         .wk-key.wk-rep { background:var(--ares); }
@@ -525,7 +527,7 @@
                 </div>
             </section>
 
-            <!-- ZEUS: business outreach stats (replaces Operation modules). -->
+            <!-- ZEUS: business outreach (stats + weekly trend). -->
             <section class="mod c-bl c-tr" id="panel-outreach" style="display:none">
                 <div class="mod-head">
                     <span class="mod-title">Outreach</span>
@@ -534,15 +536,9 @@
                 <div class="mod-body outreach-list" id="outreach-list">
                     <div class="arr-empty">loading…</div>
                 </div>
-            </section>
-
-            <section class="mod c-bl c-tr" id="panel-weekly" style="display:none">
-                <div class="mod-head">
-                    <span class="mod-title">Weekly</span>
-                    <span class="mod-meta"><i class="wk-key wk-sent"></i>sent <i class="wk-key wk-rep"></i>replied</span>
-                </div>
-                <div class="mod-body">
-                    <svg class="wk-chart" id="wk-chart" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true"></svg>
+                <div class="oc-weekly">
+                    <div class="oc-wk-head"><span>Weekly</span><span><i class="wk-key wk-sent"></i>sent <i class="wk-key wk-rep"></i>replied</span></div>
+                    <svg class="wk-chart" id="wk-chart" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true"></svg>
                 </div>
             </section>
 
@@ -599,14 +595,6 @@
 
         <!-- ── right: jobs + GPU ─────────────────────────────────────────── -->
         <div class="col">
-            <!-- ZEUS: one-glance "needs attention" rollup -->
-            <section class="mod c-tr c-br" id="panel-attention" style="display:none">
-                <div class="mod-head">
-                    <span class="mod-title">Needs attention</span>
-                    <span class="mod-meta" id="att-meta">—</span>
-                </div>
-                <div class="mod-body att-list" id="att-list"></div>
-            </section>
             <section class="mod c-tr c-bl" id="panel-jobs">
                 <div class="mod-head">
                     <span class="mod-title">Scheduled jobs</span>
