@@ -240,10 +240,8 @@
         .v-tile-meta .lo { color:var(--text-3); }
         .v-tile.warn { border-color:rgba(245,158,11,.5); }
         .v-tile.crit { border-color:var(--red); box-shadow:inset 0 0 22px rgba(239,68,68,.18); }  /* perf: static (was an animated box-shadow) */
-        @keyframes win-pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
-        @keyframes win-scan { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
         .v-win .v-tile-bar.boot { position:relative; overflow:hidden; }
-        .v-win .v-tile-bar.boot .v-tile-fill { width:100%!important; background:linear-gradient(90deg,transparent,#f59e0b,transparent)!important; animation:win-scan 1.1s linear infinite!important; }
+        .v-win .v-tile-bar.boot .v-tile-fill { width:100%!important; background:linear-gradient(90deg,transparent,#f59e0b,transparent)!important; }  /* perf: static (was win-scan infinite) */
 
         /* WIN tile: split control, same contract as before (.v-win / halves). */
         .v-tile-split { display:flex; padding:0; }
@@ -261,16 +259,15 @@
         .v-skel, .v-skel-drive { border-color:rgba(var(--ares-rgb),.14); }
         .v-skel-key, .v-skel-num, .v-skel-bar, .v-skel-meta {
             background:linear-gradient(90deg, rgba(var(--ares-rgb),.06) 25%, rgba(var(--ares-rgb),.14) 37%, rgba(var(--ares-rgb),.06) 63%);
-            background-size:200% 100%; animation:shimmer 1.3s linear infinite; border-radius:2px;
+            background-size:200% 100%; border-radius:2px;  /* perf: static (was shimmer infinite) */
         }
         .v-skel-key { height:9px; width:52%; }
         .v-skel-num { height:24px; width:66%; margin-top:7px; }
         .v-skel-bar { height:3px; width:100%; margin-top:9px; }
         .v-skel-meta { height:9px; width:78%; margin-top:8px; }
-        @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
         .skeleton { background:linear-gradient(90deg, rgba(var(--ares-rgb),.08) 25%, rgba(var(--ares-rgb),.18) 37%, rgba(var(--ares-rgb),.08) 63%);
-                    background-size:200% 100%; animation:shimmer 1.3s linear infinite; color:transparent!important;
-                    border-radius:2px; min-width:3.2em; display:inline-block; }
+                    background-size:200% 100%; color:transparent!important;
+                    border-radius:2px; min-width:3.2em; display:inline-block; }  /* perf: static (was shimmer infinite) */
 
         /* ---- storage matrix (markup emitted by renderDrives) ---------------- */
         .drives { display:flex; flex-direction:column; }
@@ -351,8 +348,7 @@
         .cdot { width:8px; height:8px; border-radius:50%; background:var(--text-3); }
         .cdot.ok  { background:#22c55e; box-shadow:0 0 8px -1px #22c55e; }
         .cdot.bad { background:var(--red); box-shadow:0 0 9px -1px var(--red); }
-        .cdot.run { background:var(--amber); box-shadow:0 0 9px -1px var(--amber); animation:cpulse 1.2s ease-in-out infinite; }
-        @keyframes cpulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+        .cdot.run { background:var(--amber); box-shadow:0 0 9px -1px var(--amber); }  /* perf: static (was cpulse infinite — N pulsing glow layers kept the window forever-dirty) */
         .cname { font-size:11px; font-weight:600; color:var(--text-1); letter-spacing:.03em;
                  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .cwhen { font-size:9.5px; color:var(--text-3); text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
