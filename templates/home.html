@@ -109,6 +109,8 @@
                     padding:9px 12px; border-bottom:1px solid rgba(var(--ares-rgb),.14); }
         .mod-title { font-size:10.5px; letter-spacing:.16em; color:var(--text-2); text-transform:uppercase; }
         .mod-meta  { font-size:10px; letter-spacing:.1em; color:var(--text-3); }
+        .gpu-src { display:inline-block; margin-right:7px; padding:1px 5px; font-size:8.5px; font-weight:700;
+                   letter-spacing:.12em; color:#0b1220; background:var(--amber); border-radius:2px; vertical-align:middle; }
         .mod-body  { padding:12px; }
 
         /* ---- header ----------------------------------------------------- */
@@ -661,7 +663,7 @@
             <section class="mod c-tr c-br" id="panel-gpu">
                 <div class="mod-head">
                     <span class="mod-title">GPU relay</span>
-                    <span class="mod-meta"><span class="skeleton" id="h-gpu"></span></span>
+                    <span class="mod-meta"><span class="gpu-src" id="gpu-src" style="display:none">WIN</span><span class="skeleton" id="h-gpu"></span></span>
                 </div>
                 <div class="mod-body">
                     <div class="gpu-top">
@@ -1481,6 +1483,8 @@ function updateGpu(g) {
     var name = document.getElementById('gpu-name');
     var util = document.getElementById('gpu-util');
     var vbar = document.getElementById('gpu-vram-bar');
+    var src = document.getElementById('gpu-src');   // "WIN" badge when read from the gaming VM
+    if (src) src.style.display = (g && g.online && g.where === 'windows') ? '' : 'none';
     if (!g || !g.online) {
         if (name) name.textContent = 'Offline';
         if (util) util.textContent = '—';
