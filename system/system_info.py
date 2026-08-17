@@ -161,6 +161,7 @@ def _read_host_nvme():
             "free": _format_bytes(total - used),
             "percent": d.get("percent", 0),
             "temp_c": d.get("temp_c"),
+            "_tb": total, "_ub": used,   # raw bytes so PROMETHEUS can sum the drives
         })
     return out
 
@@ -332,10 +333,26 @@ def _get_disks_linux():
         seen_names.add("PROMETHEUS")
 
     # Physical NVMe drives (990 PRO + 970 EVO) fed by the host collector.
-    for d in _read_host_nvme():
+    nvme = _read_host_nvme()
+    for d in nvme:
         if d["name"] not in seen_names:
             disks.append(d)
             seen_names.add(d["name"])
+
+    # PROMETHEUS = ALL storage: the mount's own df only sees the 970 pool, so sum the
+    # physical drives (970 + 990) for the true total/used.
+    tot = sum(d.get("_tb", 0) for d in nvme)
+    usd = sum(d.get("_ub", 0) for d in nvme)
+    if tot > 0:
+        for d in disks:
+            if d.get("name") == "PROMETHEUS":
+                d["total"] = _format_bytes(tot)
+                d["used"] = _format_bytes(usd)
+                d["free"] = _format_bytes(tot - usd)
+                d["percent"] = round(usd / tot * 100, 1)
+                break
+    for d in nvme:                                   # drop raw helper keys
+        d.pop("_tb", None); d.pop("_ub", None)
 
     # Individual drives by device path (also written to shared file for Mac clients)
     drive_entries = []
