@@ -155,11 +155,12 @@
            #panel-outreach (ZEUS). The hidden one is a no-op. */
         #panel-ops, #panel-outreach { flex:1 1 0; display:flex; flex-direction:column; }
         #panel-ops > .mod-body { flex:1; display:flex; flex-direction:column; }
-        /* Outreach fills its column by growing the WEEKLY chart (taller bars), not by
-           stretching the stats card — otherwise a big void opens above the chart. */
-        #panel-outreach > .mod-body { flex:0 0 auto; }
-        #panel-outreach .oc-weekly { flex:1 1 auto; display:flex; flex-direction:column; }
-        #panel-outreach .wk-chart { flex:1 1 auto; height:auto; min-height:40px; }
+        /* Outreach fills its column by distributing the client cards (space-around),
+           with the WEEKLY chart pinned at a fixed readable height at the bottom.
+           (Growing the chart to fill stretched it oddly and clipped tall bars.) */
+        #panel-outreach > .mod-body { flex:1 1 auto; justify-content:space-around; }
+        #panel-outreach .oc-weekly { flex:0 0 auto; }
+        #panel-outreach .wk-chart { height:76px; }
         #panel-ops .ops { flex:1; display:flex; flex-direction:column; justify-content:space-between; }
         #panel-ops .op { flex:1 1 0; }
         #panel-ops .op-body { justify-content:center; }
@@ -1043,11 +1044,18 @@ function renderReply(list) {
 function renderWeekly(list) {
     var svg = document.getElementById('wk-chart');
     if (!svg) return;
+    // Align clients by RECENCY, not index: each client's last entry is the most
+    // recent week, but they have different history lengths. Right-align so the same
+    // real week lines up across clients (pad the front of shorter series).
+    var series = (list || []).map(function(c){ return c.weekly || []; }).filter(function(w){ return w.length; });
+    var maxLen = series.reduce(function(m, w){ return Math.max(m, w.length); }, 0);
+    if (!maxLen) { svg.innerHTML = ''; return; }
     var agg = [];
-    (list || []).forEach(function(c){ (c.weekly || []).forEach(function(w, i){
-        agg[i] = agg[i] || { sent: 0, replied: 0 }; agg[i].sent += (w.sent || 0); agg[i].replied += (w.replied || 0);
-    }); });
-    if (!agg.length) { svg.innerHTML = ''; return; }
+    for (var k = 0; k < maxLen; k++) agg.push({ sent: 0, replied: 0 });
+    series.forEach(function(w){
+        var off = maxLen - w.length;                 // right-align
+        w.forEach(function(x, j){ agg[off + j].sent += (x.sent || 0); agg[off + j].replied += (x.replied || 0); });
+    });
     var W = 300, H = 38, n = agg.length, bw = W / n;   // H must match the svg viewBox (300x38) or bars clip/misscale
     var max = Math.max(1, Math.max.apply(null, agg.map(function(w){ return w.sent; })));
     svg.innerHTML = agg.map(function(w, i){
