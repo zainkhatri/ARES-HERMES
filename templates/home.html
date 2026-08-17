@@ -81,7 +81,10 @@
         .mod-body  { padding:12px; }
 
         /* ---- header ----------------------------------------------------- */
-        html, body { overflow:hidden; }
+        /* Single-screen by design, but never clip: if content exceeds the viewport
+           (ZEUS has more panels than ARES), allow vertical scroll instead of hiding
+           the overflow. Fits-on-screen boxes show no scrollbar. */
+        html, body { overflow-x:hidden; overflow-y:auto; }
         .hud-top { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
         /* Flex/grid children default to min-width:auto and refuse to shrink below
            their content, which pushes the console wider than a phone viewport. */
@@ -328,6 +331,10 @@
         .th-line { fill:none; stroke-width:1.6; vector-effect:non-scaling-stroke; }
         .th-cpu { stroke:var(--ares); }
         .th-gpu { stroke:var(--amber); }
+        /* Fluid graphs: morph the path between 3s samples instead of hard-jumping.
+           Chrome interpolates the `d` attribute; a long linear glide reads as
+           continuous motion. (Reduced-motion is globally disabled below.) */
+        .sp-line, .sp-fill, .trace-line, .trace-fill, .th-line { transition: d 1800ms linear; }
         .th-scale { display:flex; justify-content:space-between; margin-top:5px;
                     font-size:8.5px; letter-spacing:.14em; color:var(--text-4); }
         .key-dot { display:inline-block; width:7px; height:2px; margin:0 4px 0 9px; vertical-align:middle; }
@@ -1425,10 +1432,10 @@ var _RM = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').ma
 // Smooth scroll: put the freshly-drawn line one step to the right, then glide it
 // back to 0 over the poll interval -> continuous leftward motion between samples.
 function smoothIn(id, step) {
-    // Treadmill transform caused a visible blip (big instant sideways jump when the
-    // buffer was small). Neutralized: lines redraw in place each poll, no flicker.
-    var el = document.getElementById(id);
-    if (el) { el.style.transition = 'none'; el.style.transform = 'none'; }
+    // Fluidity now comes from the CSS `transition: d` on the chart paths (the line
+    // morphs between samples). This no longer clobbers that transition; the old
+    // treadmill transform is dropped (it blipped on a small buffer).
+    /* no-op: kept so callers don't change */
 }
 
 function drawSpark(key, lineId, fillId, valId, suffix) {
