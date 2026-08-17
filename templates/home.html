@@ -1452,6 +1452,22 @@ function updateGpu(g) {
 // empty chart means "not observed yet", never a fabricated baseline.
 var HIST = { cpu: [], mem: [], gpu: [], ctemp: [], gtemp: [] };
 
+// Persist the observed graph history (per box) so a reload shows the last-known
+// trend immediately instead of building up from an empty chart. Live samples then
+// append and the line scrolls on as usual.
+var _GKEY = 'ares_graphs_' + (document.documentElement.getAttribute('data-brand') || 'ARES');
+(function restoreGraphState() {
+    try {
+        var s = JSON.parse(localStorage.getItem(_GKEY) || 'null');
+        if (!s || (Date.now() - (s.t || 0)) > 6 * 3600 * 1000) return;   // ignore >6h stale
+        if (Array.isArray(s.trace)) _trace = s.trace.slice(-TRACE_MAX);
+        if (s.hist) for (var k in HIST) if (Array.isArray(s.hist[k])) HIST[k] = s.hist[k].slice(-TRACE_MAX);
+    } catch (e) {}
+})();
+function saveGraphState() {
+    try { localStorage.setItem(_GKEY, JSON.stringify({ t: Date.now(), trace: _trace, hist: HIST })); } catch (e) {}
+}
+
 function pushHist(key, value) {
     var a = HIST[key];
     if (!a) return;
@@ -1617,6 +1633,7 @@ function updateInstruments(i, g, pool) {
     pushHist('gtemp', (g && g.online && g.temp_c != null) ? g.temp_c : null);
     drawCharts();
     updateGpu(g);
+    saveGraphState();          // persist so a reload shows the last-known trend
 }
 
 // First frame from the server-inlined snapshot — runs here, after every `var`
