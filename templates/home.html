@@ -1293,13 +1293,18 @@ function applyVitals(i) {
 }
 
 // Scale-to-fit: render at natural size, then shrink the whole .hud to the viewport
-// height so everything shows on one screen with no scroll and no clipping.
+// height so everything shows on one screen with no scroll and no clipping. Both boxes
+// are tuned to the same natural height, so a given screen scales them identically ->
+// same zoom, and each fills the width at 1.0 when it fits natively.
 function fitScale() {
     var hud = document.querySelector('.hud');
     if (!hud) return;
-    hud.style.transform = 'none';                 // measure natural height
-    var vh = window.innerHeight, natural = hud.scrollHeight;
-    var k = natural > vh + 1 ? vh / natural : 1;
+    hud.style.transform = 'none';
+    hud.style.minHeight = '0';                     // measure TRUE content (not inflated to viewport)
+    var content = hud.scrollHeight;
+    hud.style.minHeight = '';
+    var vh = window.innerHeight;
+    var k = content > vh + 1 ? vh / content : 1;
     hud.style.transform = k < 1 ? 'scale(' + k.toFixed(4) + ')' : 'none';
 }
 var _fitT;
