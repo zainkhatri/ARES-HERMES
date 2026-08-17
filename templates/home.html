@@ -583,10 +583,6 @@
                 <div class="mod-body outreach-list" id="outreach-list">
                     <div class="arr-empty">loading…</div>
                 </div>
-                <div class="oc-weekly">
-                    <div class="oc-wk-head"><span>Weekly</span><span><i class="wk-key wk-sent"></i>sent <i class="wk-key wk-rep"></i>replied</span></div>
-                    <svg class="wk-chart" id="wk-chart" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true"></svg>
-                </div>
             </section>
 
             <section class="mod c-bl c-tr" id="panel-reply" style="display:none">
@@ -1019,7 +1015,7 @@ function renderOutreach(list) {
     var m = document.getElementById('outreach-meta');
     if (m) m.textContent = list.length + ' client' + (list.length > 1 ? 's' : '');
     renderReply(list);
-    renderWeekly(list);
+    // weekly chart removed
     __att.reply = list.reduce(function(a, c){ return a + (c.needs_reply || 0); }, 0); renderAttention();
 }
 
