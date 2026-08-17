@@ -193,6 +193,15 @@
         .att-item b { color:var(--text-1); font-weight:700; }
         .att-clear { color:var(--green); }
         .att-clear .adot { background:var(--green); box-shadow:0 0 8px -1px var(--green); }
+        /* weekly trend + reply queue */
+        .wk-chart { display:block; width:100%; height:56px; }
+        .wk-key { display:inline-block; width:8px; height:8px; vertical-align:middle; margin:0 3px 0 7px; }
+        .wk-key.wk-sent { background:rgba(var(--ares-rgb),.3); }
+        .wk-key.wk-rep { background:var(--ares); }
+        .reply-list { display:flex; flex-direction:column; gap:9px; }
+        .rq-row { display:grid; grid-template-columns:8px 1fr auto; align-items:center; gap:9px; }
+        .rq-name { font-size:11.5px; font-weight:600; color:var(--text-1); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .rq-co { font-size:9.5px; color:var(--text-3); white-space:nowrap; }
 
         /* ---- wordmark ----------------------------------------------------- */
         .mark { display:flex; align-items:flex-start; justify-content:center; flex:0 0 auto; padding:6px 0 4px; min-height:0; }
@@ -518,6 +527,24 @@
                 <div class="mod-body outreach-list" id="outreach-list">
                     <div class="arr-empty">loading…</div>
                 </div>
+            </section>
+
+            <section class="mod c-bl c-tr" id="panel-weekly" style="display:none">
+                <div class="mod-head">
+                    <span class="mod-title">Weekly</span>
+                    <span class="mod-meta"><i class="wk-key wk-sent"></i>sent <i class="wk-key wk-rep"></i>replied</span>
+                </div>
+                <div class="mod-body">
+                    <svg class="wk-chart" id="wk-chart" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true"></svg>
+                </div>
+            </section>
+
+            <section class="mod c-bl c-tr" id="panel-reply" style="display:none">
+                <div class="mod-head">
+                    <span class="mod-title">To reply</span>
+                    <span class="mod-meta" id="reply-meta">—</span>
+                </div>
+                <div class="mod-body reply-list" id="reply-list"></div>
             </section>
         </div>
 
@@ -949,7 +976,44 @@ function renderOutreach(list) {
     }).join('');
     var m = document.getElementById('outreach-meta');
     if (m) m.textContent = list.length + ' client' + (list.length > 1 ? 's' : '');
+    renderReply(list);
+    renderWeekly(list);
     __att.reply = list.reduce(function(a, c){ return a + (c.needs_reply || 0); }, 0); renderAttention();
+}
+
+// Reply queue: who to get back to, high-priority first, across all clients.
+function renderReply(list) {
+    var el = document.getElementById('reply-list');
+    if (!el) return;
+    var q = [];
+    (list || []).forEach(function(c){ (c.needs || []).forEach(function(n){ q.push(n); }); });
+    q.sort(function(a, b){ return (b.priority ? 1 : 0) - (a.priority ? 1 : 0); });
+    el.innerHTML = q.length
+        ? q.slice(0, 6).map(function(n){
+            return '<div class="rq-row"><span class="cdot ' + (n.priority ? 'bad' : 'ok') + '"></span>' +
+                   '<span class="rq-name">' + esc(n.name) + '</span>' +
+                   '<span class="rq-co">' + esc(n.company) + '</span></div>'; }).join('')
+        : '<div class="att-clear"><span class="adot"></span>inbox zero</div>';
+    var m = document.getElementById('reply-meta');
+    if (m) m.textContent = q.length ? (q.length + ' waiting') : 'clear';
+}
+
+// Weekly trend: aggregated sent (dim) + replied (bright) bars per week.
+function renderWeekly(list) {
+    var svg = document.getElementById('wk-chart');
+    if (!svg) return;
+    var agg = [];
+    (list || []).forEach(function(c){ (c.weekly || []).forEach(function(w, i){
+        agg[i] = agg[i] || { sent: 0, replied: 0 }; agg[i].sent += (w.sent || 0); agg[i].replied += (w.replied || 0);
+    }); });
+    if (!agg.length) { svg.innerHTML = ''; return; }
+    var W = 300, H = 56, n = agg.length, bw = W / n;
+    var max = Math.max(1, Math.max.apply(null, agg.map(function(w){ return w.sent; })));
+    svg.innerHTML = agg.map(function(w, i){
+        var x = i * bw, sh = (w.sent / max) * (H - 2), rh = (w.replied / max) * (H - 2);
+        return '<rect x="' + (x + bw * 0.16).toFixed(1) + '" y="' + (H - sh).toFixed(1) + '" width="' + (bw * 0.32).toFixed(1) + '" height="' + sh.toFixed(1) + '" style="fill:rgba(var(--ares-rgb),.3)"/>' +
+               '<rect x="' + (x + bw * 0.52).toFixed(1) + '" y="' + (H - rh).toFixed(1) + '" width="' + (bw * 0.32).toFixed(1) + '" height="' + rh.toFixed(1) + '" style="fill:var(--ares)"/>';
+    }).join('');
 }
 var _outreachBusy = false;
 async function pollOutreach() {
@@ -978,6 +1042,8 @@ function applyCaps(caps) {
     show('#panel-ops', caps.docker !== 1);        // ARES: operation modules
     show('#panel-outreach', caps.docker === 1);   // ZEUS: outreach stats
     show('#panel-attention', caps.docker === 1);  // ZEUS: needs-attention rollup
+    show('#panel-weekly', caps.docker === 1);     // ZEUS: weekly trend
+    show('#panel-reply', caps.docker === 1);      // ZEUS: reply queue
 }
 
 // Docker/FAI container health (ZEUS). Reuses the .crow/.cdot job-row styling.

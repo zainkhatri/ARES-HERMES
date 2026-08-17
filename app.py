@@ -605,19 +605,30 @@ def api_outreach():
         contacted = s.get("contacted") or 0
         replied = s.get("replied") or 0
         nr = d.get("needsReply")
+        nr = nr if isinstance(nr, list) else []
         opens = d.get("opens") or {}
+        wk = d.get("weekly")
+        wk = wk if isinstance(wk, list) else []
+        company = d.get("company") or "?"
         out.append({
-            "company": d.get("company") or "?",
+            "company": company,
             "sent": s.get("totalSends") or contacted or 0,
             "contacted": contacted,
             "replied": replied,
             "reply_rate": round(100 * replied / contacted, 1) if contacted else 0,
             "meetings": s.get("meetings") or 0,
             "warm": s.get("warm") or 0,
-            "needs_reply": len(nr) if isinstance(nr, list) else (nr or 0),
+            "needs_reply": len(nr),
             "opens": opens.get("total") or 0,
             "opens_unique": opens.get("unique") or 0,
             "updated": d.get("updatedAt"),
+            # reply queue: who to get back to, top 6, high-priority first
+            "needs": [{"name": c.get("name") or c.get("company") or "?",
+                       "company": company, "priority": bool(c.get("highPriority"))}
+                      for c in sorted(nr, key=lambda c: not c.get("highPriority"))[:6]],
+            # weekly trend: last 9 weeks of {wk, sent, replied}
+            "weekly": [{"wk": w.get("wk"), "sent": w.get("sent") or 0, "replied": w.get("replied") or 0}
+                       for w in wk[-9:] if isinstance(w, dict)],
         })
     return jsonify(out)
 
