@@ -45,6 +45,21 @@
         html[data-brand="ZEUS"] .col > .mod, html[data-brand="ZEUS"] .col > .mod > .mod-body { min-height:0; }
         html[data-brand="ZEUS"] .outreach-list, html[data-brand="ZEUS"] .reply-list,
         html[data-brand="ZEUS"] #panel-containers .mod-body, html[data-brand="ZEUS"] #panel-jobs .arr { overflow:hidden; }
+        /* ZEUS shrink-to-fit: the wordmark is decorative and the array map has 4
+           volumes — compress both so the center column fits without clipping. */
+        html[data-brand="ZEUS"] .mark { padding:2px 0; }
+        html[data-brand="ZEUS"] .mark pre { font-size:clamp(8px, 1.35vw, 17px); }
+        html[data-brand="ZEUS"] .v-drive { padding:7px 12px; }
+        html[data-brand="ZEUS"] .v-drive-bar { margin-top:6px; }
+        html[data-brand="ZEUS"] .v-drive-stats { margin-top:5px; }
+        /* ZEUS array map: compact rows (drop the redundant %/temp line, slim bar) so
+           all volumes fit without clipping. used/total + the fill bar remain. */
+        html[data-brand="ZEUS"] .col-mid .arr-meta { display:none; }
+        html[data-brand="ZEUS"] .col-mid .arr-bar { height:7px; margin-top:5px; }
+        html[data-brand="ZEUS"] .arr-list { gap:7px; }
+        /* Array map has 4 volumes vs the vitals' 3 tiles — give it the larger share
+           of the center column so every volume shows. */
+        html[data-brand="ZEUS"] .col-mid > .mod:last-child { flex:1.7 1 0; }
         * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         html, body {
             min-height:100%; background:var(--bg-0); color:var(--text-1);
@@ -1233,13 +1248,17 @@ function applyVitals(i) {
             }
             tiles.push({k:'cpu', key:'CPU', tag:'load', num:i.cpu_percent, unit:'%', meta:'<span class="lo">idle</span><span>peak</span>', pct:i.cpu_percent, color:TC.cpu});
             tiles.push({k:'mem', key:'MEM', tag:'usage', num:i.memory_percent, unit:'%', meta:'<span>' + i.memory_used + '</span><span class="lo">/ ' + i.memory_total + '</span>', pct:i.memory_percent, color:TC.mem});
-            if (g.online) {
-                tiles.push({k:'gpu', key:'GPU', tag:(g.name ? g.name.replace('NVIDIA GeForce ','') : 'GPU'), num:g.temp_c, unit:'\u00b0C ' + g.util_pct + '%', meta:'<span>' + g.power_w.toFixed(0) + 'W</span><span class="lo">VRAM ' + (g.vram_used_mib/1024).toFixed(1) + '/' + (g.vram_total_mib/1024).toFixed(0) + 'G</span>', pct:(g.vram_total_mib ? Math.min(100,(g.vram_used_mib/g.vram_total_mib)*100) : g.util_pct), color:TC.gpu});
-            } else {
-                tiles.push({k:'gpu', key:'GPU', tag:'RTX 3080', num:'\u2014', unit:'', meta:'<span class="lo">in VM 200</span><span></span>', pct:0, color:'#2d3a4e'});
-            }
-            if (pool) {
-                tiles.push({k:'pool', key:'POOL', tag:DRIVE_TAG['PROMETHEUS'], num:pool.percent, unit:'%', meta:'<span>' + pool.used + '</span><span class="lo">/ ' + pool.total + '</span>', pct:pool.percent, color:TC.pool});
+            // ZEUS has no GPU and its pool lives in the array map \u2014 skip both tiles
+            // (fewer tiles also helps ZEUS fit on one screen).
+            if (_BR !== 'ZEUS') {
+                if (g.online) {
+                    tiles.push({k:'gpu', key:'GPU', tag:(g.name ? g.name.replace('NVIDIA GeForce ','') : 'GPU'), num:g.temp_c, unit:'\u00b0C ' + g.util_pct + '%', meta:'<span>' + g.power_w.toFixed(0) + 'W</span><span class="lo">VRAM ' + (g.vram_used_mib/1024).toFixed(1) + '/' + (g.vram_total_mib/1024).toFixed(0) + 'G</span>', pct:(g.vram_total_mib ? Math.min(100,(g.vram_used_mib/g.vram_total_mib)*100) : g.util_pct), color:TC.gpu});
+                } else {
+                    tiles.push({k:'gpu', key:'GPU', tag:'RTX 3080', num:'\u2014', unit:'', meta:'<span class="lo">in VM 200</span><span></span>', pct:0, color:'#2d3a4e'});
+                }
+                if (pool) {
+                    tiles.push({k:'pool', key:'POOL', tag:DRIVE_TAG['PROMETHEUS'], num:pool.percent, unit:'%', meta:'<span>' + pool.used + '</span><span class="lo">/ ' + pool.total + '</span>', pct:pool.percent, color:TC.pool});
+                }
             }
             renderVitals(tiles, winTile());
 
