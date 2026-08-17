@@ -154,7 +154,12 @@
            a hidden panel. Target the two candidates explicitly: #panel-ops (ARES),
            #panel-outreach (ZEUS). The hidden one is a no-op. */
         #panel-ops, #panel-outreach { flex:1 1 0; display:flex; flex-direction:column; }
-        #panel-ops > .mod-body, #panel-outreach > .mod-body { flex:1; display:flex; flex-direction:column; }
+        #panel-ops > .mod-body { flex:1; display:flex; flex-direction:column; }
+        /* Outreach fills its column by growing the WEEKLY chart (taller bars), not by
+           stretching the stats card — otherwise a big void opens above the chart. */
+        #panel-outreach > .mod-body { flex:0 0 auto; }
+        #panel-outreach .oc-weekly { flex:1 1 auto; display:flex; flex-direction:column; }
+        #panel-outreach .wk-chart { flex:1 1 auto; height:auto; min-height:40px; }
         #panel-ops .ops { flex:1; display:flex; flex-direction:column; justify-content:space-between; }
         #panel-ops .op { flex:1 1 0; }
         #panel-ops .op-body { justify-content:center; }
