@@ -48,6 +48,12 @@
                 linear-gradient(90deg, var(--grid) 1px, transparent 1px);
             background-size:44px 44px, 44px 44px;
         }
+        /* box-switch wipe — one-shot: this box's accent washes away on load, and
+           washes in (in the TARGET box's accent) when you tap the other chip. */
+        #page-fx { position:fixed; inset:0; z-index:9999; background:var(--ares); pointer-events:none;
+                   animation:fx-reveal .5s var(--ease-out) forwards; transition:opacity .32s var(--ease-out); }
+        @keyframes fx-reveal { from { opacity:1; } to { opacity:0; } }
+
         .hud { position:relative; z-index:1; display:flex; flex-direction:column;
                min-height:100vh; min-height:100dvh; padding:calc(14px + var(--sat)) 16px calc(14px + var(--sab)); gap:14px; }
 
@@ -417,6 +423,8 @@
         </style>
 </head>
 <body>
+<div id="page-fx"></div>   <!-- box-switch wipe: fades out on load, fades in on switch -->
+
 
 
 <script id="ares-boot" type="application/json">{{ boot|default(none)|tojson }}</script>
@@ -428,11 +436,11 @@
         <div>
             {% set is_zeus = boot and (boot.hostname or '')|upper == 'ZEUS' %}
             <div class="nodes">
-                <a href="{{ 'http://100.77.42.110:8080/' if is_zeus else '/' }}" class="chip{{ '' if is_zeus else ' is-active' }}"{{ '' if is_zeus else ' aria-current=page'|safe }} aria-label="ARES">
+                <a href="{{ 'http://100.77.42.110:8080/' if is_zeus else '/' }}" data-fx="#f5402d" class="chip{{ '' if is_zeus else ' is-active' }}"{{ '' if is_zeus else ' aria-current=page'|safe }} aria-label="ARES">
                     <span class="chip-mark">A</span>
                     <span class="chip-name">ARES</span><span class="chip-tag">/ SUPER-NAS</span>
                 </a>
-                <a href="{{ '/' if is_zeus else '/jump/zeus' }}" class="chip{{ ' is-active' if is_zeus else '' }}" aria-label="ZEUS">
+                <a href="{{ '/' if is_zeus else '/jump/zeus' }}" data-fx="#38bdf8" class="chip{{ ' is-active' if is_zeus else '' }}" aria-label="ZEUS">
                     <span class="chip-mark">Z</span>
                     <span class="chip-name">ZEUS</span><span class="chip-tag">/ MID-NAS</span>
                 </a>
@@ -1552,6 +1560,29 @@ function updateInstruments(i, g, pool) {
 // with no skeleton -> pop-in flash.
 if (window.__BOOT) { try { applyVitals(window.__BOOT); } catch(e) { console.error(e); } window.__BOOT = null; }
 pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
+
+// Box-switch wipe: clear the entrance overlay once faded; on tapping the OTHER
+// box's chip, wash the screen in that box's colour, then navigate.
+(function () {
+    var fx = document.getElementById('page-fx');
+    if (!fx) return;
+    fx.addEventListener('animationend', function () { fx.style.animation = 'none'; fx.style.opacity = '0'; }, { once: true });
+    document.querySelectorAll('.chip[data-fx]:not(.is-active)').forEach(function (ch) {
+        ch.addEventListener('click', function (e) {
+            var href = ch.getAttribute('href');
+            if (!href) return;
+            e.preventDefault();
+            fx.style.animation = 'none';
+            fx.style.background = ch.getAttribute('data-fx');
+            fx.style.pointerEvents = 'auto';
+            void fx.offsetWidth;            // reflow so the transition runs
+            fx.style.opacity = '1';
+            var done = false, go = function () { if (done) return; done = true; window.location.href = href; };
+            fx.addEventListener('transitionend', go, { once: true });
+            setTimeout(go, 480);            // fallback if transitionend doesn't fire
+        });
+    });
+})();
 
 </script>
 </body>
