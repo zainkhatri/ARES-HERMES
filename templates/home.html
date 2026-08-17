@@ -79,7 +79,6 @@
         .mod-body  { padding:12px; }
 
         /* ---- header ----------------------------------------------------- */
-        .hud { transform-origin:top left; }
         html, body { overflow:hidden; }
         .hud-top { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
         /* Flex/grid children default to min-width:auto and refuse to shrink below
@@ -1298,18 +1297,10 @@ function pollWin() {
 
 // Fit-to-viewport: scale the whole HUD so it fills the screen with NO scroll,
 // as large as it can be. Re-fits on resize and after charts/data change height.
-function fitHud(){
-    var hud=document.querySelector('.hud'); if(!hud) return;
-    hud.style.transform='none'; hud.style.width='';
-    var natW=hud.offsetWidth||1, natH=hud.offsetHeight||1;
-    var s=Math.min(window.innerWidth/natW, window.innerHeight/natH);
-    if (s < 1) hud.style.width=(window.innerWidth/s)+'px';   // re-widen so scaled layout fills width
-    // re-measure height after any re-widen, then scale to fit height exactly
-    natH=hud.offsetHeight||1; s=Math.min(window.innerWidth/(hud.offsetWidth||1), window.innerHeight/natH);
-    hud.style.transform='scale('+s.toFixed(4)+')';
-}
-window.addEventListener('resize', fitHud);
-fitHud(); setTimeout(fitHud, 700); setTimeout(fitHud, 2500);
+// fitHud removed: the transform:scale on the whole HUD (with a re-widen to 2-3x
+// viewport width first) created a giant retina layer re-rastered on every repaint
+// (the slowdown) and shrank the taller ZEUS board oddly. The layout now sizes
+// naturally — flex fills the viewport; it scrolls only if content truly exceeds it.
 // No server-inlined snapshot -> fetch now. When present, the first render is
 // deferred to the end of this script (below), after HIST/_trace are initialized.
 if (!window.__BOOT) loadVitals();
