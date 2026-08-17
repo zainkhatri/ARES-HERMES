@@ -55,6 +55,7 @@ def _format_bytes(b: int) -> str:
 
 HOST_DRIVES_FILE = os.path.join(PROJECT_ROOT, ".host_drives.json")
 HOST_CRONS_FILE = os.path.join(PROJECT_ROOT, ".host_crons.json")
+HOST_GPU_FILE = os.path.join(PROJECT_ROOT, ".host_gpu.json")   # 3080 vitals from Windows VM (guest agent)
 
 
 def _read_host_crons():
@@ -828,6 +829,20 @@ def _compute_gpu_info() -> dict:
         reason = "timeout"
     except Exception as e:
         reason = str(e)[:120]
+
+    # Loaned to the Windows gaming VM (200) — the host reads nvidia-smi via the QEMU
+    # guest agent (ops/gpu-windows.py) and drops it here. Primary Windows source
+    # (works even when SSH into the guest doesn't).
+    try:
+        with open(HOST_GPU_FILE) as f:
+            gd = json.load(f)
+        if time.time() - gd.get("ts", 0) < 120:            # fresh (collector runs each minute)
+            parsed = _parse_gpu_csv(gd.get("csv", ""))
+            if parsed:
+                parsed["where"] = "windows"
+                return parsed
+    except (OSError, ValueError):
+        pass
 
     # Loaned to the Windows gaming VM (200) — SSH in and run nvidia-smi.exe.
     # Off by default; set WIN_GPU_HOST=user@win-ip once OpenSSH is enabled in Windows.
