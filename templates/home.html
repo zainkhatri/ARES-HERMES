@@ -43,6 +43,13 @@
         .hud-grid { grid-template-rows: minmax(0, 1fr); }
         .hud-grid > .col:last-child > .mod { flex:1 1 auto; }
         .hud { transform-origin: top center; }
+        /* ZEUS right column has only Thermals + Telemetry (no jobs/gpu), so let their
+           charts grow to fill the column — no big empty gap, looks full like ARES. */
+        html[data-brand="ZEUS"] .hud-grid > .col:last-child .mod-body { display:flex; flex-direction:column; }
+        html[data-brand="ZEUS"] .hud-grid > .col:last-child .thermal { flex:1 1 auto; height:auto; min-height:70px; }
+        html[data-brand="ZEUS"] .hud-grid > .col:last-child .sparks { flex:1 1 auto; justify-content:space-evenly; }
+        html[data-brand="ZEUS"] .hud-grid > .col:last-child .spark-row { flex:1 1 0; align-items:center; }
+        html[data-brand="ZEUS"] .hud-grid > .col:last-child .spark { height:100%; min-height:18px; }
         html[data-brand="ZEUS"] .outreach-list, html[data-brand="ZEUS"] .reply-list,
         html[data-brand="ZEUS"] #panel-containers .mod-body, html[data-brand="ZEUS"] #panel-jobs .arr { overflow:hidden; }
         /* ZEUS shrink-to-fit: the wordmark is decorative and the array map has 4
