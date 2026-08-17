@@ -928,7 +928,7 @@ function renderCrons(jobs) {
         var last = j.running ? 'running…' : _rel(j.last);
         return '<div class="crow"><span class="cdot ' + cls + '"></span>' +
                '<span class="cname">' + esc(j.name) + '</span>' +
-               '<span class="cwhen"><b>' + last + '</b> · ' + (j.next ? 'next ' + _rel(j.next) : esc(j.sched || '')) + '</span></div>';
+               '<span class="cwhen"><b>' + last + '</b> · ' + ((j.next && j.next * 1000 > Date.now()) ? 'next ' + _rel(j.next) : esc(j.sched || '')) + '</span></div>';
     }).join('');
     var m = document.getElementById('jobs-meta');
     if (m) m.textContent = bad ? (bad + ' failed') : (jobs.length + ' ok');

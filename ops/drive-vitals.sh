@@ -46,3 +46,7 @@ cat > "$TMP" <<JSON
 JSON
 
 mv -f "$TMP" "$OUT"
+
+# Scheduled-job status has no cron of its own — refresh it here (this script runs
+# every minute), so the dashboard's "next run" times never go stale.
+python3 /mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/ops/cron-status.py >/dev/null 2>&1 || true
