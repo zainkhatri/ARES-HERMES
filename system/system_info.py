@@ -166,6 +166,36 @@ def _read_host_nvme():
     return out
 
 
+_io_prev = {}
+def _io_rates():
+    """Live network + disk throughput (bytes/s) from psutil counter deltas, plus
+    load average. Keeps the previous sample across calls; first call returns zeros."""
+    now = time.time()
+    out = {"net_up": 0, "net_down": 0, "disk_r": 0, "disk_w": 0, "load": None, "load_pct": 0}
+    try:
+        n = psutil.net_io_counters()
+        d = psutil.disk_io_counters()
+        prev = _io_prev.get("v")
+        _io_prev["v"] = (now, n.bytes_sent, n.bytes_recv,
+                         getattr(d, "read_bytes", 0), getattr(d, "write_bytes", 0))
+        if prev:
+            dt = (now - prev[0]) or 1
+            out["net_up"] = max(0, (n.bytes_sent - prev[1]) / dt)
+            out["net_down"] = max(0, (n.bytes_recv - prev[2]) / dt)
+            out["disk_r"] = max(0, (getattr(d, "read_bytes", 0) - prev[3]) / dt)
+            out["disk_w"] = max(0, (getattr(d, "write_bytes", 0) - prev[4]) / dt)
+    except Exception:
+        pass
+    try:
+        la = os.getloadavg()
+        ncpu = psutil.cpu_count() or 1
+        out["load"] = [round(x, 2) for x in la]
+        out["load_pct"] = round(min(100, la[0] / ncpu * 100), 1)   # 1-min load vs core count
+    except Exception:
+        pass
+    return out
+
+
 def _read_crontab_jobs():
     """ZEUS scheduled jobs from the user crontab (the FAI automation). Name from the
     script/business, schedule label, last-run from the redirected log's mtime; jobs
@@ -979,6 +1009,7 @@ def get_system_info() -> dict:
         "mordor": _get_mordor_status() if caps.get("mordor") else {"online": False},
         "gpu": _get_gpu_info() if caps.get("gpu") else {"online": False},
         "crons": _read_crontab_jobs() if os.getenv("HOST_BRAND", "").upper() == "ZEUS" else _read_host_crons(),
+        "io": _io_rates(),
         "caps": caps,
     }
     if caps.get("docker"):
