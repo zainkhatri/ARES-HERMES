@@ -1,0 +1,27 @@
+/* hud.css — shared HUD design system, derived from home.html. Do not import into home.html. */
+:root {
+    --bg-0:#070403; --bg-1:#0d0605; --bg-2:#140807; --bg-3:#1c0c09;
+    --ares:#f5402d; --ares-rgb:245,64,45; --panel-rgb:20,8,7; --ares-bright:#ff7a45; --ember:#c2301f; --ember-dim:rgba(var(--ares-rgb),.28);
+    --grid:rgba(var(--ares-rgb),.055);
+    --text-1:#f6ece9; --text-2:#c99a90; --text-3:#8d6259; --text-4:#5a3d37;
+    --green:#10b981; --amber:#f59e0b; --red:#ef4444;
+    --dur-fast:120ms; --dur:180ms; --dur-slow:280ms;
+    --ease-out:cubic-bezier(.16,1,.3,1);
+    --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+}
+html[data-brand="ZEUS"] {
+    --bg-0:#03060b; --bg-1:#060b14; --bg-2:#0a1220; --bg-3:#0e1a2e;
+    --ares:#38bdf8; --ares-rgb:56,189,248; --ares-bright:#a78bfa; --ember:#6366f1;
+    --text-1:#e9f2fb; --text-2:#90aecb; --text-3:#5a7690; --text-4:#374a5e;
+    --amber:#a855f7; --panel-rgb:10,18,32;
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body {
+    min-height:100%; background:var(--bg-0); color:var(--text-1);
+    font-family:'JetBrains Mono', monospace;
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+::selection { background:var(--ares); color:var(--bg-0); }
+::-webkit-scrollbar { width:9px; height:9px; }
+::-webkit-scrollbar-thumb { background:rgba(var(--ares-rgb),.28); }
+::-webkit-scrollbar-track { background:transparent; }
