@@ -610,12 +610,18 @@ def api_outreach():
         wk = d.get("weekly")
         wk = wk if isinstance(wk, list) else []
         company = d.get("company") or "?"
+        last = wk[-1] if wk else {}
+        wk_sent = last.get("sent") or 0
+        wk_replied = last.get("replied") or 0
         out.append({
             "company": company,
             "sent": s.get("totalSends") or contacted or 0,
             "contacted": contacted,
             "replied": replied,
             "reply_rate": round(100 * replied / contacted, 1) if contacted else 0,
+            # this week's activity (last weekly bucket)
+            "week": {"sent": wk_sent, "replied": wk_replied,
+                     "reply_rate": round(100 * wk_replied / wk_sent, 1) if wk_sent else 0},
             "meetings": s.get("meetings") or 0,
             "warm": s.get("warm") or 0,
             "needs_reply": len(nr),
