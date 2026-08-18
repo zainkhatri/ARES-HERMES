@@ -266,17 +266,26 @@
         <span class="mod-meta" id="jr-count">—</span>
     </div>
     <div class="mod-body">
-        <!-- search input + results injected here by renderShelf() → #bookshelf -->
+        <div class="wrap">
+            <div class="jsearch">
+                <div class="jsearch-box">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input id="jsearch-input" type="search" placeholder="Search all journals…" autocomplete="off" spellcheck="false"
+                           oninput="onSearchInput(this.value)">
+                </div>
+                <div id="jsearch-results"></div>
+            </div>
+        </div>
     </div>
 </section>
 
 <!-- ── On This Day panel ── -->
-<section class="mod c-tl c-br" id="jr-today">
+<section class="mod c-tl c-br" id="jr-today" hidden>
     <div class="mod-head">
         <span class="mod-title">On This Day</span>
     </div>
     <div class="mod-body">
-        <!-- on-this-day entries injected by renderShelf() → #bookshelf -->
+        <div class="wrap" id="otd-body"></div>
     </div>
 </section>
 
@@ -288,7 +297,7 @@
     </div>
     <div class="mod-body">
 
-        <!-- Bookshelf: JS renders search + on-this-day + shelf grid here -->
+        <!-- Bookshelf: JS renders shelf grid here -->
         <main class="wrap" id="bookshelf">
             <div class="loader"></div>
         </main>
@@ -356,12 +365,17 @@ async function loadOnThisDay() {
         const r = await fetch('/api/journals/on-this-day');
         if (!r.ok) return;
         onThisDay = await r.json();
-        renderShelf();
+        renderOnThisDay();
     } catch (e) { console.error(e); }
 }
 
-function onThisDayHtml() {
-    if (!onThisDay || !onThisDay.entries || onThisDay.entries.length === 0) return '';
+function renderOnThisDay() {
+    const panel = document.getElementById('jr-today');
+    const body = document.getElementById('otd-body');
+    if (!onThisDay || !onThisDay.entries || onThisDay.entries.length === 0) {
+        panel.hidden = true;
+        return;
+    }
     let rows = '';
     onThisDay.entries.forEach(e => {
         const clickable = e.pdf ? ' clickable' : '';
@@ -371,10 +385,11 @@ function onThisDayHtml() {
             <div style="font-size:13px;line-height:1.6;color:var(--ink)">${esc(e.snippet)}</div>
         </div>`;
     });
-    return `<div class="otd reveal" style="border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:26px;background:rgba(255,255,255,0.02)">
+    body.innerHTML = `<div class="otd reveal" style="border:1px solid var(--line);border-radius:10px;padding:18px 20px;background:rgba(255,255,255,0.02)">
         <div class="eyebrow" style="color:var(--accent);margin-bottom:12px">📓 On this day · ${esc(onThisDay.month_day)}</div>
         ${rows}
     </div>`;
+    panel.hidden = false;
 }
 
 // ─── Search ───
@@ -409,10 +424,12 @@ function _bookTitleByPdf(pdf) {
     return j ? titleOf(j) : pdf.replace(/\.pdf$/i, '');
 }
 
-// Hide the shelf + on-this-day while a search rail is showing, so the matched
-// pages are the whole focus; restore them when the query is cleared.
+// Hide the shelf grid while a search rail is showing so matched pages are the whole focus.
+// On-this-day panel is in its own section — collapse it the same way.
 function _setShelfHidden(hidden) {
-    document.querySelectorAll('.shelf, .otd').forEach(el => { el.style.display = hidden ? 'none' : ''; });
+    document.querySelectorAll('.shelf').forEach(el => { el.style.display = hidden ? 'none' : ''; });
+    const todayPanel = document.getElementById('jr-today');
+    if (todayPanel) todayPanel.style.display = hidden ? 'none' : '';
 }
 
 let _railResults = [];
@@ -564,6 +581,12 @@ function renderShelf() {
     const el = document.getElementById('bookshelf');
     const viewable = journals.filter(j => j.has_pdf && j.pages > 0);
 
+    // Update count pills
+    const countEl = document.getElementById('jr-count');
+    if (countEl) countEl.textContent = viewable.length ? `${viewable.length} notebook${viewable.length!==1?'s':''}` : '—';
+    const booksEl = document.getElementById('jr-books');
+    if (booksEl) booksEl.textContent = viewable.length ? `${viewable.length} notebook${viewable.length!==1?'s':''}` : '—';
+
     if (viewable.length === 0) {
         el.innerHTML = `<div class="empty"><div class="big">An empty shelf.</div>
             <div style="color:var(--ink-faint);font-size:12px;letter-spacing:.04em;max-width:340px;margin:0 auto;line-height:1.6">
@@ -571,26 +594,7 @@ function renderShelf() {
         return;
     }
 
-    let h = `<div class="page-head reveal">
-        <div>
-            <div class="eyebrow">ARES · Personal Archive</div>
-            <h1 class="page-title">Journals</h1>
-        </div>
-        <div class="count-pill">${viewable.length} notebook${viewable.length!==1?'s':''}</div>
-    </div>`;
-
-    h += `<div class="jsearch reveal">
-        <div class="jsearch-box">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-            <input id="jsearch-input" type="search" placeholder="Search all journals…" autocomplete="off" spellcheck="false"
-                   value="${esc(_searchQ)}" oninput="onSearchInput(this.value)">
-        </div>
-        <div id="jsearch-results"></div>
-    </div>`;
-
-    h += onThisDayHtml();
-
-    h += `<div class="shelf">`;
+    let h = `<div class="shelf">`;
     viewable.forEach((j, vi) => {
         const i = journals.indexOf(j);
         const cover = `/api/journals/${encodeURIComponent(j.name)}/page/0?thumb=hq&v=${j.size||0}`;
