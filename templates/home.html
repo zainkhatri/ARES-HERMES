@@ -195,7 +195,7 @@
 
         .facts { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:rgba(var(--ares-rgb),.14);
                  border-top:1px solid rgba(var(--ares-rgb),.14); }
-        .fact { background:var(--bg-1); padding:7px 10px; }
+        .fact { background:var(--bg-1); padding:7px 10px; min-width:0; }
         .fact-k { font-size:8.5px; letter-spacing:.15em; color:var(--text-3); text-transform:uppercase; }
         .fact-v { font-size:12px; color:var(--text-1); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
@@ -1034,18 +1034,19 @@ function renderOutreach(list) {
     if (!el) return;
     if (!list || !list.length) { el.innerHTML = '<div class="arr-empty">no outreach data</div>'; return; }
     el.innerHTML = list.map(function(c) {
+        var w = c.week || { sent: 0, replied: 0, reply_rate: 0 };
         var nr = c.needs_reply ? '<span class="oc-nr">' + c.needs_reply + ' to reply</span>' : '';
         return '<div class="oc-row"><div class="oc-top">' +
                '<span class="oc-name">' + esc(c.company) + '</span>' + nr + '</div>' +
                '<div class="oc-stats">' +
-                 '<div class="oc-stat"><b>' + fmtN(c.sent) + '</b><i>sent</i></div>' +
-                 '<div class="oc-stat"><b>' + (c.reply_rate || 0) + '%</b><i>reply</i></div>' +
+                 '<div class="oc-stat"><b>' + fmtN(w.sent) + '</b><i>sent</i></div>' +
+                 '<div class="oc-stat"><b>' + fmtN(w.replied) + '</b><i>replies</i></div>' +
+                 '<div class="oc-stat"><b>' + (w.reply_rate || 0) + '%</b><i>reply</i></div>' +
                  '<div class="oc-stat"><b>' + (c.meetings || 0) + '</b><i>mtgs</i></div>' +
-                 '<div class="oc-stat"><b>' + fmtN(c.opens) + '</b><i>opens</i></div>' +
                '</div></div>';
     }).join('');
     var m = document.getElementById('outreach-meta');
-    if (m) m.textContent = list.length + ' client' + (list.length > 1 ? 's' : '');
+    if (m) m.textContent = 'this week · ' + list.length + ' client' + (list.length > 1 ? 's' : '');
     renderReply(list);
     // weekly chart removed
     __att.reply = list.reduce(function(a, c){ return a + (c.needs_reply || 0); }, 0); renderAttention();
