@@ -25,3 +25,50 @@ html, body {
 ::-webkit-scrollbar { width:9px; height:9px; }
 ::-webkit-scrollbar-thumb { background:rgba(var(--ares-rgb),.28); }
 ::-webkit-scrollbar-track { background:transparent; }
+
+/* ---- shell + top nav ---- */
+.hud-shell { position:relative; z-index:1; display:flex; flex-direction:column;
+             min-height:100vh; min-height:100dvh; padding:calc(14px + var(--sat)) 16px calc(14px + var(--sab)); gap:14px; }
+.hud-top { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.hud-top > * { min-width:0; max-width:100%; }
+.nodes { display:flex; gap:8px; flex-wrap:wrap; }
+.chip { display:flex; align-items:center; gap:8px; padding:6px 12px; text-decoration:none;
+        border:1px solid var(--ember-dim); color:var(--text-2); transition:all var(--dur) var(--ease-out); }
+.chip-mark { display:grid; place-items:center; width:17px; height:17px; font-size:10px; font-weight:700; border:1px solid currentColor; }
+.chip-name { font-size:11px; font-weight:700; letter-spacing:.11em; }
+.chip-tag  { font-size:9.5px; letter-spacing:.1em; opacity:.72; }
+.chip.is-active { background:rgba(var(--ares-rgb),.07); border-color:var(--ares); color:var(--ares);
+                  box-shadow:0 0 16px -7px var(--ares), inset 0 0 22px -14px var(--ares); }
+.chip.is-active .chip-mark { background:rgba(var(--ares-rgb),.14); }
+.chip:not(.is-active):hover { border-color:var(--ares); color:var(--text-1); background:rgba(var(--ares-rgb),.1); }
+
+/* ---- panels ---- */
+.mod { position:relative; contain:layout paint; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.55);
+       box-shadow:inset 0 0 22px rgba(var(--ares-rgb),.045); }
+.mod::before, .mod::after { position:absolute; width:11px; height:11px; border:2px solid var(--ares); pointer-events:none; }
+.c-tl::before { content:''; top:-2px; left:-2px; border-right:0; border-bottom:0; }
+.c-tr::before { content:''; top:-2px; right:-2px; border-left:0; border-bottom:0; }
+.c-bl::after  { content:''; bottom:-2px; left:-2px; border-right:0; border-top:0; }
+.c-br::after  { content:''; bottom:-2px; right:-2px; border-left:0; border-top:0; }
+.mod-head { display:flex; align-items:center; justify-content:space-between; gap:10px;
+            padding:9px 12px; border-bottom:1px solid rgba(var(--ares-rgb),.14); }
+.mod-title { font-size:13px; letter-spacing:.16em; color:var(--text-2); text-transform:uppercase; }
+.mod-meta  { font-size:12px; letter-spacing:.1em; color:var(--text-3); }
+.mod-body  { padding:14px; }
+
+/* ---- controls ---- */
+.btn { font:inherit; font-size:12px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer;
+       color:var(--text-2); background:rgba(var(--ares-rgb),.06); border:1px solid var(--ember-dim);
+       padding:8px 14px; transition:all var(--dur) var(--ease-out); }
+.btn:hover { color:var(--text-1); border-color:var(--ares); background:rgba(var(--ares-rgb),.12); }
+.field { font:inherit; font-size:13px; color:var(--text-1); background:var(--bg-1);
+         border:1px solid var(--ember-dim); padding:9px 12px; width:100%; }
+.field:focus { outline:none; border-color:var(--ares); }
+.field-search { display:flex; align-items:center; gap:8px; background:var(--bg-1); border:1px solid var(--ember-dim); padding:0 12px; }
+.field-search .field { border:0; background:transparent; padding:11px 0; }
+.chiptag { display:inline-flex; align-items:center; gap:5px; font-size:10px; letter-spacing:.08em;
+           color:var(--text-2); border:1px solid var(--ember-dim); padding:3px 8px; }
+
+/* ---- meter bar (array/IO style) ---- */
+.meter { position:relative; height:14px; background:rgba(var(--ares-rgb),.1); overflow:hidden; }
+.meter-fill { height:100%; background:var(--ares); box-shadow:0 0 10px -2px var(--ares); transition:width var(--dur) var(--ease-out); }
