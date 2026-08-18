@@ -178,6 +178,25 @@ def _merge_and_save(old_h, old_e, new_h, new_e):
 
 # ─── Face Detection & Clustering ────────────────────────────────────
 
+def _flatten_antelopev2():
+    """The antelopev2 pack re-extracts to a nested antelopev2/antelopev2/*.onnx on
+    (re)download, so InsightFace finds zero models and asserts. Move the .onnx files
+    up one level if that nesting is present. Idempotent, best-effort."""
+    root = Path.home() / ".insightface" / "models" / "antelopev2"
+    nested = root / "antelopev2"
+    try:
+        if nested.is_dir() and not list(root.glob("*.onnx")):
+            for f in nested.glob("*.onnx"):
+                f.rename(root / f.name)
+            try:
+                nested.rmdir()
+            except OSError:
+                pass
+            print("[faces] flattened nested antelopev2 model dir")
+    except Exception as e:
+        print(f"[faces] antelopev2 flatten skipped: {e}")
+
+
 def scan_faces(photos, rescan=False):
     try:
         from insightface.app import FaceAnalysis
@@ -205,6 +224,7 @@ def scan_faces(photos, rescan=False):
         return
 
     print("[faces] Loading InsightFace antelopev2 model…")
+    _flatten_antelopev2()   # a re-download nests the .onnx one dir too deep -> load fails
     app = FaceAnalysis(name="antelopev2", providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
     app.prepare(ctx_id=0, det_size=(960, 960))
 
