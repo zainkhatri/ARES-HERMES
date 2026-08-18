@@ -9,7 +9,7 @@
     <link rel="apple-touch-icon" href="/static/icon-180.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#04070d">
+    <meta name="theme-color" content="#070403">
     {% for thumb in first_thumbs %}<link rel="preload" href="{{ thumb }}" as="image" fetchpriority="high">
     {% endfor %}
     <!-- Kick the bulk months fetch as soon as the HTML head is parsed,
@@ -30,25 +30,26 @@
        ╚══════════════════════════════════════════════════════════════════╝ */
 
     :root {
-        --bg-0:#04070d;
-        --bg-1:#070c16;
-        --bg-2:#0a121f;
-        --bg-3:#0d1726;
-        --line-1:rgba(239,68,68,0.06);
-        --line-2:rgba(239,68,68,0.18);
-        --line-3:rgba(239,68,68,0.34);
+        /* ── Palette: aligned to dashboard hud.css ── */
+        --bg-0:#070403;
+        --bg-1:#0d0605;
+        --bg-2:#140807;
+        --bg-3:#1c0c09;
+        --line-1:rgba(245,64,45,0.06);
+        --line-2:rgba(245,64,45,0.18);
+        --line-3:rgba(245,64,45,0.34);
         --hairline:rgba(255,255,255,0.04);
-        --text-1:#ecf2fa;
-        --text-2:#8ba3c0;
-        --text-3:#4a5d78;
-        --text-4:#2d3a4e;
+        --text-1:#f6ece9;
+        --text-2:#c99a90;
+        --text-3:#8d6259;
+        --text-4:#5a3d37;
         --blue:#6495ed;
         --green:#10b981;
         --amber:#f59e0b;
         --red:#ef4444;
-        --ares:#ef4444;
-        --ares-bright:#f87171;
-        --ares-dim:rgba(239,68,68,0.08);
+        --ares:#f5402d;
+        --ares-bright:#ff7a45;
+        --ares-dim:rgba(245,64,45,0.08);
 
         --grid-gap:3px;
         --thumb-size:200px;   /* used by vault / people grids */
@@ -103,8 +104,8 @@
         content:''; position:fixed; inset:0; z-index:0;
         pointer-events:none;
         background:
-          radial-gradient(900px 600px at 100% -10%, rgba(239,68,68,0.05), transparent 60%),
-          radial-gradient(1200px 800px at -10% 110%, rgba(100,149,237,0.025), transparent 70%);
+          radial-gradient(900px 600px at 100% -10%, rgba(245,64,45,0.05), transparent 60%),
+          radial-gradient(1200px 800px at -10% 110%, rgba(100,149,237,0.015), transparent 70%);
     }
     body::after {
         content:''; position:fixed; inset:0; z-index:0;
@@ -125,7 +126,7 @@
         grid-template-columns:1fr auto 1fr;
         align-items:center;
         gap:18px;
-        background:rgba(4,7,13,0.86);
+        background:rgba(7,4,3,0.86);
         backdrop-filter:blur(14px) saturate(1.2);
         -webkit-backdrop-filter:blur(14px) saturate(1.2);
         border-bottom:1px solid var(--hairline);
@@ -142,36 +143,64 @@
         pointer-events:none;
     }
 
+    /* ─── HUD chip nav — mirrors dashboard chip aesthetic ─── */
     .chrome-brand {
-        display:flex; align-items:center; gap:12px;
+        display:flex; align-items:center; gap:8px;
         min-width:0;
     }
-    .brand-mark {
-        width:28px; height:28px; flex-shrink:0;
-        display:flex; align-items:center; justify-content:center;
-        border:1px solid var(--ares);
-        font-family:'Bricolage Grotesque', sans-serif;
-        font-weight:800; font-size:14px;
-        color:var(--ares);
-        line-height:1;
-    }
-    .brand-id { display:flex; align-items:baseline; gap:10px; min-width:0; }
-    .brand-name {
-        font-family:'Bricolage Grotesque', sans-serif;
-        font-weight:700; font-size:14px;
-        color:var(--ares);
-        letter-spacing:0.04em;
-    }
-    .brand-tag {
-        font-size:10px; color:var(--text-3);
-        letter-spacing:0.18em; text-transform:uppercase;
+    /* chip: pill-bordered nav element */
+    .hud-chip {
+        display:inline-flex; align-items:center; gap:7px;
+        padding:5px 11px;
+        border:1px solid rgba(245,64,45,0.28);
+        color:var(--text-2);
+        text-decoration:none;
+        font-family:'JetBrains Mono', monospace;
+        transition:border-color 0.18s, color 0.18s, background 0.18s;
         white-space:nowrap;
+        flex-shrink:0;
     }
+    .hud-chip:hover {
+        border-color:var(--ares);
+        color:var(--text-1);
+        background:rgba(245,64,45,0.1);
+    }
+    .hud-chip.is-active {
+        border-color:var(--ares);
+        color:var(--ares);
+        background:rgba(245,64,45,0.07);
+        box-shadow:0 0 16px -7px var(--ares), inset 0 0 22px -14px var(--ares);
+    }
+    /* small square brand mark inside chip */
+    .hud-chip-mark {
+        display:grid; place-items:center;
+        width:16px; height:16px;
+        border:1px solid currentColor;
+        font-family:'Bricolage Grotesque', sans-serif;
+        font-weight:800; font-size:10px;
+        line-height:1; flex-shrink:0;
+    }
+    .hud-chip.is-active .hud-chip-mark { background:rgba(245,64,45,0.14); }
+    .hud-chip-label {
+        font-size:10.5px; font-weight:700;
+        letter-spacing:0.11em; text-transform:uppercase;
+    }
+    .hud-chip-tag {
+        font-size:9px; letter-spacing:0.10em;
+        text-transform:uppercase; opacity:0.72;
+    }
+    /* keep old .brand-mark/.brand-name/.brand-tag/.brand-count for any JS that reads them */
+    .brand-mark { display:none; }
+    .brand-id { display:none; }
+    .brand-name { display:none; }
+    .brand-tag { display:none; }
     .brand-count {
         font-size:10px; color:var(--text-2);
         letter-spacing:0.06em;
         font-variant-numeric:tabular-nums;
         white-space:nowrap;
+        /* count still visible, appended after chips */
+        padding-left:4px;
     }
 
     /* mode tabs (Photos / People) — primary nav */
@@ -279,7 +308,7 @@
         position:absolute;
         top:calc(100% + 8px); right:0;
         min-width:240px;
-        background:rgba(7,12,22,0.97);
+        background:rgba(13,6,5,0.97);
         backdrop-filter:blur(16px);
         -webkit-backdrop-filter:blur(16px);
         border:1px solid var(--line-2);
@@ -371,12 +400,23 @@
     @media (min-width:769px) and (max-width:1060px) {
         .brand-tag { display:none; }
         .mode-tab { padding:7px 8px; letter-spacing:0.08em; }
+        /* hide ZEUS chip on mid-range to reduce brand clutter */
+        .hud-chip:nth-child(3) { display:none; }
     }
     @media (min-width:769px) and (max-width:920px) {
         /* tightest desktop band: strip the brand to the logo + ARES, shrink search */
         .mode-tab { padding:6px 6px; letter-spacing:0.04em; font-size:9.5px; }
         .search-cue { width:120px; }
         .brand-name { font-size:13px; }
+        /* strip chip tags on tightest band */
+        .hud-chip-tag { display:none; }
+        .hud-chip { padding:5px 8px; gap:5px; }
+    }
+    @media (max-width:768px) {
+        /* on mobile: show only the active chip + HOME chip, hide ZEUS */
+        .hud-chip:nth-child(3) { display:none; }
+        .hud-chip-tag { display:none; }
+        .hud-chip { padding:4px 9px; }
     }
 
     @media (max-width:880px) {
@@ -545,10 +585,10 @@
            headers tanked scroll FPS. Heavier opacity at top makes it read
            as "above" the grid without any GPU compositing cost. */
         background:linear-gradient(180deg,
-            rgba(4,7,13,1)    0%,
-            rgba(4,7,13,0.98) 50%,
-            rgba(4,7,13,0.86) 80%,
-            rgba(4,7,13,0)    100%);
+            rgba(7,4,3,1)    0%,
+            rgba(7,4,3,0.98) 50%,
+            rgba(7,4,3,0.86) 80%,
+            rgba(7,4,3,0)    100%);
     }
     .month-head::after {
         content:'';
@@ -898,7 +938,7 @@
     .lb-close-x {
         width:36px; height:36px; flex-shrink:0;
         display:flex; align-items:center; justify-content:center;
-        background:rgba(4,7,13,0.65);
+        background:rgba(7,4,3,0.65);
         border:1px solid rgba(255,255,255,0.1);
         color:rgba(255,255,255,0.8);
         border-radius:50%;
@@ -908,8 +948,8 @@
         transition:background 0.15s, border-color 0.15s, transform 0.15s;
     }
     .lb-close-x:hover {
-        background:rgba(239,68,68,0.2);
-        border-color:rgba(239,68,68,0.5);
+        background:rgba(245,64,45,0.2);
+        border-color:rgba(245,64,45,0.5);
         color:#fff;
         transform:scale(1.08);
     }
@@ -918,7 +958,7 @@
     /* — nav arrows — on-hover side zones — */
     .lb-arrow {
         position:absolute; top:50%;
-        background:rgba(4,7,13,0.6);
+        background:rgba(7,4,3,0.6);
         border:1px solid rgba(255,255,255,0.08);
         color:rgba(255,255,255,0.85);
         width:42px; height:42px;
@@ -935,8 +975,8 @@
     .lb.chrome-hidden .lb-arrow { opacity:0 !important; pointer-events:none; }
     .lb-arrow:hover {
         opacity:1 !important;
-        background:rgba(239,68,68,0.2);
-        border-color:rgba(239,68,68,0.45);
+        background:rgba(245,64,45,0.2);
+        border-color:rgba(245,64,45,0.45);
         color:#fff;
     }
     .lb-arrow svg { width:15px; height:15px; stroke:currentColor; fill:none; stroke-width:2.2; }
@@ -987,7 +1027,7 @@
         transition:background 0.15s, border-color 0.15s, transform 0.15s;
     }
     .lb-play:hover {
-        background:rgba(239,68,68,0.22); border-color:var(--ares); transform:scale(1.06);
+        background:rgba(245,64,45,0.22); border-color:var(--ares); transform:scale(1.06);
     }
     .lb-play svg { width:14px; height:14px; fill:currentColor; stroke:none; }
     .lb-play.is-playing .icon-play { display:none; }
@@ -1018,7 +1058,7 @@
         background:#fff; top:50%;
         transform:translate(-50%,-50%) scale(0);
         transition:transform 0.15s var(--ease);
-        box-shadow:0 0 10px rgba(239,68,68,0.5);
+        box-shadow:0 0 10px rgba(245,64,45,0.5);
         pointer-events:none;
     }
     .lb-progress:hover .lb-progress-knob,
@@ -1054,7 +1094,7 @@
         display:inline-flex; flex-direction:column; align-items:flex-start;
         gap:2px;
         padding:7px 14px;
-        background:rgba(4,7,13,0.72);
+        background:rgba(7,4,3,0.72);
         border:1px solid rgba(255,255,255,0.07);
         border-radius:12px;
         box-shadow:0 2px 12px rgba(0,0,0,0.6);
@@ -1083,7 +1123,7 @@
 
     .lb-actions {
         display:inline-flex; align-items:center; gap:3px; padding:4px;
-        background:rgba(4,7,13,0.72);
+        background:rgba(7,4,3,0.72);
         border:1px solid rgba(255,255,255,0.07);
         border-radius:999px;
         box-shadow:0 2px 12px rgba(0,0,0,0.6);
@@ -1103,7 +1143,7 @@
     .lb-act svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:1.9; }
     .lb-act:hover { background:rgba(255,255,255,0.09); color:#fff; }
     .lb-act.danger { color:rgba(239,113,120,0.8); }
-    .lb-act.danger:hover { background:rgba(239,68,68,0.2); color:#fff; }
+    .lb-act.danger:hover { background:rgba(245,64,45,0.2); color:#fff; }
 
     /* drag-dismiss progress indicator on the .lb itself */
     .lb.lb-drag-dismiss {
@@ -1124,7 +1164,7 @@
             padding-left:calc(12px + var(--sal));
             padding-right:calc(12px + var(--sar));
             padding-bottom:calc(8px + var(--sab));
-            background:rgba(4,7,13,0.86);
+            background:rgba(7,4,3,0.86);
             backdrop-filter:blur(18px) saturate(1.2);
             -webkit-backdrop-filter:blur(18px) saturate(1.2);
             border-top:1px solid var(--hairline);
@@ -1205,7 +1245,7 @@
             top:calc(var(--chrome-h) + var(--sat));
             z-index:990;
             padding:7px calc(14px + var(--sal)) 7px calc(14px + var(--sar));
-            background:rgba(4,7,13,0.92);
+            background:rgba(7,4,3,0.92);
             backdrop-filter:blur(14px) saturate(1.2);
             -webkit-backdrop-filter:blur(14px) saturate(1.2);
             border-bottom:1px solid var(--hairline);
@@ -1283,7 +1323,7 @@
         transform:translate(-50%, 30px);
         z-index:6000;
         max-width:420px;
-        background:rgba(7,12,22,0.97);
+        background:rgba(13,6,5,0.97);
         backdrop-filter:blur(14px);
         -webkit-backdrop-filter:blur(14px);
         border:1px solid var(--line-2);
@@ -1353,7 +1393,7 @@
        ╚══════════════════════════════════════════════════════════════════╝ */
     .ctx-menu {
         position:fixed; z-index:200;
-        background:rgba(7,12,22,0.96);
+        background:rgba(13,6,5,0.96);
         backdrop-filter:blur(14px);
         -webkit-backdrop-filter:blur(14px);
         border:1px solid var(--line-2);
@@ -1375,7 +1415,7 @@
     .ctx-item svg { width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:1.8; }
     .ctx-item:hover { background:var(--bg-2); color:var(--text-1); }
     .ctx-item.danger { color:var(--red); }
-    .ctx-item.danger:hover { background:rgba(239,68,68,0.1); }
+    .ctx-item.danger:hover { background:rgba(245,64,45,0.1); }
     .ctx-sep { height:1px; background:var(--hairline); margin:2px 0; }
 
     /* ╔══════════════════════════════════════════════════════════════════╗
@@ -1423,7 +1463,7 @@
         align-items:center; justify-content:space-between; gap:18px;
         padding:14px 18px;
         margin-bottom:24px;
-        background:linear-gradient(90deg, rgba(239,68,68,0.08), rgba(239,68,68,0.02));
+        background:linear-gradient(90deg, rgba(245,64,45,0.08), rgba(245,64,45,0.02));
         border:1px solid var(--line-2);
         border-left:3px solid var(--ares);
         flex-wrap:wrap;
@@ -1515,7 +1555,7 @@
     .person-avatar:hover {
         border-color:var(--ares);
         transform:scale(1.04);
-        box-shadow:0 12px 28px rgba(239,68,68,0.18);
+        box-shadow:0 12px 28px rgba(245,64,45,0.18);
     }
     .person-avatar img {
         width:100%; height:100%; object-fit:cover;
@@ -1634,7 +1674,7 @@
     .nf-overlay {
         display:none;
         position:fixed; inset:0; z-index:9000;
-        background:rgba(4,7,13,0.985);
+        background:rgba(7,4,3,0.985);
         backdrop-filter:blur(20px);
         -webkit-backdrop-filter:blur(20px);
         flex-direction:column; align-items:center; justify-content:center;
@@ -1665,7 +1705,7 @@
         width:300px; height:300px; border-radius:50%;
         overflow:hidden; background:var(--bg-2);
         border:1px solid var(--line-2);
-        box-shadow:0 20px 60px rgba(239,68,68,0.18);
+        box-shadow:0 20px 60px rgba(245,64,45,0.18);
         flex-shrink:0;
     }
     .nf-face-wrap img { width:100%; height:100%; object-fit:cover; }
@@ -1713,7 +1753,7 @@
     .search-overlay {
         display:none;
         position:fixed; inset:0; z-index:950;
-        background:rgba(4,7,13,0.985);
+        background:rgba(7,4,3,0.985);
         backdrop-filter:blur(20px);
         -webkit-backdrop-filter:blur(20px);
         flex-direction:column;
@@ -1946,7 +1986,7 @@
         border-radius:2px;
         transition:background 0.2s;
     }
-    .fastscroll.dragging .fs-track { background:rgba(239,68,68,0.22); }
+    .fastscroll.dragging .fs-track { background:rgba(245,64,45,0.22); }
     /* year markers along the track */
     .fs-years { position:absolute; right:0; top:8px; bottom:8px; width:100%; pointer-events:none; z-index:1; }
     .fs-year {
@@ -2002,12 +2042,12 @@
     .fastscroll.dragging .fs-handle::after {
         width:6px; right:9px;
         background:var(--ares);
-        box-shadow:0 0 16px rgba(239,68,68,0.55);
+        box-shadow:0 0 16px rgba(245,64,45,0.55);
     }
     .fs-handle:active { cursor:grabbing; }
     .fs-label {
         position:absolute; right:52px; top:0;
-        background:rgba(7,12,22,0.96);
+        background:rgba(13,6,5,0.96);
         backdrop-filter:blur(14px);
         -webkit-backdrop-filter:blur(14px);
         border:1px solid var(--line-2);
@@ -2376,7 +2416,7 @@
         padding-right:calc(20px + var(--sar));
         display:flex; align-items:center; justify-content:space-between;
         gap:16px;
-        background:rgba(4,7,13,0.9);
+        background:rgba(7,4,3,0.9);
         backdrop-filter:blur(14px);
         -webkit-backdrop-filter:blur(14px);
         border-bottom:1px solid var(--line-2);
@@ -2404,7 +2444,7 @@
         transition:background 0.15s, border-color 0.15s;
     }
     .vault-lock-btn svg { width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:2; }
-    .vault-lock-btn:hover { background:rgba(239,68,68,0.14); border-color:var(--ares); }
+    .vault-lock-btn:hover { background:rgba(245,64,45,0.14); border-color:var(--ares); }
     .vault-close-btn {
         display:inline-flex; align-items:center; justify-content:center;
         width:36px; height:36px;
@@ -2481,10 +2521,10 @@
        letterspaced wordmark, ritual-grade motion. */
     .pin-overlay {
         --vau: #ef4444;            /* champagne gold */
-        --vau-dim: rgba(239,68,68,0.16);
+        --vau-dim: rgba(245,64,45,0.16);
         position:fixed; inset:0; z-index:4000;
         background:
-            radial-gradient(460px 460px at 50% 30%, rgba(239,68,68,0.06), transparent 70%),
+            radial-gradient(460px 460px at 50% 30%, rgba(245,64,45,0.06), transparent 70%),
             rgba(5,6,9,0.97);
         backdrop-filter:blur(26px) saturate(0.85);
         -webkit-backdrop-filter:blur(26px) saturate(0.85);
@@ -2501,12 +2541,12 @@
         position:absolute; top:calc(20px + var(--sat)); right:calc(20px + var(--sar));
         width:38px; height:38px; border-radius:50%;
         display:flex; align-items:center; justify-content:center;
-        border:1px solid rgba(239,68,68,0.14);
+        border:1px solid rgba(245,64,45,0.14);
         background:none; color:var(--text-3);
         transition:color 0.2s, border-color 0.2s, transform 0.2s;
     }
     .pin-overlay-close svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:1.6; }
-    .pin-overlay-close:hover { color:#ef4444; border-color:rgba(239,68,68,0.45); transform:rotate(90deg); }
+    .pin-overlay-close:hover { color:#ef4444; border-color:rgba(245,64,45,0.45); transform:rotate(90deg); }
     .pin-header { text-align:center; }
     .pin-monogram {
         position:relative; width:84px; height:84px; margin:0 auto 22px;
@@ -2515,10 +2555,10 @@
     }
     .pin-monogram .ring { position:absolute; inset:0; }
     .pin-monogram .ring circle {
-        fill:none; stroke:rgba(239,68,68,0.35); stroke-width:1;
+        fill:none; stroke:rgba(245,64,45,0.35); stroke-width:1;
     }
     .pin-monogram .ring .engrave {
-        stroke:rgba(239,68,68,0.5); stroke-dasharray:1.5 5.5; stroke-width:1;
+        stroke:rgba(245,64,45,0.5); stroke-dasharray:1.5 5.5; stroke-width:1;
         transform-origin:50% 50%;
         animation:vauRingSpin 90s linear infinite;
     }
@@ -2545,7 +2585,7 @@
     .pin-dot {
         width:11px; height:11px;
         border-radius:50%;
-        border:1px solid rgba(239,68,68,0.4);
+        border:1px solid rgba(245,64,45,0.4);
         background:transparent;
         transition:border-color 0.15s;
     }
@@ -2554,8 +2594,8 @@
         animation:vauDotBloom 0.35s var(--ease);
     }
     @keyframes vauDotBloom {
-        0% { box-shadow:0 0 0 0 rgba(239,68,68,0.5); transform:scale(0.6); }
-        100% { box-shadow:0 0 0 7px rgba(239,68,68,0); transform:scale(1); }
+        0% { box-shadow:0 0 0 0 rgba(245,64,45,0.5); transform:scale(0.6); }
+        100% { box-shadow:0 0 0 7px rgba(245,64,45,0); transform:scale(1); }
     }
     .pin-dot.error { background:var(--red); border-color:var(--red); }
     .pin-pad {
@@ -2565,7 +2605,7 @@
     .pin-key {
         width:76px; height:76px;
         display:flex; flex-direction:column; align-items:center; justify-content:center;
-        border:1px solid var(--vau-dim, rgba(239,68,68,0.16));
+        border:1px solid var(--vau-dim, rgba(245,64,45,0.16));
         background:transparent;
         color:var(--text-1);
         font-family:'Bricolage Grotesque', sans-serif;
@@ -2576,12 +2616,12 @@
         touch-action:manipulation;
     }
     @media (hover:hover) {
-        .pin-key:hover { border-color:rgba(239,68,68,0.45); }
+        .pin-key:hover { border-color:rgba(245,64,45,0.45); }
     }
     .pin-key:active {
         transform:scale(0.92);
-        background:rgba(239,68,68,0.1);
-        border-color:rgba(239,68,68,0.6);
+        background:rgba(245,64,45,0.1);
+        border-color:rgba(245,64,45,0.6);
         transition-duration:0.05s;
     }
     .pin-key.del { font-size:16px; color:var(--text-3); border-color:transparent; }
@@ -2631,7 +2671,7 @@
         align-items:center; justify-content:center; gap:9px;
         margin-top:22px;
         padding:11px 26px;
-        border:1px solid rgba(239,68,68,0.3);
+        border:1px solid rgba(245,64,45,0.3);
         background:transparent;
         color:#ef4444;
         font-family:'Bricolage Grotesque', sans-serif;
@@ -2643,9 +2683,9 @@
         touch-action:manipulation;
     }
     @media (hover:hover) {
-        .pin-biometric-btn:hover { border-color:rgba(239,68,68,0.55); box-shadow:0 0 22px rgba(239,68,68,0.1); }
+        .pin-biometric-btn:hover { border-color:rgba(245,64,45,0.55); box-shadow:0 0 22px rgba(245,64,45,0.1); }
     }
-    .pin-biometric-btn:active { background:rgba(239,68,68,0.1); }
+    .pin-biometric-btn:active { background:rgba(245,64,45,0.1); }
     .pin-biometric-btn.visible { display:flex; }
     .pin-biometric-btn svg { width:17px; height:17px; stroke:currentColor; fill:none; stroke-width:1.6; flex-shrink:0; }
     .pin-biometric-divider { display:none !important; } /* retired — capsule reads alone */
@@ -2654,11 +2694,11 @@
         margin-top:22px;
         font-size:9px; letter-spacing:0.22em; text-transform:uppercase;
         color:var(--text-4); text-decoration:none;
-        border-bottom:1px solid rgba(239,68,68,0.25);
+        border-bottom:1px solid rgba(245,64,45,0.25);
         padding-bottom:3px;
         transition:color 0.2s, border-color 0.2s;
     }
-    .pin-secure-hint:hover { color:#ef4444; border-color:rgba(239,68,68,0.55); }
+    .pin-secure-hint:hover { color:#ef4444; border-color:rgba(245,64,45,0.55); }
 
     /* ─── Vault biometric management (inside unlocked vault) ─── */
     /* Biometric management — tucked into a quiet popover behind the
@@ -2669,7 +2709,7 @@
         min-width:248px; max-width:320px;
         padding:14px 16px;
         background:rgba(9,11,16,0.98);
-        border:1px solid rgba(239,68,68,0.2);
+        border:1px solid rgba(245,64,45,0.2);
         border-radius:14px;
         box-shadow:0 20px 50px rgba(0,0,0,0.6);
         z-index:12;
@@ -2680,12 +2720,12 @@
     .vault-manage-btn {
         width:34px; height:34px; border-radius:50%;
         display:none; align-items:center; justify-content:center;
-        border:1px solid rgba(239,68,68,0.25);
+        border:1px solid rgba(245,64,45,0.25);
         background:none; color:#ef4444; cursor:pointer;
         transition:border-color 0.2s, background 0.2s;
     }
     .vault-manage-btn.available { display:flex; }
-    .vault-manage-btn:active, .vault-manage-btn.open { background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.5); }
+    .vault-manage-btn:active, .vault-manage-btn.open { background:rgba(245,64,45,0.1); border-color:rgba(245,64,45,0.5); }
     .vault-manage-btn svg { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.6; }
     .vault-biometric-enroll-btn {
         display:flex; align-items:center; gap:6px;
@@ -2720,7 +2760,7 @@
     .lb-exif-panel {
         position:absolute; inset:0; z-index:10;
         display:flex; flex-direction:column;
-        background:rgba(4,7,13,0.92);
+        background:rgba(7,4,3,0.92);
         backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
         transform:translateX(100%);
         transition:transform 0.22s cubic-bezier(0.4,0,0.2,1);
@@ -2760,7 +2800,7 @@
     .thumb-fav-badge {
         position:absolute; top:4px; right:4px;
         width:16px; height:16px;
-        background:rgba(4,7,13,0.6);
+        background:rgba(7,4,3,0.6);
         border-radius:50%;
         display:flex; align-items:center; justify-content:center;
         pointer-events:none;
@@ -2821,7 +2861,7 @@
     .sel-act.vault { color:var(--ares); border-color:var(--ares); }
     .sel-act.vault:hover { background:var(--ares-dim); }
     .sel-act.danger { color:var(--red); border-color:var(--red); }
-    .sel-act.danger:hover { background:rgba(239,68,68,0.1); }
+    .sel-act.danger:hover { background:rgba(245,64,45,0.1); }
 
     /* ── flat-list section (Favorites / Screenshots / Memories) ── */
     .flat-section { padding:0 0 32px; }
@@ -2889,6 +2929,24 @@
 <!-- ════════════════════ CHROME ════════════════════ -->
 <header class="chrome">
     <div class="chrome-brand">
+        <!-- HUD chip: active — A · ARES · PHOTOS -->
+        <span class="hud-chip is-active" aria-current="page">
+            <span class="hud-chip-mark">A</span>
+            <span class="hud-chip-label">ARES</span>
+            <span class="hud-chip-tag">· PHOTOS</span>
+        </span>
+        <!-- HUD chip: back to home -->
+        <a href="/" class="hud-chip" title="Dashboard home">
+            <span class="hud-chip-label">HOME</span>
+            <span class="hud-chip-tag">→</span>
+        </a>
+        <!-- HUD chip: jump to ZEUS (CRONOS/HERMES sister box) -->
+        <a href="/jump/zeus" class="hud-chip" title="Switch to ZEUS">
+            <span class="hud-chip-mark">H</span>
+            <span class="hud-chip-label">ZEUS</span>
+            <span class="hud-chip-tag">→</span>
+        </a>
+        <!-- hidden legacy elements kept so JS id="t-count" still resolves -->
         <a href="/" class="brand-mark" title="Home" style="text-decoration:none">A</a>
         <div class="brand-id">
             <span class="brand-name">ARES</span>
