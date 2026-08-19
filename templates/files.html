@@ -530,26 +530,23 @@
             z-index:200;
         }
         .chat-panel.open { display:flex; }
+        /* single row: title pinned left, actions right, count shrinks (no overlap) */
         .chat-head {
-            display:flex; align-items:center; justify-content:space-between; gap:8px;
-            padding:10px 14px; border-bottom:1px solid var(--line-2);
+            display:flex; align-items:center; gap:10px;
+            padding:11px 14px; border-bottom:1px solid var(--ember-dim);
             background:var(--bg-2); flex-shrink:0;
         }
-        .chat-head-left { display:flex; flex-direction:column; gap:2px; min-width:0; }
         .chat-head-title {
             font-family:'Bricolage Grotesque', sans-serif;
-            font-weight:700; font-size:14px; letter-spacing:-0.01em;
-            color:var(--ares);
+            font-weight:700; font-size:15px; letter-spacing:-0.01em;
+            color:var(--ares); white-space:nowrap; flex-shrink:0; margin-right:auto;
         }
-        .chat-head-sub {
-            font-family:'JetBrains Mono', monospace; font-size:12px;
-            color:var(--text-3); letter-spacing:0.1em; text-transform:uppercase;
-        }
-        .chat-head-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
         .chat-index-count {
-            font-family:'JetBrains Mono', monospace; font-size:12px;
-            color:var(--text-3); letter-spacing:0.06em; white-space:nowrap;
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            color:var(--text-4); letter-spacing:0.04em;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;
         }
+        @media (max-width:420px) { .chat-index-count { display:none; } }
         .chat-reindex-btn {
             font-family:'JetBrains Mono', monospace; font-size:12px;
             letter-spacing:0.12em; text-transform:uppercase;
@@ -852,15 +849,10 @@
             <!-- ── Chat side-panel ── -->
             <div class="chat-panel mod c-tr c-br" id="chat-panel" role="complementary" aria-label="Ask about files">
                 <div class="chat-head">
-                    <div class="chat-head-left">
-                        <span class="chat-head-title">✦ Ask</span>
-                        <span class="chat-head-sub">Llama · file search</span>
-                    </div>
-                    <div class="chat-head-right">
-                        <span class="chat-index-count" id="chat-index-count">—</span>
-                        <button class="chat-reindex-btn" id="chat-reindex-btn" title="Rebuild file index">Reindex</button>
-                        <button class="chat-close" id="chat-close">✕</button>
-                    </div>
+                    <span class="chat-head-title">✦ Ask</span>
+                    <span class="chat-index-count" id="chat-index-count">—</span>
+                    <button class="chat-reindex-btn" id="chat-reindex-btn" title="Rebuild file index">Reindex</button>
+                    <button class="chat-close" id="chat-close" aria-label="Close">✕</button>
                 </div>
                 <div class="chat-msgs" id="chat-msgs" role="log" aria-live="polite"></div>
                 <div class="chat-footer">
