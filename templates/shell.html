@@ -12,9 +12,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content, viewport-fit=cover">
     <style>
-    /* ponytail: token bridge — maps old shell.html var names → hud.css vars so JS-built UI still picks up colors */
+    /* ponytail: token bridge — maps old shell.html var names → hud.css vars so JS-built UI still picks up colors.
+       NOTE: never redefine --bg-0/1/2 here — hud.css already sets them; a self-referential
+       `--bg-0:var(--bg-0,…)` is a CSS cycle that voids the variable and paints the page white. */
     :root {
-        --bg-0:var(--bg-0, #04070d); --bg-1:var(--bg-1, #070c16); --bg-2:var(--bg-2, #0a121f);
         --nav-ares:var(--ares, #ef4444); --nav-blue:#6495ed; --zeus:#22d3ee;
         --nav-line:rgba(239,68,68,0.08); --nav-line-2:rgba(239,68,68,0.18);
         --nav-text-2:var(--text-2, #8ba3c0); --nav-text-3:var(--text-3, #4a5d78);
@@ -87,7 +88,17 @@
        opens the *layout* viewport (and 100dvh) shrinks to the area above it — the
        terminal + accessory bar stay visible, the keybar rides just above the
        keyboard. */
-    #term { flex:1 1 auto; width:100%; border:0; display:block; background:var(--bg-0); min-height:0; }
+    #term { flex:1 1 auto; width:100%; border:0; display:block; background:var(--bg-0,#070403); min-height:0; }
+
+    /* Live connection dot in the panel head (replaces bare "ttyd" text). */
+    #term-status { display:inline-flex; align-items:center; gap:7px; font-size:11px; letter-spacing:.12em;
+                   text-transform:uppercase; color:var(--text-3); }
+    #term-status::before { content:''; width:7px; height:7px; border-radius:50%; background:var(--text-4);
+                           box-shadow:0 0 0 0 transparent; transition:background .2s, box-shadow .2s; }
+    #term-status.live::before { background:var(--green); box-shadow:0 0 9px -1px var(--green); }
+    #term-status.live { color:var(--text-2); }
+    #term-status.dead::before { background:var(--amber); box-shadow:0 0 9px -1px var(--amber); }
+    #term-status.dead { color:var(--amber); }
     .xterm-mount { width:100%; height:100%; }
     #term .xterm { height:100%; padding:8px 10px; }
     #term .xterm-viewport::-webkit-scrollbar { width:9px; }
@@ -333,7 +344,7 @@
             ws.send(JSON.stringify({ open: 'web' }));     // attach tmux session "web"
             try { fit.fit(); ws.send(JSON.stringify({ cols: term.cols, rows: term.rows })); } catch (e) {}
             term.focus();
-            var st = document.getElementById('term-status'); if (st) st.textContent = 'pty · web';
+            var st = document.getElementById('term-status'); if (st) { st.textContent = 'pty · web'; st.className = 'mod-meta live'; }
         };
         ws.onmessage = function (ev) {
             if (typeof ev.data === 'string') {            // control JSON (e.g. {windows:[...]})
@@ -344,7 +355,7 @@
         };
         ws.onclose = function () {
             _wsRetry = Math.min(_wsRetry + 1, 6);
-            var st = document.getElementById('term-status'); if (st) st.textContent = 'reconnecting…';
+            var st = document.getElementById('term-status'); if (st) { st.textContent = 'reconnecting…'; st.className = 'mod-meta dead'; }
             setTimeout(connectPty, 400 * _wsRetry);       // backoff reconnect
         };
         ws.onerror = function () { try { ws.close(); } catch (e) {} };
