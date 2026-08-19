@@ -429,9 +429,9 @@
        ╚══════════════════════════════════════════════════════════════════╝ */
     .page {
         position:relative; z-index:1;
-        max-width:1320px; margin:0 auto; width:100%;
-        padding-left:calc(28px + var(--sal));
-        padding-right:calc(28px + var(--sar) + var(--scrubber-gutter));
+        max-width:none; margin:0; width:100%;   /* was capped at 1320px + centered → blank margins on wide screens */
+        padding-left:calc(14px + var(--sal));
+        padding-right:calc(14px + var(--sar) + var(--scrubber-gutter));
         padding-bottom:calc(72px + var(--sab));
     }
 
