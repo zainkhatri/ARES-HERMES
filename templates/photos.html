@@ -2879,11 +2879,17 @@
         font-size:10px; letter-spacing:0.18em; text-transform:uppercase;
         font-weight:700; color:rgba(255,255,255,0.38);
     }
+    /* Screenshots / Favorites are uniform tiles → a fixed grid, NOT justified rows.
+       (Justified flex with bad/missing --ar blew each tile up to full width = a 1-per-row mess.) */
     .flat-grid {
-        display:flex; flex-wrap:wrap; gap:2px; padding:0 2px;
+        display:grid;
+        grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));
+        gap:3px; padding:0 2px;
     }
-    /* Do NOT override .thumb flex here — the ar-based flex-grow/flex-basis
-       layout requires the defaults from .thumb to remain intact. */
+    .flat-grid .thumb {
+        flex:none; width:auto; min-width:0;
+        aspect-ratio:1;   /* uniform square cell; img object-fit:cover fills it */
+    }
 
     /* ── memories panel ── */
     #memories-panel { padding:0 0 80px; }
