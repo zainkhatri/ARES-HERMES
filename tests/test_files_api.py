@@ -34,3 +34,30 @@ def test_safe_resolve_rules():
         assert r("\x00") is None                    # NUL byte
     finally:
         shutil.rmtree(root)
+
+def test_kind_for():
+    assert files_api.kind_for("a.PDF") == "pdf"
+    assert files_api.kind_for("a.jpg") == "image"
+    assert files_api.kind_for("a.mp4") == "video"
+    assert files_api.kind_for("a.flac") == "audio"
+    assert files_api.kind_for("a.md") == "md"
+    assert files_api.kind_for("a.py") == "text"
+    assert files_api.kind_for("a.bin") == "file"
+
+def test_list_dir_filters_and_sorts():
+    root = tempfile.mkdtemp()
+    try:
+        os.makedirs(os.path.join(root, "zdir"))
+        os.makedirs(os.path.join(root, "adir"))
+        os.makedirs(os.path.join(root, ".vault"))       # excluded (deny + dot)
+        for n in ("b.txt", "a.txt", ".hidden"):
+            open(os.path.join(root, n), "w").close()
+        out = files_api.list_dir(root, root=root)
+        names = [e["name"] for e in out["entries"]]
+        assert names == ["adir", "zdir", "a.txt", "b.txt"]   # dirs first, then name
+        assert ".vault" not in names and ".hidden" not in names
+        assert out["parent"] is None and out["cwd"] == ""
+        assert out["truncated"] is False
+        assert out["entries"][2]["kind"] == "text"
+    finally:
+        shutil.rmtree(root)
