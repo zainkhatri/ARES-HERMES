@@ -259,6 +259,124 @@ def content_search(query, limit=6, db=INDEX_DB):
              "snippet": " ".join((r[1] or "").split())} for r in rows]
 
 
+# ── Semantic search (Phase 3): doc-chunk embeddings via Ollama + numpy cosine ──
+# numpy imported lazily inside functions so a missing dep never breaks import.
+EMB_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+EMB_FILE = os.path.join(_APP_ROOT, "ai_data", "doc_embeddings.npy")
+CHUNKS_FILE = os.path.join(_APP_ROOT, "ai_data", "doc_chunks.json")
+CHUNK_SIZE = 500
+CHUNK_OVERLAP = 80
+EMB_BATCH = 64
+EMB_CHUNK_CAP = 200_000        # hard upper bound on total chunks (Power of Ten rule 2)
+
+
+def _chunk(text):
+    assert isinstance(text, str), "text must be str"
+    step = CHUNK_SIZE - CHUNK_OVERLAP
+    assert step > 0, "overlap must be < size"
+    out, i, n = [], 0, len(text)
+    while i < n:                                   # bounded: i advances by step each pass
+        piece = text[i:i + CHUNK_SIZE].strip()
+        if piece:
+            out.append(piece)
+        i += step
+    return out
+
+
+def _embed(texts):
+    """Embed a list of strings via Ollama /api/embed (stdlib urllib). -> list[vec]."""
+    assert isinstance(texts, list) and texts, "texts must be non-empty list"
+    import json as _json, urllib.request as _u
+    host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+    body = _json.dumps({"model": EMB_MODEL, "input": texts}).encode()
+    req = _u.Request(host + "/api/embed", data=body,
+                     headers={"Content-Type": "application/json"})
+    with _u.urlopen(req, timeout=300) as r:
+        return _json.loads(r.read()).get("embeddings", [])
+
+
+def embed_docs(db=INDEX_DB):
+    """Embed all content_fts doc chunks → EMB_FILE + CHUNKS_FILE. Returns chunk
+    count. Best-effort: any failure leaves prior files intact and returns 0."""
+    assert isinstance(db, str) and db, "db required"
+    if not os.path.exists(db):
+        return 0
+    # Never attempt a full embed while the GPU is on loan (VM200 gaming): CPU
+    # embedding is ~1000x slower and would wedge the reindex thread for hours.
+    if os.path.exists(os.path.join(_APP_ROOT, ".gpu-on-loan")):
+        return 0
+    import json as _json
+    import numpy as _np
+    con = sqlite3.connect(db)
+    try:
+        rows = con.execute("SELECT path, body FROM content_fts").fetchall()
+    except sqlite3.OperationalError:
+        return 0
+    finally:
+        con.close()
+    chunks = []
+    for path, body in rows:
+        for piece in _chunk(body or ""):
+            chunks.append({"path": path, "chunk": piece})
+        if len(chunks) >= EMB_CHUNK_CAP:
+            break
+    if not chunks:
+        return 0
+    try:
+        vecs = []
+        for i in range(0, len(chunks), EMB_BATCH):
+            vecs.extend(_embed([c["chunk"] for c in chunks[i:i + EMB_BATCH]]))
+            time.sleep(_THROTTLE)
+        mat = _np.asarray(vecs, dtype="float32")
+        assert mat.shape[0] == len(chunks), "embed count mismatch"
+        norms = _np.linalg.norm(mat, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        mat = mat / norms
+        os.makedirs(os.path.dirname(EMB_FILE), exist_ok=True)
+        _np.save(EMB_FILE + ".tmp.npy", mat)
+        os.replace(EMB_FILE + ".tmp.npy", EMB_FILE)
+        with open(CHUNKS_FILE + ".tmp", "w") as fh:
+            _json.dump(chunks, fh)
+        os.replace(CHUNKS_FILE + ".tmp", CHUNKS_FILE)
+    except Exception:
+        return 0
+    return len(chunks)
+
+
+def semantic_search(query, k=8, db=INDEX_DB):
+    """Cosine top-k over doc-chunk embeddings, deduped by path. -> [{path,chunk,score}]."""
+    assert isinstance(query, str), "query must be str"
+    assert isinstance(k, int) and k > 0, "k must be positive int"
+    if not query.strip() or not (os.path.exists(EMB_FILE) and os.path.exists(CHUNKS_FILE)):
+        return []
+    import json as _json
+    import numpy as _np
+    try:
+        qv = _embed([query])
+        if not qv:
+            return []
+        q = _np.asarray(qv[0], dtype="float32")
+        q = q / (_np.linalg.norm(q) or 1.0)
+        mat = _np.load(EMB_FILE, mmap_mode="r")
+        chunks = _json.load(open(CHUNKS_FILE))
+    except Exception:
+        return []
+    if mat.shape[0] != len(chunks):
+        return []
+    sims = _np.asarray(mat @ q)
+    order = _np.argsort(-sims)[:k * 4]             # oversample, dedupe by path below
+    out, seen = [], set()
+    for idx in order:
+        c = chunks[int(idx)]
+        if c["path"] in seen:
+            continue
+        seen.add(c["path"])
+        out.append({"path": c["path"], "chunk": c["chunk"], "score": float(sims[int(idx)])})
+        if len(out) >= k:
+            break
+    return out
+
+
 def index_status(db=INDEX_DB):
     """Return build state; fills count from the DB if idle and present."""
     st = dict(_state)
@@ -284,6 +402,10 @@ def start_reindex():
         try:
             n = build_index()
             _state.update(count=n, built_at=int(time.time()))
+            try:
+                embed_docs()                       # best-effort semantic index (Phase 3)
+            except Exception:
+                pass
         except Exception as e:                              # pragma: no cover
             _state["error"] = str(e)
         finally:
