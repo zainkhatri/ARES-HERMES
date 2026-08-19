@@ -1,4 +1,4 @@
-{# ARES · Files — storage explorer. Browse PROMETHEUS filesystem. #}
+{# ARES · Files — Finder-style storage explorer. #}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,6 +22,7 @@
             --ares:#ef4444; --ares-bright:#f87171;
             --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
             --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
+            --sidebar-w:220px;
         }
         * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         html, body {
@@ -32,7 +33,7 @@
         ::selection { background:var(--ares); color:var(--bg-0); }
         .app { display:flex; flex-direction:column; min-height:100vh; min-height:100dvh; }
 
-        /* ═══ Navbar — identical structure to drives.html ═══ */
+        /* ═══ Navbar ═══ */
         .navbar {
             position:sticky; top:0; z-index:1000;
             background:rgba(4,7,13,0.92);
@@ -64,13 +65,23 @@
             font-family:'JetBrains Mono', monospace; font-size:10px;
             color:var(--text-2); text-decoration:none;
             letter-spacing:0.15em; text-transform:uppercase;
-            padding:5px 11px;
-            border:1px solid var(--line-2);
+            padding:5px 11px; border:1px solid var(--line-2);
             transition:color 0.15s, border-color 0.15s, background 0.15s, gap 0.15s;
         }
         .back-chip svg { transition:transform 0.18s ease; }
         .back-chip:hover { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.05); }
         .back-chip:hover svg { transform:translateX(-2px); }
+        /* hamburger (mobile sidebar toggle) */
+        .hamburger {
+            display:none; align-items:center; justify-content:center;
+            width:32px; height:32px; cursor:pointer;
+            background:none; border:1px solid var(--line-2); color:var(--text-2);
+            transition:color 0.15s, border-color 0.15s;
+        }
+        .hamburger:hover { color:var(--ares); border-color:var(--ares); }
+        @media (max-width:900px) {
+            .hamburger { display:flex; }
+        }
         @media (max-width:600px) {
             .navbar { padding:12px 14px; gap:10px; }
             .nbr-tag { display:none; }
@@ -78,19 +89,98 @@
             .back-chip { padding:5px 8px; }
         }
 
-        /* ═══ Main ═══ */
+        /* ═══ Main layout: sidebar + content + preview ═══ */
         main {
             flex:1;
-            padding:28px 32px;
-            padding-left:calc(32px + var(--sal));
-            padding-right:calc(32px + var(--sar));
-            max-width:1400px; margin:0 auto; width:100%;
+            display:flex;
+            gap:0;
+            align-items:stretch;
+            max-width:100%;
+            overflow:hidden;
+        }
+
+        /* ═══ Folder-tree sidebar ═══ */
+        .sidebar {
+            width:var(--sidebar-w);
+            flex-shrink:0;
+            border-right:1px solid var(--line-2);
+            background:var(--bg-1);
+            overflow-y:auto;
+            overflow-x:hidden;
+            padding:12px 0 20px;
+            /* sticky so it fills the viewport height */
+            position:sticky;
+            top:57px; /* approx navbar height */
+            height:calc(100vh - 57px);
+            height:calc(100dvh - 57px);
+            transition:transform 0.22s ease, width 0.22s ease;
+        }
+        .sidebar.collapsed {
+            width:0; padding:0; border-right:none;
+            transform:translateX(-100%);
+            overflow:hidden;
+        }
+        @media (max-width:900px) {
+            .sidebar {
+                position:fixed; left:0; top:0; bottom:0; height:100vh; height:100dvh;
+                z-index:500; top:0; padding-top:calc(57px + var(--sat));
+                box-shadow:4px 0 24px rgba(0,0,0,0.5);
+            }
+            .sidebar.collapsed { transform:translateX(calc(-1 * var(--sidebar-w))); width:var(--sidebar-w); }
+            .sidebar-overlay {
+                display:none; position:fixed; inset:0; z-index:499;
+                background:rgba(4,7,13,0.6); backdrop-filter:blur(2px);
+            }
+            .sidebar-overlay.open { display:block; }
+        }
+
+        .tree-root { list-style:none; }
+        .tree-node { }
+        .tree-row {
+            display:flex; align-items:center; gap:6px;
+            padding:5px 12px; cursor:pointer;
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            color:var(--text-2); letter-spacing:0.04em;
+            transition:background 0.1s, color 0.1s;
+            user-select:none; white-space:nowrap;
+        }
+        .tree-row:hover { background:var(--bg-2); color:var(--text-1); }
+        .tree-row.active { color:var(--ares); background:rgba(239,68,68,0.07); }
+        .tree-toggle {
+            width:12px; flex-shrink:0; color:var(--text-4);
+            transition:transform 0.15s;
+            display:flex; align-items:center; justify-content:center;
+        }
+        .tree-toggle.open { transform:rotate(90deg); }
+        .tree-icon { flex-shrink:0; color:var(--amber); }
+        .tree-label { overflow:hidden; text-overflow:ellipsis; min-width:0; }
+        .tree-children {
+            list-style:none;
+            padding-left:14px;
+            border-left:1px solid var(--line-1);
+            margin-left:18px;
+            display:none;
+        }
+        .tree-children.open { display:block; }
+
+        /* ═══ Content area ═══ */
+        .content-area {
+            flex:1; min-width:0;
+            display:flex; gap:0; align-items:flex-start;
+        }
+        .explorer-main {
+            flex:1; min-width:0;
+            padding:20px 24px;
+            overflow:auto;
+        }
+        @media (max-width:600px) {
+            .explorer-main { padding:14px 12px; }
         }
 
         /* ═══ Section head ═══ */
         .section-head {
             display:flex; justify-content:space-between; align-items:baseline;
-            margin-bottom:18px;
+            margin-bottom:12px;
             padding-bottom:10px;
             border-bottom:1px solid var(--line-1);
             gap:16px; flex-wrap:wrap;
@@ -110,19 +200,15 @@
         /* ═══ Breadcrumb ═══ */
         .breadcrumb {
             display:flex; align-items:center; gap:0; flex-wrap:wrap;
-            margin-bottom:16px;
+            margin-bottom:10px;
             font-family:'JetBrains Mono', monospace; font-size:11px;
             letter-spacing:0.08em;
-            background:var(--bg-1);
-            border:1px solid var(--line-2);
-            padding:8px 14px;
-            min-height:36px;
+            background:var(--bg-1); border:1px solid var(--line-2);
+            padding:7px 12px; min-height:34px;
         }
         .bc-seg {
             color:var(--text-2); cursor:pointer; text-decoration:none;
-            padding:2px 4px;
-            transition:color 0.15s;
-            white-space:nowrap;
+            padding:2px 4px; transition:color 0.15s; white-space:nowrap;
         }
         .bc-seg:hover { color:var(--ares); }
         .bc-sep { color:var(--text-4); padding:0 2px; user-select:none; }
@@ -130,68 +216,122 @@
 
         /* ═══ Controls row ═══ */
         .controls {
-            display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+            display:flex; align-items:center; gap:8px; flex-wrap:wrap;
             margin-bottom:12px;
         }
+        /* Up button */
+        .up-btn {
+            display:inline-flex; align-items:center; gap:6px;
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            letter-spacing:0.15em; text-transform:uppercase;
+            color:var(--text-2); background:var(--bg-1); border:1px solid var(--line-2);
+            padding:6px 12px; cursor:pointer; flex-shrink:0;
+            transition:color 0.15s, border-color 0.15s, background 0.15s;
+        }
+        .up-btn:hover:not(:disabled) { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.05); }
+        .up-btn:disabled { opacity:0.3; cursor:not-allowed; }
         .filter-input {
-            flex:1; min-width:180px; max-width:340px;
+            flex:1; min-width:160px; max-width:300px;
             background:var(--bg-1); border:1px solid var(--line-2); color:var(--text-1);
             font-family:'JetBrains Mono', monospace; font-size:11px;
-            padding:6px 12px; letter-spacing:0.04em;
-            outline:none; transition:border-color 0.15s;
+            padding:6px 12px; letter-spacing:0.04em; outline:none;
+            transition:border-color 0.15s;
         }
         .filter-input::placeholder { color:var(--text-3); }
         .filter-input:focus { border-color:var(--ares); }
-        .sort-group {
-            display:flex; gap:0; flex-shrink:0;
-        }
+        .sort-group { display:flex; gap:0; flex-shrink:0; }
         .sort-btn {
             font-family:'JetBrains Mono', monospace; font-size:9px;
             letter-spacing:0.18em; text-transform:uppercase;
             color:var(--text-3); background:var(--bg-1); border:1px solid var(--line-2);
-            padding:6px 12px; cursor:pointer;
+            padding:6px 10px; cursor:pointer; margin-left:-1px;
             transition:color 0.15s, background 0.15s, border-color 0.15s;
-            margin-left:-1px;
         }
         .sort-btn:first-child { margin-left:0; }
         .sort-btn:hover { color:var(--text-1); }
         .sort-btn.active { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.06); z-index:1; position:relative; }
+        /* View toggle */
+        .view-toggle { display:flex; gap:0; flex-shrink:0; }
+        .view-btn {
+            font-family:'JetBrains Mono', monospace; font-size:9px;
+            letter-spacing:0.15em; text-transform:uppercase;
+            color:var(--text-3); background:var(--bg-1); border:1px solid var(--line-2);
+            padding:6px 10px; cursor:pointer; margin-left:-1px;
+            transition:color 0.15s, background 0.15s, border-color 0.15s;
+            display:flex; align-items:center; gap:5px;
+        }
+        .view-btn:first-child { margin-left:0; }
+        .view-btn.active { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.06); z-index:1; position:relative; }
 
         /* ═══ Truncation notice ═══ */
         .truncated-notice {
             font-family:'JetBrains Mono', monospace; font-size:10px;
             color:var(--amber); letter-spacing:0.12em;
-            padding:7px 14px;
-            border:1px solid rgba(245,158,11,0.25);
-            background:rgba(245,158,11,0.04);
-            margin-bottom:12px;
+            padding:7px 14px; border:1px solid rgba(245,158,11,0.25);
+            background:rgba(245,158,11,0.04); margin-bottom:12px;
         }
 
-        /* ═══ File table ═══ */
-        .file-table {
-            border:1px solid var(--line-2);
-            background:var(--bg-1);
-        }
-        .ft-head {
+        /* ═══ GRID view ═══ */
+        .file-grid {
             display:grid;
-            grid-template-columns:28px 1fr 90px 130px;
-            align-items:center;
-            padding:8px 16px;
-            border-bottom:1px solid var(--line-2);
-            background:var(--bg-2);
-            font-family:'JetBrains Mono', monospace;
-            font-size:9px; font-weight:700;
+            grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));
+            gap:10px;
+        }
+        .fg-tile {
+            display:flex; flex-direction:column; align-items:center;
+            padding:12px 8px 10px;
+            background:var(--bg-1); border:1px solid var(--line-1);
+            cursor:pointer; transition:background 0.12s, border-color 0.15s;
+            user-select:none; min-width:0;
+        }
+        .fg-tile:hover { background:var(--bg-2); border-color:var(--line-2); }
+        .fg-tile.selected { border-color:var(--ares); background:rgba(239,68,68,0.06); }
+        .fg-thumb-wrap {
+            width:80px; height:80px; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center;
+            position:relative; margin-bottom:8px;
+        }
+        .fg-thumb {
+            width:80px; height:80px; object-fit:cover;
+            border:1px solid var(--line-2); display:block;
+        }
+        .fg-icon-wrap {
+            width:80px; height:80px;
+            display:flex; align-items:center; justify-content:center;
+        }
+        .fg-icon-wrap svg { width:40px; height:40px; }
+        .fg-name {
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:600; font-size:12px; letter-spacing:-0.01em;
+            color:var(--text-1); text-align:center;
+            width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        }
+        .fg-tile:hover .fg-name { color:var(--ares-bright); }
+        .fg-sub {
+            font-family:'JetBrains Mono', monospace; font-size:9px;
+            color:var(--text-3); margin-top:2px; letter-spacing:0.04em;
+        }
+        .fg-empty, .ft-empty {
+            padding:48px 0; text-align:center;
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            color:var(--text-3); letter-spacing:0.2em; text-transform:uppercase;
+        }
+
+        /* ═══ LIST view ═══ */
+        .file-table { border:1px solid var(--line-2); background:var(--bg-1); }
+        .ft-head {
+            display:grid; grid-template-columns:28px 1fr 90px 130px;
+            align-items:center; padding:8px 16px;
+            border-bottom:1px solid var(--line-2); background:var(--bg-2);
+            font-family:'JetBrains Mono', monospace; font-size:9px; font-weight:700;
             color:var(--text-3); letter-spacing:0.22em; text-transform:uppercase;
         }
         .ft-head .num-col { text-align:right; }
         .ft-row {
-            display:grid;
-            grid-template-columns:28px 1fr 90px 130px;
-            align-items:center;
-            padding:10px 16px;
+            display:grid; grid-template-columns:28px 1fr 90px 130px;
+            align-items:center; padding:10px 16px;
             border-bottom:1px solid var(--line-1);
-            cursor:pointer;
-            transition:background 0.12s;
+            cursor:pointer; transition:background 0.12s;
             text-decoration:none; color:inherit;
         }
         .ft-row:last-child { border-bottom:0; }
@@ -199,8 +339,7 @@
         .ft-row.selected { background:rgba(239,68,68,0.06); }
         .ft-icon {
             display:flex; align-items:center; justify-content:center;
-            width:18px; height:18px; flex-shrink:0;
-            color:var(--text-3);
+            width:18px; height:18px; flex-shrink:0; color:var(--text-3);
         }
         .ft-icon.kind-dir   { color:var(--amber); }
         .ft-icon.kind-image { color:var(--cyan); }
@@ -213,9 +352,8 @@
         .ft-name {
             font-family:'Bricolage Grotesque', sans-serif;
             font-weight:600; font-size:14px; letter-spacing:-0.01em;
-            color:var(--text-1);
-            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-            padding-right:12px;
+            color:var(--text-1); overflow:hidden; text-overflow:ellipsis;
+            white-space:nowrap; padding-right:12px;
         }
         .ft-row:hover .ft-name { color:var(--ares-bright); }
         .ft-size {
@@ -226,82 +364,50 @@
             font-family:'JetBrains Mono', monospace; font-size:10px;
             color:var(--text-3); text-align:right; letter-spacing:0.04em;
         }
-        .ft-empty {
-            padding:48px 0; text-align:center;
-            font-family:'JetBrains Mono', monospace; font-size:11px;
-            color:var(--text-3); letter-spacing:0.2em; text-transform:uppercase;
-        }
 
-        /* ═══ Layout: list + preview ═══ */
-        .explorer {
-            display:flex; gap:0; align-items:flex-start;
-        }
-        .explorer-list {
-            flex:1; min-width:0;
-        }
+        /* ═══ Preview pane ═══ */
         .explorer-preview {
-            width:460px; flex-shrink:0;
-            margin-left:20px;
-            position:sticky; top:80px;
-            max-height:calc(100vh - 100px);
+            width:400px; flex-shrink:0;
+            border-left:1px solid var(--line-2); background:var(--bg-1);
+            position:sticky; top:57px;
+            height:calc(100vh - 57px); height:calc(100dvh - 57px);
             overflow-y:auto;
-            border:1px solid var(--line-2);
-            background:var(--bg-1);
-            display:none;
+            display:none; flex-direction:column;
         }
-        .explorer-preview.open { display:flex; flex-direction:column; }
+        .explorer-preview.open { display:flex; }
         .preview-head {
             display:flex; align-items:center; justify-content:space-between; gap:10px;
-            padding:10px 14px;
-            border-bottom:1px solid var(--line-2);
-            background:var(--bg-2);
-            flex-shrink:0;
+            padding:10px 14px; border-bottom:1px solid var(--line-2);
+            background:var(--bg-2); flex-shrink:0;
         }
         .preview-name {
             font-family:'Bricolage Grotesque', sans-serif;
             font-weight:700; font-size:13px; letter-spacing:-0.01em;
-            color:var(--text-1);
-            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-            min-width:0;
+            color:var(--text-1); overflow:hidden; text-overflow:ellipsis;
+            white-space:nowrap; min-width:0;
         }
         .preview-close {
-            color:var(--text-3); cursor:pointer; background:none; border:none;
+            color:var(--text-3); cursor:pointer; background:none;
             font-family:'JetBrains Mono', monospace; font-size:11px;
             letter-spacing:0.12em; text-transform:uppercase; flex-shrink:0;
             padding:3px 8px; border:1px solid var(--line-2);
             transition:color 0.15s, border-color 0.15s;
         }
         .preview-close:hover { color:var(--ares); border-color:var(--ares); }
-        .preview-body {
-            flex:1; padding:14px; min-height:0; overflow:auto;
-        }
-        .preview-img {
-            max-width:100%; display:block; margin:0 auto;
-            border:1px solid var(--line-2);
-        }
-        .preview-video, .preview-audio {
-            width:100%; display:block;
-        }
-        .preview-iframe {
-            width:100%; height:560px; border:none; display:block;
-            background:var(--bg-2);
-        }
+        .preview-body { flex:1; padding:14px; min-height:0; overflow:auto; }
+        .preview-img { max-width:100%; display:block; margin:0 auto; border:1px solid var(--line-2); }
+        .preview-video, .preview-audio { width:100%; display:block; }
+        .preview-iframe { width:100%; height:520px; border:none; display:block; background:var(--bg-2); }
         .preview-text {
             font-family:'JetBrains Mono', monospace; font-size:11px;
-            color:var(--text-2); line-height:1.7;
-            white-space:pre-wrap; word-break:break-all;
+            color:var(--text-2); line-height:1.7; white-space:pre-wrap; word-break:break-all;
             max-height:500px; overflow-y:auto;
         }
-        .preview-meta {
-            font-family:'JetBrains Mono', monospace; font-size:11px;
-            color:var(--text-2); line-height:2; letter-spacing:0.04em;
-        }
+        .preview-meta { font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--text-2); line-height:2; letter-spacing:0.04em; }
         .preview-meta .mk { color:var(--text-3); }
         .preview-footer {
-            padding:10px 14px;
-            border-top:1px solid var(--line-2);
-            background:var(--bg-2);
-            flex-shrink:0;
+            padding:10px 14px; border-top:1px solid var(--line-2);
+            background:var(--bg-2); flex-shrink:0;
         }
         .dl-btn {
             display:inline-flex; align-items:center; gap:8px;
@@ -330,27 +436,26 @@
 
         /* ═══ Footer ═══ */
         footer {
-            border-top:1px solid var(--line-1);
-            padding:14px 32px;
+            border-top:1px solid var(--line-1); padding:14px 32px;
             padding-bottom:calc(14px + var(--sab));
-            font-family:'JetBrains Mono', monospace;
-            font-size:10px; color:var(--text-3);
+            font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--text-3);
             letter-spacing:0.12em; text-transform:uppercase;
             display:flex; justify-content:space-between; flex-shrink:0;
         }
         footer a { color:var(--text-3); text-decoration:none; }
         footer a:hover { color:var(--ares); }
 
+        /* ═══ Responsive ═══ */
         @media (max-width:900px) {
-            .explorer { flex-direction:column; }
-            .explorer-preview { width:100%; margin-left:0; margin-top:16px; position:static; max-height:none; }
+            .explorer-preview { width:100%; border-left:none; border-top:1px solid var(--line-2); position:static; height:auto; }
+            .content-area { flex-direction:column; }
             .ft-head, .ft-row { grid-template-columns:28px 1fr 90px; }
             .ft-head .date-col, .ft-row .ft-date { display:none; }
         }
         @media (max-width:600px) {
-            main { padding:16px 14px; }
             .ft-head, .ft-row { grid-template-columns:24px 1fr; }
             .ft-head .size-col, .ft-row .ft-size { display:none; }
+            .file-grid { grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:8px; }
         }
         @media (prefers-reduced-motion: reduce) {
             .loading .glyph { animation:none !important; opacity:1 !important; }
@@ -363,6 +468,9 @@
 <div class="app">
     <header class="navbar">
         <div class="navbar-left">
+            <button class="hamburger" id="hamburger" aria-label="Toggle folder tree" title="Toggle folder tree">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
             <a href="/" class="nbr nbr-self">
                 <div class="nbr-mark m-a">A</div>
                 <div class="nbr-id">
@@ -378,41 +486,73 @@
         </div>
     </header>
 
+    <!-- mobile overlay for sidebar -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
     <main>
-        <div class="section-head">
-            <div class="section-title">Storage <span class="dim">/ explorer</span></div>
-            <div class="section-meta" id="entry-count">—</div>
-        </div>
+        <!-- ── Folder tree sidebar ── -->
+        <nav class="sidebar" id="sidebar" aria-label="Folder tree">
+            <ul class="tree-root" id="tree-root"></ul>
+        </nav>
 
-        <nav class="breadcrumb" id="breadcrumb" aria-label="Current path"></nav>
+        <!-- ── Content + preview ── -->
+        <div class="content-area">
+            <div class="explorer-main">
+                <div class="section-head">
+                    <div class="section-title">Storage <span class="dim">/ explorer</span></div>
+                    <div class="section-meta" id="entry-count">—</div>
+                </div>
 
-        <div class="controls">
-            <input class="filter-input" id="filter-input" type="text" placeholder="Filter this folder" autocomplete="off" spellcheck="false">
-            <div class="sort-group" role="group" aria-label="Sort by">
-                <button class="sort-btn active" data-sort="name">Name</button>
-                <button class="sort-btn" data-sort="date">Date</button>
-                <button class="sort-btn" data-sort="size">Size</button>
-            </div>
-        </div>
+                <nav class="breadcrumb" id="breadcrumb" aria-label="Current path"></nav>
 
-        <div id="truncated-notice" class="truncated-notice" style="display:none">
-            Showing first 2000 entries — narrow with the filter to see more
-        </div>
-
-        <div class="explorer">
-            <div class="explorer-list">
-                <div class="file-table" id="file-table">
-                    <div class="ft-head">
-                        <span></span>
-                        <span>Name</span>
-                        <span class="num-col size-col">Size</span>
-                        <span class="num-col date-col">Modified</span>
+                <div class="controls">
+                    <button class="up-btn" id="up-btn" disabled title="Go up one level">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+                        Up
+                    </button>
+                    <input class="filter-input" id="filter-input" type="text" placeholder="Filter this folder" autocomplete="off" spellcheck="false">
+                    <div class="sort-group" role="group" aria-label="Sort by">
+                        <button class="sort-btn active" data-sort="name">Name</button>
+                        <button class="sort-btn" data-sort="date">Date</button>
+                        <button class="sort-btn" data-sort="size">Size</button>
                     </div>
-                    <div id="file-rows">
-                        <div class="loading"><span class="glyph"></span>Loading…</div>
+                    <div class="view-toggle" role="group" aria-label="View">
+                        <button class="view-btn" id="view-grid" title="Grid view">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                            Grid
+                        </button>
+                        <button class="view-btn" id="view-list" title="List view">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                            List
+                        </button>
+                    </div>
+                </div>
+
+                <div id="truncated-notice" class="truncated-notice" style="display:none">
+                    Showing first 2000 entries — narrow with the filter to see more
+                </div>
+
+                <!-- grid view -->
+                <div id="grid-view" style="display:none">
+                    <div class="file-grid" id="file-grid"></div>
+                </div>
+
+                <!-- list view -->
+                <div id="list-view" style="display:none">
+                    <div class="file-table">
+                        <div class="ft-head">
+                            <span></span>
+                            <span>Name</span>
+                            <span class="num-col size-col">Size</span>
+                            <span class="num-col date-col">Modified</span>
+                        </div>
+                        <div id="file-rows">
+                            <div class="loading"><span class="glyph"></span>Loading…</div>
+                        </div>
                     </div>
                 </div>
             </div>
+
             <div class="explorer-preview" id="preview-pane">
                 <div class="preview-head">
                     <span class="preview-name" id="preview-name">—</span>
@@ -436,26 +576,47 @@
 </div>
 
 <script>
-// ponytail: single-file vanilla JS explorer, no framework, no deps
+// ponytail: single-file vanilla JS Finder-style explorer, no framework, no deps
 'use strict';
 
-const rowsEl     = document.getElementById('file-rows');
-const bcEl       = document.getElementById('breadcrumb');
-const filterEl   = document.getElementById('filter-input');
-const countEl    = document.getElementById('entry-count');
-const truncEl    = document.getElementById('truncated-notice');
-const previewPane = document.getElementById('preview-pane');
-const previewName = document.getElementById('preview-name');
-const previewBody = document.getElementById('preview-body');
-const previewDl   = document.getElementById('preview-dl');
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const gridViewEl   = document.getElementById('grid-view');
+const listViewEl   = document.getElementById('list-view');
+const gridEl       = document.getElementById('file-grid');
+const rowsEl       = document.getElementById('file-rows');
+const bcEl         = document.getElementById('breadcrumb');
+const filterEl     = document.getElementById('filter-input');
+const countEl      = document.getElementById('entry-count');
+const truncEl      = document.getElementById('truncated-notice');
+const previewPane  = document.getElementById('preview-pane');
+const previewName  = document.getElementById('preview-name');
+const previewBody  = document.getElementById('preview-body');
+const previewDl    = document.getElementById('preview-dl');
 const previewClose = document.getElementById('preview-close');
+const upBtn        = document.getElementById('up-btn');
+const viewGrid     = document.getElementById('view-grid');
+const viewList     = document.getElementById('view-list');
+const sidebarEl    = document.getElementById('sidebar');
+const overlayEl    = document.getElementById('sidebar-overlay');
+const hamburgerEl  = document.getElementById('hamburger');
+const treeRootEl   = document.getElementById('tree-root');
 
-let allEntries = [];   // raw entries from last fetch
-let currentPath = '';  // current rel path
-let sortKey = 'name';  // name|date|size
-let sortDir = 1;       // 1=asc, -1=desc
-let selectedPath = ''; // currently previewed file path
+// ── State ─────────────────────────────────────────────────────────────────────
+let allEntries  = [];
+let currentPath = '';
+let sortKey     = 'name';
+let sortDir     = 1;
+let selectedPath = '';
+let viewMode    = localStorage.getItem('ares-files-view') || 'grid'; // 'grid'|'list'
+let sidebarOpen = window.innerWidth > 900; // start open on desktop
 
+// IntersectionObserver for lazy thumbnail loading
+// ponytail: one observer per navigate(), tiles observed individually
+let thumbObserver = null;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+// XSS-safe string → HTML text node
 function esc(s) {
     const d = document.createElement('div');
     d.textContent = s == null ? '' : String(s);
@@ -474,31 +635,104 @@ function fmtSize(bytes) {
 function fmtDate(ts) {
     if (!ts) return '—';
     const d = new Date(ts * 1000);
-    const yr = d.getFullYear(), mo = String(d.getMonth()+1).padStart(2,'0'),
-          da = String(d.getDate()).padStart(2,'0');
-    const hr = String(d.getHours()).padStart(2,'0'),
+    const yr = d.getFullYear(),
+          mo = String(d.getMonth()+1).padStart(2,'0'),
+          da = String(d.getDate()).padStart(2,'0'),
+          hr = String(d.getHours()).padStart(2,'0'),
           mn = String(d.getMinutes()).padStart(2,'0');
     return yr + '-' + mo + '-' + da + ' ' + hr + ':' + mn;
 }
-
-// Icon SVGs by kind — inline, single-path
-const ICONS = {
-    dir:   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
-    image: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>',
-    video: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
-    audio: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
-    pdf:   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>',
-    md:    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="17" x2="10" y2="17"/><line x1="12" y1="17" x2="14" y2="17"/><polyline points="10 13 12 11 14 13"/></svg>',
-    text:  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/></svg>',
-    file:  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
-};
 
 function joinPath(base, name) {
     if (!base) return name;
     return base.replace(/\/+$/, '') + '/' + name;
 }
 
+function rawUrl(path, dl) {
+    return '/api/files/raw?path=' + encodeURIComponent(path) + (dl ? '&dl=1' : '&dl=0');
+}
+
+function thumbUrl(path) {
+    return '/api/files/thumb?path=' + encodeURIComponent(path);
+}
+
+// ── Icon SVGs ─────────────────────────────────────────────────────────────────
+const ICONS = {
+    dir:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+    image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>',
+    video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
+    audio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+    pdf:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>',
+    md:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+    text:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>',
+    file:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+};
+
+const KIND_COLORS = {
+    dir:'var(--amber)', image:'var(--cyan)', video:'var(--magenta)',
+    audio:'var(--green)', pdf:'var(--ares)', md:'var(--blue)',
+    text:'var(--text-2)', file:'var(--text-4)',
+};
+
+// ── View mode ─────────────────────────────────────────────────────────────────
+
+function applyViewMode() {
+    if (viewMode === 'grid') {
+        gridViewEl.style.display = '';
+        listViewEl.style.display = 'none';
+        viewGrid.classList.add('active');
+        viewList.classList.remove('active');
+    } else {
+        listViewEl.style.display = '';
+        gridViewEl.style.display = 'none';
+        viewList.classList.add('active');
+        viewGrid.classList.remove('active');
+    }
+}
+
+viewGrid.addEventListener('click', () => {
+    viewMode = 'grid';
+    localStorage.setItem('ares-files-view', 'grid');
+    applyViewMode();
+    rerender();
+});
+viewList.addEventListener('click', () => {
+    viewMode = 'list';
+    localStorage.setItem('ares-files-view', 'list');
+    applyViewMode();
+    rerender();
+});
+
+// ── Sidebar / hamburger ───────────────────────────────────────────────────────
+
+function setSidebar(open) {
+    sidebarOpen = open;
+    if (open) {
+        sidebarEl.classList.remove('collapsed');
+        overlayEl.classList.add('open');
+    } else {
+        sidebarEl.classList.add('collapsed');
+        overlayEl.classList.remove('open');
+    }
+}
+
+hamburgerEl.addEventListener('click', () => setSidebar(!sidebarOpen));
+overlayEl.addEventListener('click', () => setSidebar(false));
+
+// On wide screen startup open sidebar without overlay
+(function initSidebar() {
+    if (window.innerWidth > 900) {
+        sidebarEl.classList.remove('collapsed');
+        // don't show overlay on desktop
+    } else {
+        sidebarEl.classList.add('collapsed');
+    }
+}());
+
+// ── Breadcrumb ────────────────────────────────────────────────────────────────
+
 function renderBreadcrumb(cwd) {
+    upBtn.disabled = !cwd || cwd === '.';
     if (!cwd || cwd === '.') {
         bcEl.innerHTML = '<span class="bc-current">/ root</span>';
         return;
@@ -520,23 +754,17 @@ function renderBreadcrumb(cwd) {
     });
 }
 
+// ── Sort + filter ─────────────────────────────────────────────────────────────
+
 function sortEntries(entries) {
     return entries.slice().sort((a, b) => {
-        // Dirs always first
         if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
-        let av, bv;
         if (sortKey === 'name') {
-            av = a.name.toLowerCase(); bv = b.name.toLowerCase();
+            const av = a.name.toLowerCase(), bv = b.name.toLowerCase();
             return av < bv ? -sortDir : av > bv ? sortDir : 0;
         }
-        if (sortKey === 'date') {
-            av = a.mtime || 0; bv = b.mtime || 0;
-            return (bv - av) * sortDir;
-        }
-        if (sortKey === 'size') {
-            av = a.size || 0; bv = b.size || 0;
-            return (bv - av) * sortDir;
-        }
+        if (sortKey === 'date') return ((b.mtime||0) - (a.mtime||0)) * sortDir;
+        if (sortKey === 'size') return ((b.size||0) - (a.size||0)) * sortDir;
         return 0;
     });
 }
@@ -547,28 +775,144 @@ function filterEntries(entries, q) {
     return entries.filter(e => e.name.toLowerCase().includes(lq));
 }
 
-function renderRows(entries) {
-    if (!entries.length) {
-        rowsEl.innerHTML = '<div class="ft-empty">No entries match</div>';
-        countEl.textContent = '0 entries';
-        return;
-    }
-    const sorted = sortEntries(filterEntries(entries, filterEl.value.trim()));
+// ── Grid render ───────────────────────────────────────────────────────────────
+
+function setupThumbObserver() {
+    // ponytail: IntersectionObserver — only set img.src when tile scrolls into view
+    if (thumbObserver) thumbObserver.disconnect();
+    thumbObserver = new IntersectionObserver((entries) => {
+        entries.forEach(oe => {
+            if (!oe.isIntersecting) return;
+            const img = oe.target.querySelector('.fg-thumb');
+            if (img && img.dataset.src) {
+                img.src = img.dataset.src;
+                delete img.dataset.src;
+                thumbObserver.unobserve(oe.target);
+            }
+        });
+    }, { rootMargin: '200px' });
+}
+
+function renderGrid(sorted) {
     if (!sorted.length) {
-        rowsEl.innerHTML = '<div class="ft-empty">No matches</div>';
-        countEl.textContent = '0 of ' + entries.length + ' entries';
+        gridEl.innerHTML = '<div class="fg-empty" style="grid-column:1/-1">No entries match</div>';
         return;
     }
-    countEl.textContent = (sorted.length === entries.length ? sorted.length : sorted.length + ' / ' + entries.length) + ' entries';
+    setupThumbObserver();
+    const frag = document.createDocumentFragment();
+
+    sorted.forEach(entry => {
+        const kind  = entry.kind || 'file';
+        const epath = joinPath(currentPath, entry.name);
+        const canThumb = !entry.is_dir && (kind === 'image' || kind === 'video' || kind === 'pdf');
+        const isSelected = !entry.is_dir && epath === selectedPath;
+
+        const tile = document.createElement('div');
+        tile.className = 'fg-tile' + (isSelected ? ' selected' : '');
+        // data attrs — safe because we read them back as JS strings, never innerHTML
+        tile.dataset.name  = entry.name;
+        tile.dataset.kind  = kind;
+        tile.dataset.path  = epath;
+        tile.dataset.isdir = entry.is_dir ? '1' : '0';
+
+        // thumb or icon
+        const thumbWrap = document.createElement('div');
+        thumbWrap.className = 'fg-thumb-wrap';
+
+        if (canThumb) {
+            const img = document.createElement('img');
+            img.className = 'fg-thumb';
+            img.alt = '';
+            // lazy: src stored in dataset, observer sets it
+            img.dataset.src = thumbUrl(epath);
+            img.addEventListener('error', () => {
+                // fallback to icon on 404 / thumb error
+                img.replaceWith(makeIconEl(kind));
+            });
+            thumbWrap.appendChild(img);
+            // observe the tile (not img) for scroll visibility
+            // (observer set up in setupThumbObserver above)
+            // we observe after tile is in DOM — done below after append
+        } else {
+            thumbWrap.appendChild(makeIconEl(kind));
+        }
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'fg-name';
+        nameEl.title = entry.name; // tooltip for full name
+        nameEl.textContent = entry.name; // textContent — XSS safe
+
+        tile.appendChild(thumbWrap);
+        tile.appendChild(nameEl);
+
+        if (!entry.is_dir && entry.size != null) {
+            const sub = document.createElement('div');
+            sub.className = 'fg-sub';
+            sub.textContent = fmtSize(entry.size);
+            tile.appendChild(sub);
+        }
+
+        // single-click = select/preview; double-click folder = navigate
+        let clickTimer = null;
+        tile.addEventListener('click', () => {
+            if (tile.dataset.isdir === '1') {
+                // single click on folder: highlight only, double-click descends
+                clearSelection();
+                tile.classList.add('selected');
+            } else {
+                openPreview(tile.dataset.path, tile.dataset.name, tile.dataset.kind);
+            }
+        });
+        tile.addEventListener('dblclick', () => {
+            if (tile.dataset.isdir === '1') {
+                navigate(tile.dataset.path);
+            }
+        });
+
+        frag.appendChild(tile);
+    });
+
+    gridEl.innerHTML = '';
+    gridEl.appendChild(frag);
+
+    // now observe each tile that has a lazy img
+    gridEl.querySelectorAll('.fg-tile').forEach(tile => {
+        if (tile.querySelector('.fg-thumb[data-src]')) {
+            thumbObserver.observe(tile);
+        }
+    });
+}
+
+function makeIconEl(kind) {
+    const wrap = document.createElement('div');
+    wrap.className = 'fg-icon-wrap';
+    wrap.style.color = KIND_COLORS[kind] || KIND_COLORS.file;
+    wrap.innerHTML = ICONS[kind] || ICONS.file; // safe: ICONS is static const
+    return wrap;
+}
+
+function clearSelection() {
+    gridEl.querySelectorAll('.fg-tile.selected').forEach(t => t.classList.remove('selected'));
+    rowsEl.querySelectorAll('.ft-row.selected').forEach(r => r.classList.remove('selected'));
+}
+
+// ── List render ───────────────────────────────────────────────────────────────
+
+function renderList(sorted) {
+    if (!sorted.length) {
+        rowsEl.innerHTML = '<div class="ft-empty">No entries match</div>';
+        return;
+    }
     let html = '';
     sorted.forEach(entry => {
-        const kind = entry.kind || 'file';
-        const entryPath = joinPath(currentPath, entry.name);
+        const kind  = entry.kind || 'file';
+        const epath = joinPath(currentPath, entry.name);
         const szStr = entry.is_dir ? '—' : fmtSize(entry.size);
         const dtStr = fmtDate(entry.mtime);
-        const selected = (!entry.is_dir && entryPath === selectedPath) ? ' selected' : '';
+        const sel   = (!entry.is_dir && epath === selectedPath) ? ' selected' : '';
+        // esc() on every user-controlled string injected into HTML
         html +=
-            '<div class="ft-row' + selected + '" data-name="' + esc(entry.name) + '" data-kind="' + esc(kind) + '" data-path="' + esc(entryPath) + '" data-isdir="' + (entry.is_dir ? '1' : '0') + '">' +
+            '<div class="ft-row' + sel + '" data-name="' + esc(entry.name) + '" data-kind="' + esc(kind) + '" data-path="' + esc(epath) + '" data-isdir="' + (entry.is_dir ? '1' : '0') + '">' +
                 '<span class="ft-icon kind-' + esc(kind) + '">' + (ICONS[kind] || ICONS.file) + '</span>' +
                 '<span class="ft-name" title="' + esc(entry.name) + '">' + esc(entry.name) + '</span>' +
                 '<span class="ft-size">' + esc(szStr) + '</span>' +
@@ -576,58 +920,82 @@ function renderRows(entries) {
             '</div>';
     });
     rowsEl.innerHTML = html;
+
     rowsEl.querySelectorAll('.ft-row').forEach(row => {
         row.addEventListener('click', () => {
             if (row.dataset.isdir === '1') {
-                navigate(row.dataset.path);
+                row.classList.toggle('selected');
             } else {
                 openPreview(row.dataset.path, row.dataset.name, row.dataset.kind);
             }
         });
+        row.addEventListener('dblclick', () => {
+            if (row.dataset.isdir === '1') navigate(row.dataset.path);
+        });
     });
 }
 
+// ── Combined render ───────────────────────────────────────────────────────────
+
 function rerender() {
-    renderRows(allEntries);
+    const q = filterEl.value.trim();
+    const sorted = sortEntries(filterEntries(allEntries, q));
+    const total  = allEntries.length;
+
+    countEl.textContent = (sorted.length === total ? sorted.length : sorted.length + ' / ' + total) + ' entries';
+
+    if (viewMode === 'grid') {
+        renderGrid(sorted);
+    } else {
+        renderList(sorted);
+    }
 }
+
+// ── Navigate ──────────────────────────────────────────────────────────────────
 
 async function navigate(path) {
     closePreview();
     currentPath = path || '';
-    rowsEl.innerHTML = '<div class="loading"><span class="glyph"></span>Loading…</div>';
-    countEl.textContent = '—';
     filterEl.value = '';
-    const encoded = encodeURIComponent(currentPath);
+
+    // show loading in active view
+    const loadHtml = '<div class="loading"><span class="glyph"></span>Loading…</div>';
+    gridEl.innerHTML = loadHtml;
+    rowsEl.innerHTML = loadHtml;
+    countEl.textContent = '—';
+
     try {
-        const r = await fetch('/api/files/list?path=' + encoded);
+        const r = await fetch('/api/files/list?path=' + encodeURIComponent(currentPath));
         if (r.status === 401) { location.href = '/login'; return; }
-        if (!r.ok) { throw new Error('HTTP ' + r.status); }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
         const data = await r.json();
-        allEntries = data.entries || [];
+        allEntries  = data.entries || [];
         currentPath = data.cwd || currentPath;
         renderBreadcrumb(currentPath);
         truncEl.style.display = data.truncated ? '' : 'none';
-        renderRows(allEntries);
+        syncTreeActive(currentPath);
+        rerender();
     } catch (e) {
-        rowsEl.innerHTML = '<div class="loading" style="color:var(--amber)">error · ' + esc(e.message) + '</div>';
+        const err = '<div class="loading" style="color:var(--amber)">error · ' + esc(e.message) + '</div>';
+        gridEl.innerHTML = err;
+        rowsEl.innerHTML = err;
     }
 }
 
-function rawUrl(path, dl) {
-    return '/api/files/raw?path=' + encodeURIComponent(path) + (dl ? '&dl=1' : '&dl=0');
-}
+// ── Preview pane ──────────────────────────────────────────────────────────────
 
 async function openPreview(path, name, kind) {
     selectedPath = path;
-    rerender(); // mark row selected
-    previewName.textContent = name;
+    rerender(); // re-render to mark selected
+
+    previewName.textContent = name; // textContent — XSS safe
     previewDl.href = rawUrl(path, true);
     previewDl.setAttribute('download', name);
     previewPane.classList.add('open');
 
     const raw0 = rawUrl(path, false);
-
     let bodyHtml = '';
+
     if (kind === 'image') {
         bodyHtml = '<img class="preview-img" src="' + esc(raw0) + '" alt="' + esc(name) + '" loading="lazy">';
     } else if (kind === 'video') {
@@ -645,16 +1013,21 @@ async function openPreview(path, name, kind) {
             const txt = await r.text();
             const pre = document.createElement('pre');
             pre.className = 'preview-text';
-            pre.textContent = txt;
+            pre.textContent = txt; // textContent — XSS safe
             previewBody.innerHTML = '';
             previewBody.appendChild(pre);
         } catch (e) {
-            previewBody.innerHTML = '<pre class="preview-text" style="color:var(--amber)">Error loading: ' + esc(e.message) + '</pre>';
+            previewBody.innerHTML = '<pre class="preview-text" style="color:var(--amber)">Error: ' + esc(e.message) + '</pre>';
         }
         return;
     } else {
-        // Unknown / binary: metadata + download only
-        bodyHtml = '<div class="preview-meta"><span class="mk">name&nbsp;&nbsp; </span>' + esc(name) + '<br><span class="mk">path&nbsp;&nbsp; </span>' + esc(path) + '<br><span class="mk">kind&nbsp;&nbsp; </span>' + esc(kind) + '</div>';
+        // Unknown/binary: metadata + download only
+        bodyHtml =
+            '<div class="preview-meta">' +
+            '<span class="mk">name&nbsp;&nbsp; </span>' + esc(name) + '<br>' +
+            '<span class="mk">path&nbsp;&nbsp; </span>' + esc(path) + '<br>' +
+            '<span class="mk">kind&nbsp;&nbsp; </span>' + esc(kind) +
+            '</div>';
     }
     previewBody.innerHTML = bodyHtml;
 }
@@ -665,13 +1038,129 @@ function closePreview() {
     previewName.textContent = '—';
     previewDl.href = '#';
     selectedPath = '';
-    rerender();
 }
 
-// ── Event wiring ──────────────────────────────────────────────────────────
+// ── Folder tree sidebar ───────────────────────────────────────────────────────
+// ponytail: lazy-expand, children loaded on first expand only
+
+function makeTreeNode(name, path, hasChildren) {
+    const li = document.createElement('li');
+    li.className = 'tree-node';
+    li.dataset.path = path;
+
+    const row = document.createElement('div');
+    row.className = 'tree-row';
+
+    const toggle = document.createElement('span');
+    toggle.className = 'tree-toggle';
+    toggle.innerHTML = hasChildren
+        ? '<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>'
+        : '';
+
+    const icon = document.createElement('span');
+    icon.className = 'tree-icon';
+    icon.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+
+    const label = document.createElement('span');
+    label.className = 'tree-label';
+    label.textContent = name || '/ root'; // textContent — safe
+
+    row.appendChild(toggle);
+    row.appendChild(icon);
+    row.appendChild(label);
+    li.appendChild(row);
+
+    const childList = document.createElement('ul');
+    childList.className = 'tree-children';
+    li.appendChild(childList);
+
+    let loaded = false;
+    let expanded = false;
+
+    function expand() {
+        expanded = true;
+        toggle.classList.add('open');
+        childList.classList.add('open');
+        if (!loaded) {
+            loaded = true;
+            loadTreeChildren(path, childList);
+        }
+    }
+    function collapse() {
+        expanded = false;
+        toggle.classList.remove('open');
+        childList.classList.remove('open');
+    }
+
+    row.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // navigate main area to this path
+        navigate(path);
+        // on mobile close sidebar after selection
+        if (window.innerWidth <= 900) setSidebar(false);
+        // toggle expand if it has children
+        if (hasChildren) {
+            if (expanded) collapse(); else expand();
+        }
+    });
+
+    // expose for external sync
+    li._setActive = (active) => {
+        row.classList.toggle('active', active);
+    };
+    li._expand = expand;
+    li._path = path;
+
+    return li;
+}
+
+async function loadTreeChildren(path, listEl) {
+    listEl.innerHTML = '<li style="padding:4px 12px;font-size:10px;color:var(--text-4)">…</li>';
+    try {
+        const r = await fetch('/api/files/list?path=' + encodeURIComponent(path));
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const dirs = (data.entries || []).filter(e => e.is_dir);
+        if (!dirs.length) {
+            listEl.innerHTML = '';
+            return;
+        }
+        listEl.innerHTML = '';
+        dirs.forEach(d => {
+            const child = makeTreeNode(d.name, joinPath(path, d.name), true);
+            listEl.appendChild(child);
+        });
+    } catch (e) {
+        listEl.innerHTML = '<li style="padding:4px 12px;font-size:10px;color:var(--amber)">' + esc(e.message) + '</li>';
+    }
+}
+
+function syncTreeActive(path) {
+    // walk all tree-row elements and mark the one matching current path
+    treeRootEl.querySelectorAll('.tree-node').forEach(li => {
+        if (li._setActive) li._setActive(li._path === path);
+    });
+}
+
+function initTree() {
+    // root node
+    const root = makeTreeNode('/ root', '', true);
+    treeRootEl.appendChild(root);
+    root._expand(); // start expanded
+}
+
+// ── Up button ─────────────────────────────────────────────────────────────────
+
+upBtn.addEventListener('click', () => {
+    if (!currentPath) return;
+    const parts = currentPath.split('/').filter(Boolean);
+    parts.pop();
+    navigate(parts.join('/'));
+});
+
+// ── Controls wiring ───────────────────────────────────────────────────────────
 
 previewClose.addEventListener('click', closePreview);
-
 filterEl.addEventListener('input', rerender);
 
 document.querySelectorAll('.sort-btn').forEach(btn => {
@@ -689,11 +1178,13 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
     });
 });
 
-// Boot: read ?path= from URL, else start at root
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
 (function init() {
+    applyViewMode();
+    initTree();
     const params = new URLSearchParams(location.search);
-    const startPath = params.get('path') || '';
-    navigate(startPath);
+    navigate(params.get('path') || '');
 }());
 </script>
 </body>
