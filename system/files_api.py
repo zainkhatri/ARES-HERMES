@@ -184,8 +184,10 @@ def _thumb_image(src, dst):
 
 
 def _thumb_video(src, dst):
-    with _tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
-        frame = tf.name
+    # Stage the ffmpeg frame IN the cache dir (same filesystem as dst) so the
+    # os.replace is a same-fs atomic rename — a /tmp intermediate would be a
+    # cross-device link and fail. ffmpeg needs a real image extension.
+    frame = dst + ".frame.jpg"
     try:
         _sp.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", "1", "-i", src,
                  "-vframes", "1", "-vf", "scale=%d:-2" % THUMB_PX, frame],
