@@ -372,6 +372,15 @@
     }
     term.onData(function (data) { wsSend(data); });       // keystrokes → PTY
 
+    function doFit() {
+        try {
+            fit.fit();
+            if (ws && ws.readyState === 1) ws.send(JSON.stringify({ cols: term.cols, rows: term.rows }));
+        } catch (e) {}
+    }
+    window.addEventListener('resize', doFit);
+    new ResizeObserver(doFit).observe(document.getElementById('term'));
+
     function _ptyCtl(msg) {
         if (ws && ws.readyState === 1) {
             ws.send(JSON.stringify(msg));
