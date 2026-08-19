@@ -130,3 +130,25 @@ def test_files_index_build_search_excludes_vault():
         assert all(".vault" not in h["path"] for h in files_index.search("secret", db=db))
     finally:
         shutil.rmtree(root); shutil.rmtree(dbdir, ignore_errors=True)
+
+
+def test_content_search_indexes_docs_not_code():
+    import os, tempfile, shutil
+    from system import files_index
+    root = tempfile.mkdtemp(); dbdir = tempfile.mkdtemp(); db = os.path.join(dbdir, "idx.db")
+    try:
+        os.makedirs(os.path.join(root, "docs"))
+        with open(os.path.join(root, "docs", "contract.md"), "w") as f:
+            f.write("This agreement uses net-30 payment terms and auto-renews annually.")
+        with open(os.path.join(root, "docs", "notes.txt"), "w") as f:
+            f.write("nothing special in here")
+        with open(os.path.join(root, "docs", "script.py"), "w") as f:
+            f.write("# net-30 mentioned in a code comment, must NOT be content-indexed")
+        files_index.build_index(root=root, db=db)
+        hits = files_index.content_search("net-30", db=db)
+        paths = [h["path"] for h in hits]
+        assert any("contract.md" in p for p in paths), paths
+        assert not any("script.py" in p for p in paths), "code was content-indexed"
+        assert any("net" in h["snippet"].lower() for h in hits), hits
+    finally:
+        shutil.rmtree(root); shutil.rmtree(dbdir, ignore_errors=True)

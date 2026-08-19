@@ -51,6 +51,36 @@ def _skip_dir(name):
     return _excluded(name) or name in BACKUP_DIRS
 
 
+CONTENT_EXTS = frozenset({".pdf", ".md", ".markdown", ".txt"})
+CONTENT_CHAR_CAP = 40000            # per-file extracted-text cap
+CONTENT_FILE_MAX = 20_000_000       # skip files larger than this before extracting
+
+
+def _extract_text(abspath, ext):
+    """Best-effort text extraction for a doc file. Never raises; capped to CONTENT_CHAR_CAP."""
+    assert isinstance(abspath, str) and abspath, "abspath required"
+    assert isinstance(ext, str), "ext must be str"
+    try:
+        if ext == ".pdf":
+            import pymupdf
+            parts, n = [], 0
+            doc = pymupdf.open(abspath)
+            try:
+                for page in doc:                       # bounded by CONTENT_CHAR_CAP break
+                    t = page.get_text() or ""
+                    parts.append(t)
+                    n += len(t)
+                    if n >= CONTENT_CHAR_CAP:
+                        break
+            finally:
+                doc.close()
+            return "".join(parts)[:CONTENT_CHAR_CAP]
+        with open(abspath, "r", errors="ignore") as fh:
+            return fh.read(CONTENT_CHAR_CAP)
+    except Exception:
+        return ""
+
+
 def build_index(root=ROOT, db=INDEX_DB):
     """Rebuild the FTS index from scratch. Bounded + throttled. Returns count."""
     assert isinstance(root, str) and root, "root required"
@@ -64,7 +94,9 @@ def build_index(root=ROOT, db=INDEX_DB):
     try:
         con.execute("CREATE VIRTUAL TABLE files_fts USING fts5("
                     "name, path, kind UNINDEXED, size UNINDEXED, mtime UNINDEXED)")
+        con.execute("CREATE VIRTUAL TABLE content_fts USING fts5(path UNINDEXED, body)")
         batch = []
+        cbatch = []                                           # extracted doc bodies
         dirs = 0
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = [d for d in dirnames if not _skip_dir(d)]   # prune, don't descend
@@ -86,9 +118,19 @@ def build_index(root=ROOT, db=INDEX_DB):
                     st = os.stat(full, follow_symlinks=False)
                 except OSError:
                     continue
-                batch.append((fn, os.path.relpath(full, root), kind_for(fn),
-                              st.st_size, int(st.st_mtime)))
+                rel = os.path.relpath(full, root)
+                batch.append((fn, rel, kind_for(fn), st.st_size, int(st.st_mtime)))
                 count += 1
+                ext = os.path.splitext(fn)[1].lower()
+                if ext in CONTENT_EXTS and st.st_size <= CONTENT_FILE_MAX:
+                    body = _extract_text(full, ext)          # never raises
+                    if body:
+                        cbatch.append((rel, body))
+                        if len(cbatch) >= 50:                # throttle the heavy step
+                            con.executemany("INSERT INTO content_fts(path,body) VALUES(?,?)", cbatch)
+                            con.commit()
+                            cbatch = []
+                            time.sleep(_THROTTLE)
                 if len(batch) >= _BATCH:
                     con.executemany("INSERT INTO files_fts(name,path,kind,size,mtime) "
                                     "VALUES(?,?,?,?,?)", batch)
@@ -103,6 +145,9 @@ def build_index(root=ROOT, db=INDEX_DB):
         if batch:
             con.executemany("INSERT INTO files_fts(name,path,kind,size,mtime) "
                             "VALUES(?,?,?,?,?)", batch)
+            con.commit()
+        if cbatch:
+            con.executemany("INSERT INTO content_fts(path,body) VALUES(?,?)", cbatch)
             con.commit()
     finally:
         con.close()
@@ -185,6 +230,33 @@ def search(query, limit=40, db=INDEX_DB):
     if recency_intent(query):
         results.sort(key=lambda c: c["mtime"], reverse=True)   # newest first
     return results
+
+
+def content_search(query, limit=6, db=INDEX_DB):
+    """Full-text search INSIDE extracted document bodies (pdf/md/txt). Returns
+    [{path, kind, snippet}] with the matching passage. Empty if the content
+    table doesn't exist yet (old index) or nothing matches."""
+    assert isinstance(query, str), "query must be str"
+    assert isinstance(limit, int) and limit > 0, "limit must be positive int"
+    if not query.strip() or not os.path.exists(db):
+        return []
+    terms = [t for t in re.findall(r"[A-Za-z0-9_]+", query.lower())
+             if len(t) > 1 and t not in STOPWORDS]
+    if not terms:
+        return []
+    match = " OR ".join(t + "*" for t in terms)
+    con = sqlite3.connect(db)
+    try:
+        rows = con.execute(
+            "SELECT path, snippet(content_fts, 1, '[', ']', ' … ', 14) "
+            "FROM content_fts WHERE content_fts MATCH ? ORDER BY rank LIMIT ?",
+            (match, limit)).fetchall()
+    except sqlite3.OperationalError:                          # no content_fts yet
+        return []
+    finally:
+        con.close()
+    return [{"path": r[0], "kind": kind_for(os.path.basename(r[0])),
+             "snippet": " ".join((r[1] or "").split())} for r in rows]
 
 
 def index_status(db=INDEX_DB):
