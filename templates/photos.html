@@ -57,7 +57,7 @@
         /* Justified rows: target row height = base × density multiplier.
            Density buttons set --density (0.65 / 1 / 1.35); the media query
            below shrinks --row-h-base on phones, so both knobs compose. */
-        --row-h-base:210px;
+        --row-h-base:160px;   /* denser default — ~6/row on desktop instead of ~4 (was 210) */
         --density:1;
         --row-h:calc(var(--row-h-base) * var(--density));
 
