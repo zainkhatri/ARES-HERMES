@@ -1424,7 +1424,7 @@ function applyVitals(i) {
                 if (i.caps && i.caps.docker) renderContainers(i.containers || []);
             }
             var fb = document.getElementById('foot-brand'); if (fb) fb.textContent = i.hostname || 'ARES';
-            requestAnimationFrame(fitScale);   // content heights may have changed
+            requestAnimationFrame(function () { fitScale(); });   // cheap: refits only if content overflowed
         }
         _vtick++;
 }
@@ -1432,28 +1432,27 @@ function applyVitals(i) {
 // Scale-to-fit: when content is taller than the viewport, widen the .hud by 1/k first,
 // THEN scale by k — so it shrinks to fit the height AND still fills the full width
 // (no side letterbox). Origin is top-left so the widened box aligns to the edges.
-function fitScale() {
+function fitScale(force) {
     var hud = document.querySelector('.hud');
     if (!hud) return;
-    hud.style.transform = 'none';
-    hud.style.width = '';
-    hud.style.minHeight = '0';                     // measure TRUE content (not inflated to viewport)
-    var content = hud.scrollHeight;
-    hud.style.minHeight = '';
     var vh = window.innerHeight;
-    var k = content > vh + 1 ? vh / content : 1;
-    if (k < 1) {
-        hud.style.width = (100 / k).toFixed(3) + '%';   // widen so scaling brings it back to full width
-        hud.style.transform = 'scale(' + k.toFixed(4) + ')';
-    } else {
-        hud.style.width = '';
-        hud.style.transform = 'none';
-    }
+    // Steady-state fast path: on the 3s vitals tick, if content already fits
+    // (zoomed or not) there's nothing to do — skip the style write so we don't
+    // reflow/re-raster the page every tick. `force` bypasses this on load/resize.
+    if (!force && hud.scrollHeight <= vh + 1) return;
+    // Fit via `zoom`, not transform:scale. `zoom` scales at layout time — text
+    // stays crisp and the page keeps normal (small) compositor layers. The old
+    // transform:scale(k)+width:100/k% hack put the WHOLE dashboard into one
+    // fractional-scaled composite layer that re-rasterized on every repaint and
+    // was blurry on Retina — smooth at scale 1 (big monitor), laggy at <1 (laptop).
+    hud.style.zoom = '';
+    var content = hud.scrollHeight;
+    hud.style.zoom = content > vh + 1 ? (vh / content).toFixed(4) : '';
 }
 var _fitT;
-window.addEventListener('resize', function () { clearTimeout(_fitT); _fitT = setTimeout(fitScale, 80); });
-window.addEventListener('load', fitScale);
-setTimeout(fitScale, 400);   // after fonts settle
+window.addEventListener('resize', function () { clearTimeout(_fitT); _fitT = setTimeout(function () { fitScale(true); }, 80); });
+window.addEventListener('load', function () { fitScale(true); });
+setTimeout(function () { fitScale(true); }, 400);   // after fonts settle
 
 
 
