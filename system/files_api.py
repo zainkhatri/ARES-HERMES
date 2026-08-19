@@ -53,7 +53,7 @@ def kind_for(name):
     """Classify file by extension. Returns one of: pdf|image|video|audio|md|text|file."""
     assert isinstance(name, str), "name must be str"
     ext = os.path.splitext(name)[1].lower()
-    assert isinstance(ext, str)
+    assert ext == "" or ext.startswith("."), "ext must be empty or dotted"
     if ext == ".pdf":
         return "pdf"
     if ext in _IMAGE:
@@ -81,25 +81,28 @@ def list_dir(abspath, root=ROOT):
     root = os.path.realpath(root)
     entries = []
     truncated = False
-    with os.scandir(abspath) as it:
-        for de in it:                                 # bounded by LIST_CAP below
-            if de.name.startswith(".") or de.name in DENY_NAMES:
-                continue
-            if len(entries) >= LIST_CAP:
-                truncated = True
-                break
-            try:
-                st = de.stat(follow_symlinks=False)
-                is_dir = de.is_dir()
-            except OSError:
-                continue
-            entries.append({
-                "name": de.name,
-                "is_dir": is_dir,
-                "size": None if is_dir else st.st_size,
-                "mtime": int(st.st_mtime),
-                "kind": "dir" if is_dir else kind_for(de.name),
-            })
+    try:
+        with os.scandir(abspath) as it:
+            for de in it:                                 # bounded by LIST_CAP below
+                if de.name.startswith(".") or de.name in DENY_NAMES:
+                    continue
+                if len(entries) >= LIST_CAP:
+                    truncated = True
+                    break
+                try:
+                    st = de.stat(follow_symlinks=False)
+                    is_dir = de.is_dir()
+                except OSError:
+                    continue
+                entries.append({
+                    "name": de.name,
+                    "is_dir": is_dir,
+                    "size": None if is_dir else st.st_size,
+                    "mtime": int(st.st_mtime),
+                    "kind": "dir" if is_dir else kind_for(de.name),
+                })
+    except OSError:
+        pass  # ponytail: unreadable dir (e.g. lost+found) → return empty entries
     entries.sort(key=lambda e: (not e["is_dir"], e["name"].lower()))
     rel = "" if os.path.realpath(abspath) == root else os.path.relpath(abspath, root)
     parent = None if rel == "" else os.path.dirname(rel)
@@ -125,7 +128,7 @@ def serve_mode(name, force_dl):
     if mime == "application/pdf" or top in _INLINE_TOP:
         return mime, False
     if ext in _TEXT_SAFE or kind_for(name) == "md":
-        return "text/plain; charset=utf-8", False
+        return "text/plain", False
     return "application/octet-stream", True
 
 
