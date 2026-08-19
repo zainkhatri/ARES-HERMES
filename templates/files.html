@@ -57,8 +57,8 @@
         .c-br::after  { content:''; bottom:-2px; right:-2px; border-left:0; border-top:0; }
         .mod-head { display:flex; align-items:center; justify-content:space-between; gap:10px;
                     padding:9px 12px; border-bottom:1px solid rgba(var(--ares-rgb),.14); }
-        .mod-title { font-size:13px; letter-spacing:.16em; color:var(--text-2); text-transform:uppercase; }
-        .mod-meta  { font-size:12px; letter-spacing:.1em; color:var(--text-3); }
+        .mod-title { font-size:14px; letter-spacing:.16em; color:var(--text-2); text-transform:uppercase; }
+        .mod-meta  { font-size:14px; letter-spacing:.1em; color:var(--text-3); }
         .mod-body  { padding:12px; }
         /* scrolling panels: drop paint-containment so corner brackets (drawn at
            -2px) aren't clipped, and keep their own overflow behaviour. */
@@ -97,11 +97,11 @@
         .nbr-id { display:flex; align-items:baseline; gap:8px; min-width:0; }
         .nbr-name { font-family:'Bricolage Grotesque', sans-serif; font-weight:700; font-size:14px; letter-spacing:0.02em; white-space:nowrap; }
         .nbr-name.n-a { color:var(--ares); }
-        .nbr-sep { color:var(--text-3); font-size:11px; }
-        .nbr-tag { font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--text-2); letter-spacing:0.1em; text-transform:uppercase; white-space:nowrap; }
+        .nbr-sep { color:var(--text-3); font-size:13px; }
+        .nbr-tag { font-family:'JetBrains Mono', monospace; font-size:13px; color:var(--text-2); letter-spacing:0.1em; text-transform:uppercase; white-space:nowrap; }
         .back-chip {
             display:inline-flex; align-items:center; gap:6px;
-            font-family:'JetBrains Mono', monospace; font-size:10px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             color:var(--text-2); text-decoration:none;
             letter-spacing:0.15em; text-transform:uppercase;
             padding:5px 11px; border:1px solid var(--line-2);
@@ -178,7 +178,7 @@
         .tree-row {
             display:flex; align-items:center; gap:6px;
             padding:5px 12px; cursor:pointer;
-            font-family:'JetBrains Mono', monospace; font-size:11px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             color:var(--text-2); letter-spacing:0.04em;
             transition:background 0.1s, color 0.1s;
             user-select:none; white-space:nowrap;
@@ -239,7 +239,7 @@
         .section-title .dim { color:var(--text-3); font-weight:500; }
         .section-meta {
             display:flex; align-items:center; gap:10px;
-            font-family:'JetBrains Mono', monospace; font-size:10px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             color:var(--text-3); letter-spacing:0.15em; text-transform:uppercase;
         }
 
@@ -247,7 +247,7 @@
         .breadcrumb {
             display:flex; align-items:center; gap:0; flex-wrap:wrap;
             margin-bottom:10px;
-            font-family:'JetBrains Mono', monospace; font-size:11px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             letter-spacing:0.08em;
             background:var(--bg-1); border:1px solid var(--line-2);
             padding:7px 12px; min-height:34px;
@@ -268,7 +268,7 @@
         /* Up button */
         .up-btn {
             display:inline-flex; align-items:center; gap:6px;
-            font-family:'JetBrains Mono', monospace; font-size:10px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             letter-spacing:0.15em; text-transform:uppercase;
             color:var(--text-2); background:var(--bg-1); border:1px solid var(--line-2);
             padding:6px 12px; cursor:pointer; flex-shrink:0;
@@ -279,7 +279,7 @@
         .filter-input {
             flex:1; min-width:160px; max-width:300px;
             background:var(--bg-1); border:1px solid var(--line-2); color:var(--text-1);
-            font-family:'JetBrains Mono', monospace; font-size:11px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             padding:6px 12px; letter-spacing:0.04em; outline:none;
             transition:border-color 0.15s;
         }
@@ -287,7 +287,7 @@
         .filter-input:focus { border-color:var(--ares); }
         .sort-group { display:flex; gap:0; flex-shrink:0; }
         .sort-btn {
-            font-family:'JetBrains Mono', monospace; font-size:9px;
+            font-family:'JetBrains Mono', monospace; font-size:12px;
             letter-spacing:0.18em; text-transform:uppercase;
             color:var(--text-3); background:var(--bg-1); border:1px solid var(--line-2);
             padding:6px 10px; cursor:pointer; margin-left:-1px;
@@ -299,7 +299,7 @@
         /* View toggle */
         .view-toggle { display:flex; gap:0; flex-shrink:0; }
         .view-btn {
-            font-family:'JetBrains Mono', monospace; font-size:9px;
+            font-family:'JetBrains Mono', monospace; font-size:12px;
             letter-spacing:0.15em; text-transform:uppercase;
             color:var(--text-3); background:var(--bg-1); border:1px solid var(--line-2);
             padding:6px 10px; cursor:pointer; margin-left:-1px;
@@ -311,7 +311,7 @@
 
         /* ═══ Truncation notice ═══ */
         .truncated-notice {
-            font-family:'JetBrains Mono', monospace; font-size:10px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             color:var(--amber); letter-spacing:0.12em;
             padding:7px 14px; border:1px solid rgba(var(--ares-rgb),.22);
             background:rgba(var(--ares-rgb),.05); margin-bottom:12px;
@@ -348,18 +348,18 @@
         .fg-icon-wrap svg { width:60px; height:60px; }
         .fg-name {
             font-family:'Bricolage Grotesque', sans-serif;
-            font-weight:600; font-size:12px; letter-spacing:-0.01em;
+            font-weight:600; font-size:14px; letter-spacing:-0.01em;
             color:var(--text-1); text-align:center;
             width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
         }
         .fg-tile:hover .fg-name { color:var(--ares-bright); }
         .fg-sub {
-            font-family:'JetBrains Mono', monospace; font-size:9px;
+            font-family:'JetBrains Mono', monospace; font-size:12px;
             color:var(--text-3); margin-top:2px; letter-spacing:0.04em;
         }
         .fg-empty, .ft-empty {
             padding:48px 0; text-align:center;
-            font-family:'JetBrains Mono', monospace; font-size:11px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             color:var(--text-3); letter-spacing:0.2em; text-transform:uppercase;
         }
 
@@ -369,7 +369,7 @@
             display:grid; grid-template-columns:28px 1fr 90px 130px;
             align-items:center; padding:8px 16px;
             border-bottom:1px solid var(--line-2); background:var(--bg-2);
-            font-family:'JetBrains Mono', monospace; font-size:9px; font-weight:700;
+            font-family:'JetBrains Mono', monospace; font-size:12px; font-weight:700;
             color:var(--text-3); letter-spacing:0.22em; text-transform:uppercase;
         }
         .ft-head .num-col { text-align:right; }
@@ -403,11 +403,11 @@
         }
         .ft-row:hover .ft-name { color:var(--ares-bright); }
         .ft-size {
-            font-family:'JetBrains Mono', monospace; font-size:11px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             color:var(--text-3); text-align:right; font-variant-numeric:tabular-nums;
         }
         .ft-date {
-            font-family:'JetBrains Mono', monospace; font-size:10px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             color:var(--text-3); text-align:right; letter-spacing:0.04em;
         }
 
@@ -428,13 +428,13 @@
         }
         .preview-name {
             font-family:'Bricolage Grotesque', sans-serif;
-            font-weight:700; font-size:13px; letter-spacing:-0.01em;
+            font-weight:700; font-size:14px; letter-spacing:-0.01em;
             color:var(--text-1); overflow:hidden; text-overflow:ellipsis;
             white-space:nowrap; min-width:0;
         }
         .preview-close {
             color:var(--text-3); cursor:pointer; background:none;
-            font-family:'JetBrains Mono', monospace; font-size:11px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             letter-spacing:0.12em; text-transform:uppercase; flex-shrink:0;
             padding:3px 8px; border:1px solid var(--line-2);
             transition:color 0.15s, border-color 0.15s;
@@ -445,11 +445,11 @@
         .preview-video, .preview-audio { width:100%; display:block; }
         .preview-iframe { width:100%; height:520px; border:none; display:block; background:var(--bg-2); }
         .preview-text {
-            font-family:'JetBrains Mono', monospace; font-size:11px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             color:var(--text-2); line-height:1.7; white-space:pre-wrap; word-break:break-all;
             max-height:500px; overflow-y:auto;
         }
-        .preview-meta { font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--text-2); line-height:2; letter-spacing:0.04em; }
+        .preview-meta { font-family:'JetBrains Mono', monospace; font-size:13px; color:var(--text-2); line-height:2; letter-spacing:0.04em; }
         .preview-meta .mk { color:var(--text-3); }
         .preview-footer {
             padding:10px 14px; border-top:1px solid var(--line-2);
@@ -457,7 +457,7 @@
         }
         .dl-btn {
             display:inline-flex; align-items:center; gap:8px;
-            font-family:'JetBrains Mono', monospace; font-size:10px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             letter-spacing:0.18em; text-transform:uppercase;
             color:var(--text-2); text-decoration:none;
             padding:6px 14px; border:1px solid var(--line-2);
@@ -468,7 +468,7 @@
         /* ═══ Loading spinner ═══ */
         .loading {
             padding:60px 0; text-align:center;
-            font-family:'JetBrains Mono', monospace; font-size:11px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             color:var(--text-3); letter-spacing:0.2em; text-transform:uppercase;
         }
         .loading .glyph {
@@ -484,7 +484,7 @@
         footer {
             border-top:1px solid var(--line-1); padding:14px 32px;
             padding-bottom:calc(14px + var(--sab));
-            font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--text-3);
+            font-family:'JetBrains Mono', monospace; font-size:13px; color:var(--text-3);
             letter-spacing:0.12em; text-transform:uppercase;
             display:flex; justify-content:space-between; flex-shrink:0;
         }
@@ -511,7 +511,7 @@
         /* ponytail: single panel, right-docked, same visual language as preview pane */
         .ask-toggle {
             display:inline-flex; align-items:center; gap:6px;
-            font-family:'JetBrains Mono', monospace; font-size:10px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             letter-spacing:0.15em; text-transform:uppercase;
             color:var(--text-2); background:var(--bg-1); border:1px solid var(--line-2);
             padding:6px 12px; cursor:pointer; flex-shrink:0;
@@ -538,20 +538,20 @@
         .chat-head-left { display:flex; flex-direction:column; gap:2px; min-width:0; }
         .chat-head-title {
             font-family:'Bricolage Grotesque', sans-serif;
-            font-weight:700; font-size:13px; letter-spacing:-0.01em;
+            font-weight:700; font-size:14px; letter-spacing:-0.01em;
             color:var(--ares);
         }
         .chat-head-sub {
-            font-family:'JetBrains Mono', monospace; font-size:9px;
+            font-family:'JetBrains Mono', monospace; font-size:12px;
             color:var(--text-3); letter-spacing:0.1em; text-transform:uppercase;
         }
         .chat-head-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
         .chat-index-count {
-            font-family:'JetBrains Mono', monospace; font-size:9px;
+            font-family:'JetBrains Mono', monospace; font-size:12px;
             color:var(--text-3); letter-spacing:0.06em; white-space:nowrap;
         }
         .chat-reindex-btn {
-            font-family:'JetBrains Mono', monospace; font-size:9px;
+            font-family:'JetBrains Mono', monospace; font-size:12px;
             letter-spacing:0.12em; text-transform:uppercase;
             color:var(--text-3); background:var(--bg-1); border:1px solid var(--line-2);
             padding:3px 8px; cursor:pointer;
@@ -561,7 +561,7 @@
         .chat-reindex-btn:disabled { opacity:0.4; cursor:not-allowed; }
         .chat-close {
             color:var(--text-3); cursor:pointer; background:none;
-            font-family:'JetBrains Mono', monospace; font-size:11px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             letter-spacing:0.12em; text-transform:uppercase; flex-shrink:0;
             padding:3px 8px; border:1px solid var(--line-2);
             transition:color 0.15s, border-color 0.15s;
@@ -574,13 +574,13 @@
         }
         .chat-msg { display:flex; flex-direction:column; gap:4px; }
         .chat-msg-role {
-            font-family:'JetBrains Mono', monospace; font-size:9px;
+            font-family:'JetBrains Mono', monospace; font-size:12px;
             letter-spacing:0.15em; text-transform:uppercase;
         }
         .chat-msg-role.user { color:var(--ares); }
         .chat-msg-role.assistant { color:var(--blue); }
         .chat-msg-bubble {
-            font-family:'JetBrains Mono', monospace; font-size:11px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             color:var(--text-2); line-height:1.65; padding:8px 10px;
             background:var(--bg-2); border:1px solid var(--line-1);
             word-break:break-word;
@@ -591,7 +591,7 @@
         .chat-loc-row {
             display:flex; align-items:center; gap:6px;
             padding:5px 8px; background:var(--bg-2); border:1px solid var(--line-1);
-            font-family:'JetBrains Mono', monospace; font-size:9px;
+            font-family:'JetBrains Mono', monospace; font-size:12px;
             color:var(--text-3); min-width:0;
         }
         .chat-loc-icon { flex-shrink:0; width:13px; height:13px; color:var(--text-3); }
@@ -608,7 +608,7 @@
         }
         .chat-loc-btns { display:flex; gap:4px; flex-shrink:0; }
         .chat-loc-btn {
-            font-family:'JetBrains Mono', monospace; font-size:8px;
+            font-family:'JetBrains Mono', monospace; font-size:12px;
             letter-spacing:0.12em; text-transform:uppercase;
             color:var(--text-3); background:var(--bg-0); border:1px solid var(--line-2);
             padding:2px 6px; cursor:pointer;
@@ -622,7 +622,7 @@
         }
         .chat-input {
             flex:1; background:var(--bg-1); border:1px solid var(--line-2);
-            color:var(--text-1); font-family:'JetBrains Mono', monospace; font-size:11px;
+            color:var(--text-1); font-family:'JetBrains Mono', monospace; font-size:13px;
             padding:7px 10px; outline:none; resize:none; min-height:34px; max-height:120px;
             letter-spacing:0.03em; line-height:1.5;
             transition:border-color 0.15s;
@@ -630,7 +630,7 @@
         .chat-input::placeholder { color:var(--text-4); }
         .chat-input:focus { border-color:var(--ares); }
         .chat-send-btn {
-            font-family:'JetBrains Mono', monospace; font-size:10px;
+            font-family:'JetBrains Mono', monospace; font-size:13px;
             letter-spacing:0.15em; text-transform:uppercase;
             color:var(--text-2); background:var(--bg-1); border:1px solid var(--line-2);
             padding:7px 12px; cursor:pointer; flex-shrink:0;
@@ -1337,7 +1337,7 @@ function makeTreeNode(name, path, hasChildren) {
 }
 
 async function loadTreeChildren(path, listEl) {
-    listEl.innerHTML = '<li style="padding:4px 12px;font-size:10px;color:var(--text-4)">…</li>';
+    listEl.innerHTML = '<li style="padding:4px 12px;font-size:13px;color:var(--text-4)">…</li>';
     try {
         const r = await fetch('/api/files/list?path=' + encodeURIComponent(path));
         if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -1353,7 +1353,7 @@ async function loadTreeChildren(path, listEl) {
             listEl.appendChild(child);
         });
     } catch (e) {
-        listEl.innerHTML = '<li style="padding:4px 12px;font-size:10px;color:var(--amber)">' + esc(e.message) + '</li>';
+        listEl.innerHTML = '<li style="padding:4px 12px;font-size:13px;color:var(--amber)">' + esc(e.message) + '</li>';
     }
 }
 
