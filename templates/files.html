@@ -568,33 +568,84 @@
         }
         .chat-close:hover { color:var(--ares); border-color:var(--ares); }
         .chat-msgs {
-            flex:1; overflow-y:auto; padding:12px 14px;
-            display:flex; flex-direction:column; gap:10px;
+            flex:1; overflow-y:auto; padding:14px 14px;
+            display:flex; flex-direction:column; gap:14px;
             min-height:0;
         }
-        .chat-msg { display:flex; flex-direction:column; gap:4px; }
-        .chat-msg-role {
-            font-family:'JetBrains Mono', monospace; font-size:12px;
-            letter-spacing:0.15em; text-transform:uppercase;
+        /* ── Welcome / empty state ── */
+        .chat-welcome {
+            margin:auto 0; display:flex; flex-direction:column;
+            align-items:center; text-align:center; gap:14px; padding:20px 8px;
         }
-        .chat-msg-role.user { color:var(--ares); }
-        .chat-msg-role.assistant { color:var(--blue); }
-        .chat-msg-bubble {
+        .chat-welcome-mark {
+            font-size:32px; line-height:1; color:var(--ares);
+            text-shadow:0 0 18px rgba(var(--ares-rgb),.45);
+        }
+        .chat-welcome-tag {
             font-family:'JetBrains Mono', monospace; font-size:13px;
-            color:var(--text-2); line-height:1.65; padding:8px 10px;
-            background:var(--bg-2); border:1px solid var(--line-1);
-            word-break:break-word;
+            color:var(--text-2); line-height:1.6; max-width:280px;
         }
-        .chat-msg-bubble.user { border-color:rgba(var(--ares-rgb),.18); background:rgba(var(--ares-rgb),.05); color:var(--text-1); }
-        .chat-msg-bubble.thinking { color:var(--text-4); font-style:italic; }
-        .chat-locations { margin-top:6px; display:flex; flex-direction:column; gap:4px; }
-        .chat-loc-row {
-            display:flex; align-items:center; gap:6px;
-            padding:5px 8px; background:var(--bg-2); border:1px solid var(--line-1);
+        .chat-chips { display:flex; flex-wrap:wrap; gap:7px; justify-content:center; }
+        .chat-chip {
             font-family:'JetBrains Mono', monospace; font-size:12px;
-            color:var(--text-3); min-width:0;
+            color:var(--text-2); background:var(--bg-2);
+            border:1px solid var(--ember-dim); padding:7px 11px; cursor:pointer;
+            letter-spacing:0.02em; line-height:1.3; text-align:left;
+            transition:color var(--dur), border-color var(--dur), background var(--dur);
         }
-        .chat-loc-icon { flex-shrink:0; width:13px; height:13px; color:var(--text-3); }
+        .chat-chip:hover, .chat-chip:focus-visible {
+            color:var(--ares); border-color:var(--ares);
+            background:rgba(var(--ares-rgb),.06); outline:none;
+        }
+        /* ── Messages ── */
+        .chat-msg {
+            display:flex; flex-direction:column; gap:5px;
+            max-width:88%;
+            animation:chatMsgIn var(--dur) var(--ease-out) both;
+        }
+        @keyframes chatMsgIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+        .chat-msg.user { align-self:flex-end; align-items:flex-end; }
+        .chat-msg.assistant { align-self:flex-start; align-items:flex-start; }
+        .chat-msg-row { display:flex; align-items:flex-start; gap:8px; min-width:0; max-width:100%; }
+        .chat-avatar {
+            flex-shrink:0; width:22px; height:22px; margin-top:1px;
+            display:flex; align-items:center; justify-content:center;
+            color:var(--ares); font-size:14px;
+            border:1px solid var(--ember-dim); background:var(--bg-2);
+        }
+        .chat-msg-role {
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            letter-spacing:0.18em; text-transform:uppercase; color:var(--text-3);
+        }
+        .chat-msg-bubble {
+            font-family:'JetBrains Mono', monospace; font-size:14px;
+            color:var(--text-1); line-height:1.6; padding:10px 12px;
+            background:var(--bg-2); border:1px solid var(--line-1);
+            word-break:break-word; min-width:0;
+        }
+        .chat-msg-bubble.user {
+            border-color:rgba(var(--ares-rgb),.30);
+            background:rgba(var(--ares-rgb),.09); color:var(--text-1);
+        }
+        /* ── Typing indicator ── */
+        .chat-typing { display:flex; gap:5px; align-items:center; padding:12px 12px; }
+        .chat-typing span {
+            width:6px; height:6px; border-radius:50%;
+            background:var(--ares); opacity:.35;
+            animation:chatDot 1.2s var(--ease-out) infinite;
+        }
+        .chat-typing span:nth-child(2) { animation-delay:.18s; }
+        .chat-typing span:nth-child(3) { animation-delay:.36s; }
+        @keyframes chatDot { 0%,60%,100% { opacity:.25; transform:translateY(0); } 30% { opacity:1; transform:translateY(-3px); } }
+        /* ── Location result card ── */
+        .chat-locations { margin-top:8px; display:flex; flex-direction:column; gap:7px; width:100%; }
+        .chat-loc-card {
+            display:flex; flex-direction:column; gap:8px;
+            padding:10px 11px; background:var(--bg-2); border:1px solid var(--ember-dim);
+            min-width:0;
+        }
+        .chat-loc-head { display:flex; align-items:flex-start; gap:9px; min-width:0; }
+        .chat-loc-icon { flex-shrink:0; width:18px; height:18px; margin-top:1px; color:var(--text-3); }
         .chat-loc-icon.kind-dir   { color:var(--text-1); }
         .chat-loc-icon.kind-image { color:var(--cyan); }
         .chat-loc-icon.kind-video { color:var(--magenta); }
@@ -602,43 +653,71 @@
         .chat-loc-icon.kind-pdf   { color:var(--ares); }
         .chat-loc-icon.kind-md    { color:var(--blue); }
         .chat-loc-icon.kind-text  { color:var(--text-2); }
+        .chat-loc-meta { display:flex; flex-direction:column; gap:3px; min-width:0; flex:1; }
+        .chat-loc-name {
+            font-family:'JetBrains Mono', monospace; font-size:13px;
+            color:var(--text-1); font-weight:500;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        }
         .chat-loc-path {
-            flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-            color:var(--text-2); letter-spacing:0.02em;
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            color:var(--text-3); letter-spacing:0.02em;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
         }
-        .chat-loc-btns { display:flex; gap:4px; flex-shrink:0; }
+        .chat-loc-tag {
+            align-self:flex-start; font-family:'JetBrains Mono', monospace;
+            font-size:9px; letter-spacing:0.14em; text-transform:uppercase;
+            color:var(--text-3); border:1px solid var(--line-1);
+            padding:2px 6px; margin-top:1px;
+        }
+        .chat-loc-btns { display:flex; gap:7px; }
         .chat-loc-btn {
+            flex:1; display:inline-flex; align-items:center; justify-content:center;
+            min-height:40px;
             font-family:'JetBrains Mono', monospace; font-size:12px;
-            letter-spacing:0.12em; text-transform:uppercase;
-            color:var(--text-3); background:var(--bg-0); border:1px solid var(--line-2);
-            padding:2px 6px; cursor:pointer;
-            transition:color 0.12s, border-color 0.12s;
+            letter-spacing:0.14em; text-transform:uppercase;
+            color:var(--text-2); background:var(--bg-0); border:1px solid var(--line-2);
+            padding:0 10px; cursor:pointer;
+            transition:color var(--dur), border-color var(--dur), background var(--dur);
         }
-        .chat-loc-btn:hover { color:var(--ares); border-color:var(--ares); }
+        .chat-loc-btn:hover, .chat-loc-btn:focus-visible {
+            color:var(--ares); border-color:var(--ares);
+            background:rgba(var(--ares-rgb),.06); outline:none;
+        }
+        /* ── Input dock ── */
         .chat-footer {
-            padding:10px 14px; border-top:1px solid var(--line-2);
+            padding:10px 14px calc(10px + var(--sab)) 14px; border-top:1px solid var(--line-2);
             background:var(--bg-2); flex-shrink:0;
-            display:flex; gap:6px; align-items:flex-end;
+            display:flex; gap:8px; align-items:flex-end;
         }
         .chat-input {
             flex:1; background:var(--bg-1); border:1px solid var(--line-2);
-            color:var(--text-1); font-family:'JetBrains Mono', monospace; font-size:13px;
-            padding:7px 10px; outline:none; resize:none; min-height:34px; max-height:120px;
-            letter-spacing:0.03em; line-height:1.5;
-            transition:border-color 0.15s;
+            color:var(--text-1); font-family:'JetBrains Mono', monospace; font-size:14px;
+            padding:9px 11px; outline:none; resize:none; min-height:40px; max-height:120px;
+            letter-spacing:0.02em; line-height:1.5;
+            transition:border-color var(--dur), box-shadow var(--dur);
         }
         .chat-input::placeholder { color:var(--text-4); }
-        .chat-input:focus { border-color:var(--ares); }
-        .chat-send-btn {
-            font-family:'JetBrains Mono', monospace; font-size:13px;
-            letter-spacing:0.15em; text-transform:uppercase;
-            color:var(--text-2); background:var(--bg-1); border:1px solid var(--line-2);
-            padding:7px 12px; cursor:pointer; flex-shrink:0;
-            transition:color 0.15s, border-color 0.15s, background 0.15s;
-            align-self:flex-end;
+        .chat-input:focus {
+            border-color:var(--ares);
+            box-shadow:0 0 0 2px rgba(var(--ares-rgb),.18);
         }
-        .chat-send-btn:hover:not(:disabled) { color:var(--ares); border-color:var(--ares); background:rgba(var(--ares-rgb),.06); }
+        .chat-send-btn {
+            flex-shrink:0; width:44px; height:40px; align-self:flex-end;
+            display:inline-flex; align-items:center; justify-content:center;
+            color:var(--text-2); background:var(--bg-1); border:1px solid var(--line-2);
+            cursor:pointer;
+            transition:color var(--dur), border-color var(--dur), background var(--dur);
+        }
+        .chat-send-btn svg { width:18px; height:18px; }
+        .chat-send-btn:hover:not(:disabled), .chat-send-btn:focus-visible:not(:disabled) {
+            color:var(--ares); border-color:var(--ares); background:rgba(var(--ares-rgb),.06); outline:none;
+        }
         .chat-send-btn:disabled { opacity:0.35; cursor:not-allowed; }
+        @media (prefers-reduced-motion: reduce) {
+            .chat-msg { animation:none; }
+            .chat-typing span { animation:none; opacity:.6; }
+        }
         @media (max-width:900px) {
             .chat-panel {
                 position:fixed; right:0; top:0; bottom:0;
@@ -648,6 +727,10 @@
                 padding-top:calc(57px + var(--sat));
                 z-index:501;
             }
+            .chat-msg { max-width:92%; }
+            .chat-loc-btn { min-height:44px; }
+            .chat-input { min-height:44px; font-size:16px; }
+            .chat-send-btn { height:44px; width:48px; }
         }
     </style>
     <script>window.__NODE="ARES"</script>
@@ -779,10 +862,12 @@
                         <button class="chat-close" id="chat-close">✕</button>
                     </div>
                 </div>
-                <div class="chat-msgs" id="chat-msgs"></div>
+                <div class="chat-msgs" id="chat-msgs" role="log" aria-live="polite"></div>
                 <div class="chat-footer">
                     <textarea class="chat-input" id="chat-input" rows="1" placeholder="Ask about your files…" aria-label="Ask about your files" autocomplete="off" spellcheck="false"></textarea>
-                    <button class="chat-send-btn" id="chat-send-btn">Send</button>
+                    <button class="chat-send-btn" id="chat-send-btn" aria-label="Send message">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                    </button>
                 </div>
             </div>
         </div>
@@ -1474,11 +1559,57 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
         startIndexPoll();
     });
 
+    // brand-neutral assistant name (ARES / ZEUS), themes with the box
+    const ASSISTANT_NAME = (document.documentElement.getAttribute('data-brand') || 'ARES');
+
+    // ── Welcome / empty state ───────────────────────────────────────────────────
+
+    const EXAMPLE_PROMPTS = [
+        'the newest resume',
+        'how do I join the minecraft server',
+        'docs about deliverability',
+        'largest video files',
+    ];
+
+    function renderWelcome() {
+        chatMsgs.innerHTML = '';
+        const w = document.createElement('div');
+        w.className = 'chat-welcome';
+
+        const mark = document.createElement('div');
+        mark.className = 'chat-welcome-mark';
+        mark.textContent = '✦';
+        w.appendChild(mark);
+
+        const tag = document.createElement('div');
+        tag.className = 'chat-welcome-tag';
+        tag.textContent = 'Ask about your files by name, content, or meaning.';
+        w.appendChild(tag);
+
+        const chips = document.createElement('div');
+        chips.className = 'chat-chips';
+        EXAMPLE_PROMPTS.forEach(p => {
+            const chip = document.createElement('button');
+            chip.className = 'chat-chip';
+            chip.type = 'button';
+            chip.textContent = p; // static strings, but textContent regardless
+            chip.addEventListener('click', () => {
+                chatInput.value = p;
+                sendQuery();
+            });
+            chips.appendChild(chip);
+        });
+        w.appendChild(chips);
+
+        chatMsgs.appendChild(w);
+    }
+
     // ── Panel open/close ──────────────────────────────────────────────────────
 
     function openChat() {
         chatPanel.classList.add('open');
         askToggle.classList.add('active');
+        if (!chatHistory.length) renderWelcome();
         refreshIndexCount();
         chatInput.focus();
     }
@@ -1495,20 +1626,34 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
 
     // ── Message rendering ─────────────────────────────────────────────────────
 
+    const VIA_LABELS = { semantic: 'matched: semantic', content: 'matched: content' };
+
     function appendMsg(role, text, locations) {
         const wrap = document.createElement('div');
-        wrap.className = 'chat-msg';
+        wrap.className = 'chat-msg ' + (role === 'user' ? 'user' : 'assistant');
 
         const roleEl = document.createElement('div');
-        roleEl.className = 'chat-msg-role ' + esc(role);
-        roleEl.textContent = role === 'user' ? 'You' : 'ZEUS';
+        roleEl.className = 'chat-msg-role';
+        roleEl.textContent = role === 'user' ? 'You' : ASSISTANT_NAME;
         wrap.appendChild(roleEl);
 
+        const row = document.createElement('div');
+        row.className = 'chat-msg-row';
+
+        if (role !== 'user') {
+            const avatar = document.createElement('div');
+            avatar.className = 'chat-avatar';
+            avatar.setAttribute('aria-hidden', 'true');
+            avatar.textContent = '✦';
+            row.appendChild(avatar);
+        }
+
         const bubble = document.createElement('div');
-        bubble.className = 'chat-msg-bubble ' + esc(role);
+        bubble.className = 'chat-msg-bubble ' + (role === 'user' ? 'user' : 'assistant');
         // esc() on answer text; newlines → <br>
         bubble.innerHTML = esc(text).replace(/\n/g, '<br>');
-        wrap.appendChild(bubble);
+        row.appendChild(bubble);
+        wrap.appendChild(row);
 
         if (locations && locations.length) {
             const locList = document.createElement('div');
@@ -1519,27 +1664,52 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
                 const locPath = loc.path || '';
                 const locName = loc.name || locPath.split('/').pop() || locPath;
 
-                const row = document.createElement('div');
-                row.className = 'chat-loc-row';
+                const card = document.createElement('div');
+                card.className = 'chat-loc-card';
+
+                const head = document.createElement('div');
+                head.className = 'chat-loc-head';
 
                 // icon — ICONS is static, safe to inject; wrap it in a styled span
                 const iconSpan = document.createElement('span');
                 iconSpan.className = 'chat-loc-icon kind-' + kind;
+                iconSpan.setAttribute('aria-hidden', 'true');
                 iconSpan.innerHTML = ICONS[loc.kind] || ICONS.file; // ICONS is static const
-                row.appendChild(iconSpan);
+                head.appendChild(iconSpan);
 
-                const pathSpan = document.createElement('span');
+                const meta = document.createElement('div');
+                meta.className = 'chat-loc-meta';
+
+                const nameSpan = document.createElement('div');
+                nameSpan.className = 'chat-loc-name';
+                nameSpan.title = locName;
+                nameSpan.textContent = locName; // textContent — safe
+                meta.appendChild(nameSpan);
+
+                const pathSpan = document.createElement('div');
                 pathSpan.className = 'chat-loc-path';
                 pathSpan.title = locPath;
                 pathSpan.textContent = locPath; // textContent — safe
-                row.appendChild(pathSpan);
+                meta.appendChild(pathSpan);
+
+                if (loc.via === 'semantic' || loc.via === 'content') {
+                    const tag = document.createElement('span');
+                    tag.className = 'chat-loc-tag';
+                    tag.textContent = VIA_LABELS[loc.via];
+                    meta.appendChild(tag);
+                }
+
+                head.appendChild(meta);
+                card.appendChild(head);
 
                 const btns = document.createElement('div');
                 btns.className = 'chat-loc-btns';
 
                 const jumpBtn = document.createElement('button');
                 jumpBtn.className = 'chat-loc-btn';
+                jumpBtn.type = 'button';
                 jumpBtn.textContent = 'Jump';
+                jumpBtn.setAttribute('aria-label', 'Jump to folder of ' + locName);
                 jumpBtn.addEventListener('click', () => {
                     // derive parent dir: everything before last '/'
                     const slash = locPath.lastIndexOf('/');
@@ -1555,15 +1725,17 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
                 if (loc.kind !== 'dir') {
                     const openBtn = document.createElement('button');
                     openBtn.className = 'chat-loc-btn';
+                    openBtn.type = 'button';
                     openBtn.textContent = 'Open';
+                    openBtn.setAttribute('aria-label', 'Open ' + locName + ' in new tab');
                     openBtn.addEventListener('click', () => {
                         window.open(rawUrl(locPath, false), '_blank', 'noopener');
                     });
                     btns.appendChild(openBtn);
                 }
 
-                row.appendChild(btns);
-                locList.appendChild(row);
+                card.appendChild(btns);
+                locList.appendChild(card);
             });
 
             wrap.appendChild(locList);
@@ -1571,7 +1743,7 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
 
         chatMsgs.appendChild(wrap);
         chatMsgs.scrollTop = chatMsgs.scrollHeight;
-        return bubble; // returned so caller can update a "thinking…" placeholder
+        return bubble; // returned so caller can update a placeholder
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────
@@ -1582,22 +1754,34 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
         chatBusy = true;
         chatSendBtn.disabled = true;
 
+        // clear welcome state once a conversation starts
+        if (!chatHistory.length) chatMsgs.innerHTML = '';
+
         appendMsg('user', query, null);
         chatHistory.push({ role: 'user', text: query });
         chatInput.value = '';
         chatInput.style.height = '';
 
-        // thinking placeholder
-        const thinkBubble = document.createElement('div');
+        // typing indicator (assistant-side)
         const thinkWrap   = document.createElement('div');
-        thinkWrap.className = 'chat-msg';
+        thinkWrap.className = 'chat-msg assistant';
         const thinkRole = document.createElement('div');
-        thinkRole.className = 'chat-msg-role assistant';
-        thinkRole.textContent = 'ZEUS';
-        thinkBubble.className = 'chat-msg-bubble assistant thinking';
-        thinkBubble.textContent = 'thinking…';
+        thinkRole.className = 'chat-msg-role';
+        thinkRole.textContent = ASSISTANT_NAME;
+        const thinkRow = document.createElement('div');
+        thinkRow.className = 'chat-msg-row';
+        const thinkAvatar = document.createElement('div');
+        thinkAvatar.className = 'chat-avatar';
+        thinkAvatar.setAttribute('aria-hidden', 'true');
+        thinkAvatar.textContent = '✦';
+        const thinkBubble = document.createElement('div');
+        thinkBubble.className = 'chat-msg-bubble assistant';
+        thinkBubble.setAttribute('aria-label', 'Thinking');
+        thinkBubble.innerHTML = '<span class="chat-typing"><span></span><span></span><span></span></span>';
+        thinkRow.appendChild(thinkAvatar);
+        thinkRow.appendChild(thinkBubble);
         thinkWrap.appendChild(thinkRole);
-        thinkWrap.appendChild(thinkBubble);
+        thinkWrap.appendChild(thinkRow);
         chatMsgs.appendChild(thinkWrap);
         chatMsgs.scrollTop = chatMsgs.scrollHeight;
 
