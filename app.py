@@ -5264,10 +5264,14 @@ def api_photos_summary():
     months = OrderedDict()
     month_candidates = {}  # month_key -> list of {thumb, is_camera}
     MAX_COVERS = 6
+    # Photos view includes BOTH images and videos, interleaved by date — so a
+    # video-only month still appears (the old two-loop form dropped any month
+    # that had no photo). Videos also seed month covers as a fallback.
     for item in items:
-        if item.get("type") == "video":
+        try:
+            dt = datetime.fromtimestamp(item["date"], tz=_GALLERY_TZ)
+        except Exception:
             continue
-        dt = datetime.fromtimestamp(item["date"], tz=_GALLERY_TZ)
         mk = dt.strftime("%Y-%m")
         if mk not in months:
             months[mk] = {
@@ -5287,15 +5291,6 @@ def api_photos_summary():
                 "thumb": thumb,
                 "is_camera": _is_camera_source(item.get("path", "")),
             })
-
-    # Also count videos toward month totals
-    for item in items:
-        if item.get("type") == "video":
-            dt = datetime.fromtimestamp(item["date"], tz=_GALLERY_TZ)
-            mk = dt.strftime("%Y-%m")
-            if mk in months:
-                months[mk]["count"] += 1
-                months[mk]["sumar"] += _clamp_ar(item.get("ar"))
 
     # Pick covers using CLIP aesthetic scoring (falls back to landscape heuristic)
     for mk, cands in month_candidates.items():
