@@ -75,3 +75,5 @@ ios_photo_ids.json
 data/
 xcuserdata/
 ._*
+system/_files_thumb_cache/
+ai_data/files_index.db*

@@ -166,8 +166,14 @@ def search(query, limit=40, db=INDEX_DB):
                 s += 1.0
             if t in segs:                      # matched a whole folder/file name
                 s += 2.5
+            if segs and t == segs[0]:          # matched a TOP-LEVEL folder — strong signal
+                s += 1.5
             if in_name:                        # matched the basename itself
                 s += 1.0
+        for seg in segs:                       # multiple query terms in ONE path
+            if sum(1 for t in terms if t in seg) >= 2:   # component (e.g. "ares-dashboard")
+                s += 3.0                                  # = a very strong match
+                break
         s -= 0.15 * max(0, len(segs) - 1)      # shallower = more likely what you want
         if r[2] == "dir":                      # a matching folder answers "where is X"
             s += 0.6
