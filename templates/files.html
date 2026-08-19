@@ -152,7 +152,7 @@
             display:flex; align-items:center; justify-content:center;
         }
         .tree-toggle.open { transform:rotate(90deg); }
-        .tree-icon { flex-shrink:0; color:var(--amber); }
+        .tree-icon { flex-shrink:0; color:var(--text-1); }
         .tree-label { overflow:hidden; text-overflow:ellipsis; min-width:0; }
         .tree-children {
             list-style:none;
@@ -341,7 +341,7 @@
             display:flex; align-items:center; justify-content:center;
             width:18px; height:18px; flex-shrink:0; color:var(--text-3);
         }
-        .ft-icon.kind-dir   { color:var(--amber); }
+        .ft-icon.kind-dir   { color:var(--text-1); }
         .ft-icon.kind-image { color:var(--cyan); }
         .ft-icon.kind-video { color:var(--magenta); }
         .ft-icon.kind-audio { color:var(--green); }
@@ -669,7 +669,7 @@ const ICONS = {
 };
 
 const KIND_COLORS = {
-    dir:'var(--amber)', image:'var(--cyan)', video:'var(--magenta)',
+    dir:'var(--text-1)', image:'var(--cyan)', video:'var(--magenta)',
     audio:'var(--green)', pdf:'var(--ares)', md:'var(--blue)',
     text:'var(--text-2)', file:'var(--text-4)',
 };
@@ -866,6 +866,8 @@ function renderGrid(sorted) {
         tile.addEventListener('dblclick', () => {
             if (tile.dataset.isdir === '1') {
                 navigate(tile.dataset.path);
+            } else {
+                window.open(rawUrl(tile.dataset.path, false), '_blank', 'noopener');
             }
         });
 
@@ -931,6 +933,7 @@ function renderList(sorted) {
         });
         row.addEventListener('dblclick', () => {
             if (row.dataset.isdir === '1') navigate(row.dataset.path);
+            else window.open(rawUrl(row.dataset.path, false), '_blank', 'noopener');
         });
     });
 }
