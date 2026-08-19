@@ -3,6 +3,9 @@
 <head>
 {% set page_title = "TERMINAL · ARES" %}
 {% include "_hud_head.html" %}
+    <link rel="stylesheet" href="/static/vendor/xterm/xterm.css">
+    <script src="/static/vendor/xterm/xterm.js"></script>
+    <script src="/static/vendor/xterm/xterm-addon-fit.js"></script>
     <link rel="manifest" href="/static/manifest.json">
     <link rel="apple-touch-icon" href="/static/icon-180.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -78,14 +81,17 @@
     .tab-add.t-zeus { color:var(--nav-blue); border-color:rgba(100,149,237,0.5); }
     .tab-add.t-zeus:active { background:rgba(100,149,237,0.12); }
 
-    /* === Terminal iframe === */
+    /* === xterm.js mount === */
     /* The whole UI is a flex column sized to the dynamic viewport. The viewport
        meta sets interactive-widget=resizes-content, so when the soft keyboard
        opens the *layout* viewport (and 100dvh) shrinks to the area above it — the
        terminal + accessory bar stay visible, the keybar rides just above the
-       keyboard. This is done purely by the browser: NO JS touches the layout, so
-       focus inside the (cross-origin) ttyd iframe is never disturbed while typing. */
+       keyboard. */
     #term { flex:1 1 auto; width:100%; border:0; display:block; background:var(--bg-0); min-height:0; }
+    .xterm-mount { width:100%; height:100%; }
+    #term .xterm { height:100%; padding:8px 10px; }
+    #term .xterm-viewport::-webkit-scrollbar { width:9px; }
+    #term .xterm-viewport::-webkit-scrollbar-thumb { background:rgba(var(--ares-rgb),.28); }
 
     /* === Block + Claude views (same-slot as iframe) === */
     #block-view, #claude-view {
@@ -226,8 +232,8 @@
                 <button class="tab tab-add t-zeus" id="tab-add-zeus" title="SSH into ZEUS"><span class="plus">+</span>ZEUS</button>
             </div>
 
-            <!-- Live PTY into the ARES host's persistent tmux session "web" (ttyd). -->
-            <iframe id="term" title="ARES shell" allow="clipboard-read; clipboard-write"></iframe>
+            <!-- xterm.js terminal mount (Task 1). PTY wire-up in Task 2. -->
+            <div id="term" class="xterm-mount"></div>
             <!-- Block view: Warp-style command cards for shell-kind windows -->
             <div id="block-view"></div>
             <!-- Claude view: chat feed for claude-kind windows -->
@@ -293,8 +299,21 @@
         ? 'wss://' + location.host + '/pty-ws/'
         : 'ws://100.77.42.110:7686';
     var SESSION_NAME = 'web';
-    var term = document.getElementById('term');
-    term.src = onHttps ? '/shell/' : 'http://100.77.42.110:7681/';
+
+    // xterm.js terminal instance (Task 1). PTY wire-up in Task 2.
+    var term = new Terminal({
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 13.5,
+        lineHeight: 1.2,
+        cursorBlink: true,
+        cursorStyle: 'block',
+        scrollback: 5000,
+        allowProposedApi: true
+    });
+    var fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open(document.getElementById('term'));
+    try { fit.fit(); } catch (e) {}
 
     // Per-window kind map populated from pty_ws windows responses.
     var _windowKinds = {};   // index (int) → "shell" | "claude" | null
@@ -321,32 +340,6 @@
     function _escHtml(s) {
         return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
-
-    /* ── Reconnect: reload iframe if ttyd goes dark ─────────────────── */
-    var _termSrc = term.src;
-    var _disconnected = false;
-    var _reconnTimer = null;
-
-    function _termHealth() {
-        // If the iframe content is blank/error, reload it.
-        try {
-            var doc = term.contentDocument;
-            if (doc && (doc.readyState === 'complete') &&
-                (!doc.body || doc.body.innerHTML.trim() === '' ||
-                 doc.title === '')) {
-                _scheduleReconnect();
-            }
-        } catch (e) { /* cross-origin: can't inspect — that's fine, ttyd is live */ }
-    }
-    function _scheduleReconnect() {
-        if (_reconnTimer) return;
-        _reconnTimer = setTimeout(function () {
-            _reconnTimer = null;
-            term.src = _termSrc + '?' + Date.now();  // cache-bust
-        }, 1500);
-    }
-    term.addEventListener('error', _scheduleReconnect);
-    setInterval(_termHealth, 8000);
 
     /* ── CTL API ─────────────────────────────────────────────────────── */
     function api(path, body) {
