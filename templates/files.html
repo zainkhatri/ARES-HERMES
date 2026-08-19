@@ -206,14 +206,20 @@
 
         /* ═══ Content area ═══ */
         .content-area {
-            flex:1; min-width:0;
-            display:flex; gap:0; align-items:flex-start;
+            flex:1; min-width:0; min-height:0;
+            display:flex; gap:0; align-items:stretch;
         }
         .explorer-main {
-            flex:1; min-width:0;
+            flex:1; min-width:0; min-height:0;
             padding:20px 24px;
-            overflow:auto;
+            display:flex; flex-direction:column; gap:14px;
+            overflow:hidden;
         }
+        /* toolbar stays its natural height; the file panel fills the rest and
+           scrolls inside so the page always fills the viewport (no dead space). */
+        .toolbar-mod { flex:0 0 auto; }
+        .files-mod { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+        .files-mod > .mod-body { flex:1 1 auto; min-height:0; overflow:auto; }
         @media (max-width:600px) {
             .explorer-main { padding:14px 12px; }
         }
@@ -316,12 +322,12 @@
         /* ═══ GRID view ═══ */
         .file-grid {
             display:grid;
-            grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));
-            gap:10px;
+            grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));
+            gap:16px; align-content:start;
         }
         .fg-tile {
             display:flex; flex-direction:column; align-items:center;
-            padding:12px 8px 10px;
+            padding:20px 12px 16px;
             background:var(--bg-1); border:1px solid var(--line-1);
             cursor:pointer; transition:background 0.12s, border-color 0.15s;
             user-select:none; min-width:0;
@@ -329,19 +335,19 @@
         .fg-tile:hover { background:var(--bg-2); border-color:var(--line-2); }
         .fg-tile.selected { border-color:var(--ares); background:rgba(var(--ares-rgb),.07); }
         .fg-thumb-wrap {
-            width:80px; height:80px; flex-shrink:0;
+            width:120px; height:120px; flex-shrink:0;
             display:flex; align-items:center; justify-content:center;
-            position:relative; margin-bottom:8px;
+            position:relative; margin-bottom:12px;
         }
         .fg-thumb {
-            width:80px; height:80px; object-fit:cover;
+            width:120px; height:120px; object-fit:cover;
             border:1px solid var(--line-2); display:block;
         }
         .fg-icon-wrap {
-            width:80px; height:80px;
+            width:120px; height:120px;
             display:flex; align-items:center; justify-content:center;
         }
-        .fg-icon-wrap svg { width:40px; height:40px; }
+        .fg-icon-wrap svg { width:60px; height:60px; }
         .fg-name {
             font-family:'Bricolage Grotesque', sans-serif;
             font-weight:600; font-size:12px; letter-spacing:-0.01em;
