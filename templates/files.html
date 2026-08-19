@@ -1,0 +1,700 @@
+{# ARES · Files — storage explorer. Browse PROMETHEUS filesystem. #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ARES · Files</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icon-180.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#04070d">
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-0:#04070d; --bg-1:#070c16; --bg-2:#0a121f; --bg-3:#0d1726;
+            --line-1:rgba(239,68,68,0.08); --line-2:rgba(239,68,68,0.18);
+            --text-1:#e8f0f8; --text-2:#8ba3c0; --text-3:#4a5d78; --text-4:#2d3a4e;
+            --blue:#6495ed; --blue-bright:#9ab5f5; --cyan:#67e8f9;
+            --green:#10b981; --amber:#f59e0b; --red:#ef4444; --magenta:#c084fc;
+            --ares:#ef4444; --ares-bright:#f87171;
+            --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+            --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        html, body {
+            min-height:100%; background:var(--bg-0); color:var(--text-1);
+            font-family:'JetBrains Mono', monospace;
+            -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+        }
+        ::selection { background:var(--ares); color:var(--bg-0); }
+        .app { display:flex; flex-direction:column; min-height:100vh; min-height:100dvh; }
+
+        /* ═══ Navbar — identical structure to drives.html ═══ */
+        .navbar {
+            position:sticky; top:0; z-index:1000;
+            background:rgba(4,7,13,0.92);
+            border-bottom:1px solid var(--line-1);
+            padding:14px 24px;
+            padding-top:calc(14px + var(--sat));
+            padding-left:calc(24px + var(--sal));
+            padding-right:calc(24px + var(--sar));
+            display:flex; align-items:center; justify-content:space-between; gap:20px;
+        }
+        .navbar-left { display:flex; align-items:center; gap:16px; min-width:0; }
+        .nbr { display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; transition:opacity 0.18s ease; min-width:0; }
+        .nbr-other { opacity:0.7; }
+        .nbr-other:hover { opacity:1; }
+        .nbr-mark {
+            width:26px; height:26px; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center;
+            border:1px solid; font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:800; font-size:14px; line-height:1;
+        }
+        .nbr-mark.m-a { border-color:var(--ares); color:var(--ares); }
+        .nbr-id { display:flex; align-items:baseline; gap:8px; min-width:0; }
+        .nbr-name { font-family:'Bricolage Grotesque', sans-serif; font-weight:700; font-size:14px; letter-spacing:0.02em; white-space:nowrap; }
+        .nbr-name.n-a { color:var(--ares); }
+        .nbr-sep { color:var(--text-3); font-size:11px; }
+        .nbr-tag { font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--text-2); letter-spacing:0.1em; text-transform:uppercase; white-space:nowrap; }
+        .back-chip {
+            display:inline-flex; align-items:center; gap:6px;
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            color:var(--text-2); text-decoration:none;
+            letter-spacing:0.15em; text-transform:uppercase;
+            padding:5px 11px;
+            border:1px solid var(--line-2);
+            transition:color 0.15s, border-color 0.15s, background 0.15s, gap 0.15s;
+        }
+        .back-chip svg { transition:transform 0.18s ease; }
+        .back-chip:hover { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.05); }
+        .back-chip:hover svg { transform:translateX(-2px); }
+        @media (max-width:600px) {
+            .navbar { padding:12px 14px; gap:10px; }
+            .nbr-tag { display:none; }
+            .back-chip span { display:none; }
+            .back-chip { padding:5px 8px; }
+        }
+
+        /* ═══ Main ═══ */
+        main {
+            flex:1;
+            padding:28px 32px;
+            padding-left:calc(32px + var(--sal));
+            padding-right:calc(32px + var(--sar));
+            max-width:1400px; margin:0 auto; width:100%;
+        }
+
+        /* ═══ Section head ═══ */
+        .section-head {
+            display:flex; justify-content:space-between; align-items:baseline;
+            margin-bottom:18px;
+            padding-bottom:10px;
+            border-bottom:1px solid var(--line-1);
+            gap:16px; flex-wrap:wrap;
+        }
+        .section-title {
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:700; font-size:18px; letter-spacing:-0.01em;
+            color:var(--text-1);
+        }
+        .section-title .dim { color:var(--text-3); font-weight:500; }
+        .section-meta {
+            display:flex; align-items:center; gap:10px;
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            color:var(--text-3); letter-spacing:0.15em; text-transform:uppercase;
+        }
+
+        /* ═══ Breadcrumb ═══ */
+        .breadcrumb {
+            display:flex; align-items:center; gap:0; flex-wrap:wrap;
+            margin-bottom:16px;
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            letter-spacing:0.08em;
+            background:var(--bg-1);
+            border:1px solid var(--line-2);
+            padding:8px 14px;
+            min-height:36px;
+        }
+        .bc-seg {
+            color:var(--text-2); cursor:pointer; text-decoration:none;
+            padding:2px 4px;
+            transition:color 0.15s;
+            white-space:nowrap;
+        }
+        .bc-seg:hover { color:var(--ares); }
+        .bc-sep { color:var(--text-4); padding:0 2px; user-select:none; }
+        .bc-current { color:var(--text-1); font-weight:600; padding:2px 4px; white-space:nowrap; }
+
+        /* ═══ Controls row ═══ */
+        .controls {
+            display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+            margin-bottom:12px;
+        }
+        .filter-input {
+            flex:1; min-width:180px; max-width:340px;
+            background:var(--bg-1); border:1px solid var(--line-2); color:var(--text-1);
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            padding:6px 12px; letter-spacing:0.04em;
+            outline:none; transition:border-color 0.15s;
+        }
+        .filter-input::placeholder { color:var(--text-3); }
+        .filter-input:focus { border-color:var(--ares); }
+        .sort-group {
+            display:flex; gap:0; flex-shrink:0;
+        }
+        .sort-btn {
+            font-family:'JetBrains Mono', monospace; font-size:9px;
+            letter-spacing:0.18em; text-transform:uppercase;
+            color:var(--text-3); background:var(--bg-1); border:1px solid var(--line-2);
+            padding:6px 12px; cursor:pointer;
+            transition:color 0.15s, background 0.15s, border-color 0.15s;
+            margin-left:-1px;
+        }
+        .sort-btn:first-child { margin-left:0; }
+        .sort-btn:hover { color:var(--text-1); }
+        .sort-btn.active { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.06); z-index:1; position:relative; }
+
+        /* ═══ Truncation notice ═══ */
+        .truncated-notice {
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            color:var(--amber); letter-spacing:0.12em;
+            padding:7px 14px;
+            border:1px solid rgba(245,158,11,0.25);
+            background:rgba(245,158,11,0.04);
+            margin-bottom:12px;
+        }
+
+        /* ═══ File table ═══ */
+        .file-table {
+            border:1px solid var(--line-2);
+            background:var(--bg-1);
+        }
+        .ft-head {
+            display:grid;
+            grid-template-columns:28px 1fr 90px 130px;
+            align-items:center;
+            padding:8px 16px;
+            border-bottom:1px solid var(--line-2);
+            background:var(--bg-2);
+            font-family:'JetBrains Mono', monospace;
+            font-size:9px; font-weight:700;
+            color:var(--text-3); letter-spacing:0.22em; text-transform:uppercase;
+        }
+        .ft-head .num-col { text-align:right; }
+        .ft-row {
+            display:grid;
+            grid-template-columns:28px 1fr 90px 130px;
+            align-items:center;
+            padding:10px 16px;
+            border-bottom:1px solid var(--line-1);
+            cursor:pointer;
+            transition:background 0.12s;
+            text-decoration:none; color:inherit;
+        }
+        .ft-row:last-child { border-bottom:0; }
+        .ft-row:hover { background:var(--bg-2); }
+        .ft-row.selected { background:rgba(239,68,68,0.06); }
+        .ft-icon {
+            display:flex; align-items:center; justify-content:center;
+            width:18px; height:18px; flex-shrink:0;
+            color:var(--text-3);
+        }
+        .ft-icon.kind-dir   { color:var(--amber); }
+        .ft-icon.kind-image { color:var(--cyan); }
+        .ft-icon.kind-video { color:var(--magenta); }
+        .ft-icon.kind-audio { color:var(--green); }
+        .ft-icon.kind-pdf   { color:var(--ares); }
+        .ft-icon.kind-md    { color:var(--blue); }
+        .ft-icon.kind-text  { color:var(--text-2); }
+        .ft-icon.kind-file  { color:var(--text-4); }
+        .ft-name {
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:600; font-size:14px; letter-spacing:-0.01em;
+            color:var(--text-1);
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+            padding-right:12px;
+        }
+        .ft-row:hover .ft-name { color:var(--ares-bright); }
+        .ft-size {
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            color:var(--text-3); text-align:right; font-variant-numeric:tabular-nums;
+        }
+        .ft-date {
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            color:var(--text-3); text-align:right; letter-spacing:0.04em;
+        }
+        .ft-empty {
+            padding:48px 0; text-align:center;
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            color:var(--text-3); letter-spacing:0.2em; text-transform:uppercase;
+        }
+
+        /* ═══ Layout: list + preview ═══ */
+        .explorer {
+            display:flex; gap:0; align-items:flex-start;
+        }
+        .explorer-list {
+            flex:1; min-width:0;
+        }
+        .explorer-preview {
+            width:460px; flex-shrink:0;
+            margin-left:20px;
+            position:sticky; top:80px;
+            max-height:calc(100vh - 100px);
+            overflow-y:auto;
+            border:1px solid var(--line-2);
+            background:var(--bg-1);
+            display:none;
+        }
+        .explorer-preview.open { display:flex; flex-direction:column; }
+        .preview-head {
+            display:flex; align-items:center; justify-content:space-between; gap:10px;
+            padding:10px 14px;
+            border-bottom:1px solid var(--line-2);
+            background:var(--bg-2);
+            flex-shrink:0;
+        }
+        .preview-name {
+            font-family:'Bricolage Grotesque', sans-serif;
+            font-weight:700; font-size:13px; letter-spacing:-0.01em;
+            color:var(--text-1);
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+            min-width:0;
+        }
+        .preview-close {
+            color:var(--text-3); cursor:pointer; background:none; border:none;
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            letter-spacing:0.12em; text-transform:uppercase; flex-shrink:0;
+            padding:3px 8px; border:1px solid var(--line-2);
+            transition:color 0.15s, border-color 0.15s;
+        }
+        .preview-close:hover { color:var(--ares); border-color:var(--ares); }
+        .preview-body {
+            flex:1; padding:14px; min-height:0; overflow:auto;
+        }
+        .preview-img {
+            max-width:100%; display:block; margin:0 auto;
+            border:1px solid var(--line-2);
+        }
+        .preview-video, .preview-audio {
+            width:100%; display:block;
+        }
+        .preview-iframe {
+            width:100%; height:560px; border:none; display:block;
+            background:var(--bg-2);
+        }
+        .preview-text {
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            color:var(--text-2); line-height:1.7;
+            white-space:pre-wrap; word-break:break-all;
+            max-height:500px; overflow-y:auto;
+        }
+        .preview-meta {
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            color:var(--text-2); line-height:2; letter-spacing:0.04em;
+        }
+        .preview-meta .mk { color:var(--text-3); }
+        .preview-footer {
+            padding:10px 14px;
+            border-top:1px solid var(--line-2);
+            background:var(--bg-2);
+            flex-shrink:0;
+        }
+        .dl-btn {
+            display:inline-flex; align-items:center; gap:8px;
+            font-family:'JetBrains Mono', monospace; font-size:10px;
+            letter-spacing:0.18em; text-transform:uppercase;
+            color:var(--text-2); text-decoration:none;
+            padding:6px 14px; border:1px solid var(--line-2);
+            transition:color 0.15s, border-color 0.15s, background 0.15s;
+        }
+        .dl-btn:hover { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.05); }
+
+        /* ═══ Loading spinner ═══ */
+        .loading {
+            padding:60px 0; text-align:center;
+            font-family:'JetBrains Mono', monospace; font-size:11px;
+            color:var(--text-3); letter-spacing:0.2em; text-transform:uppercase;
+        }
+        .loading .glyph {
+            display:inline-block; width:9px; height:9px;
+            background:var(--ares); margin-right:10px;
+            clip-path:polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+            animation:spin 1.4s ease-in-out infinite;
+            vertical-align:middle;
+        }
+        @keyframes spin { 0%,100% { transform:rotate(0deg); opacity:0.35; } 50% { transform:rotate(180deg); opacity:1; } }
+
+        /* ═══ Footer ═══ */
+        footer {
+            border-top:1px solid var(--line-1);
+            padding:14px 32px;
+            padding-bottom:calc(14px + var(--sab));
+            font-family:'JetBrains Mono', monospace;
+            font-size:10px; color:var(--text-3);
+            letter-spacing:0.12em; text-transform:uppercase;
+            display:flex; justify-content:space-between; flex-shrink:0;
+        }
+        footer a { color:var(--text-3); text-decoration:none; }
+        footer a:hover { color:var(--ares); }
+
+        @media (max-width:900px) {
+            .explorer { flex-direction:column; }
+            .explorer-preview { width:100%; margin-left:0; margin-top:16px; position:static; max-height:none; }
+            .ft-head, .ft-row { grid-template-columns:28px 1fr 90px; }
+            .ft-head .date-col, .ft-row .ft-date { display:none; }
+        }
+        @media (max-width:600px) {
+            main { padding:16px 14px; }
+            .ft-head, .ft-row { grid-template-columns:24px 1fr; }
+            .ft-head .size-col, .ft-row .ft-size { display:none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .loading .glyph { animation:none !important; opacity:1 !important; }
+        }
+    </style>
+    <script>window.__NODE="ARES"</script>
+    <script src="/static/node-switcher.js" defer></script>
+</head>
+<body>
+<div class="app">
+    <header class="navbar">
+        <div class="navbar-left">
+            <a href="/" class="nbr nbr-self">
+                <div class="nbr-mark m-a">A</div>
+                <div class="nbr-id">
+                    <span class="nbr-name n-a">ARES</span>
+                    <span class="nbr-sep">/</span>
+                    <span class="nbr-tag">FILES</span>
+                </div>
+            </a>
+            <a href="/" class="back-chip" title="Back to home">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                <span>Home</span>
+            </a>
+        </div>
+    </header>
+
+    <main>
+        <div class="section-head">
+            <div class="section-title">Storage <span class="dim">/ explorer</span></div>
+            <div class="section-meta" id="entry-count">—</div>
+        </div>
+
+        <nav class="breadcrumb" id="breadcrumb" aria-label="Current path"></nav>
+
+        <div class="controls">
+            <input class="filter-input" id="filter-input" type="text" placeholder="Filter this folder" autocomplete="off" spellcheck="false">
+            <div class="sort-group" role="group" aria-label="Sort by">
+                <button class="sort-btn active" data-sort="name">Name</button>
+                <button class="sort-btn" data-sort="date">Date</button>
+                <button class="sort-btn" data-sort="size">Size</button>
+            </div>
+        </div>
+
+        <div id="truncated-notice" class="truncated-notice" style="display:none">
+            Showing first 2000 entries — narrow with the filter to see more
+        </div>
+
+        <div class="explorer">
+            <div class="explorer-list">
+                <div class="file-table" id="file-table">
+                    <div class="ft-head">
+                        <span></span>
+                        <span>Name</span>
+                        <span class="num-col size-col">Size</span>
+                        <span class="num-col date-col">Modified</span>
+                    </div>
+                    <div id="file-rows">
+                        <div class="loading"><span class="glyph"></span>Loading…</div>
+                    </div>
+                </div>
+            </div>
+            <div class="explorer-preview" id="preview-pane">
+                <div class="preview-head">
+                    <span class="preview-name" id="preview-name">—</span>
+                    <button class="preview-close" id="preview-close">✕ close</button>
+                </div>
+                <div class="preview-body" id="preview-body"></div>
+                <div class="preview-footer">
+                    <a class="dl-btn" id="preview-dl" href="#" download>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Download
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <span>ARES · Files</span>
+        <span><a href="/terminal">→ terminal</a></span>
+    </footer>
+</div>
+
+<script>
+// ponytail: single-file vanilla JS explorer, no framework, no deps
+'use strict';
+
+const rowsEl     = document.getElementById('file-rows');
+const bcEl       = document.getElementById('breadcrumb');
+const filterEl   = document.getElementById('filter-input');
+const countEl    = document.getElementById('entry-count');
+const truncEl    = document.getElementById('truncated-notice');
+const previewPane = document.getElementById('preview-pane');
+const previewName = document.getElementById('preview-name');
+const previewBody = document.getElementById('preview-body');
+const previewDl   = document.getElementById('preview-dl');
+const previewClose = document.getElementById('preview-close');
+
+let allEntries = [];   // raw entries from last fetch
+let currentPath = '';  // current rel path
+let sortKey = 'name';  // name|date|size
+let sortDir = 1;       // 1=asc, -1=desc
+let selectedPath = ''; // currently previewed file path
+
+function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+}
+
+function fmtSize(bytes) {
+    if (bytes == null || bytes < 0) return '—';
+    if (bytes === 0) return '0 B';
+    const u = ['B','KB','MB','GB','TB'];
+    let n = bytes, i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return (i === 0 ? n : n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2)) + ' ' + u[i];
+}
+
+function fmtDate(ts) {
+    if (!ts) return '—';
+    const d = new Date(ts * 1000);
+    const yr = d.getFullYear(), mo = String(d.getMonth()+1).padStart(2,'0'),
+          da = String(d.getDate()).padStart(2,'0');
+    const hr = String(d.getHours()).padStart(2,'0'),
+          mn = String(d.getMinutes()).padStart(2,'0');
+    return yr + '-' + mo + '-' + da + ' ' + hr + ':' + mn;
+}
+
+// Icon SVGs by kind — inline, single-path
+const ICONS = {
+    dir:   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+    image: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>',
+    video: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
+    audio: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+    pdf:   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>',
+    md:    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="17" x2="10" y2="17"/><line x1="12" y1="17" x2="14" y2="17"/><polyline points="10 13 12 11 14 13"/></svg>',
+    text:  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/></svg>',
+    file:  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+};
+
+function joinPath(base, name) {
+    if (!base) return name;
+    return base.replace(/\/+$/, '') + '/' + name;
+}
+
+function renderBreadcrumb(cwd) {
+    if (!cwd || cwd === '.') {
+        bcEl.innerHTML = '<span class="bc-current">/ root</span>';
+        return;
+    }
+    const parts = cwd.split('/').filter(Boolean);
+    let html = '<span class="bc-seg" data-path="">/ root</span>';
+    parts.forEach((seg, i) => {
+        html += '<span class="bc-sep"> / </span>';
+        const segPath = parts.slice(0, i + 1).join('/');
+        if (i === parts.length - 1) {
+            html += '<span class="bc-current">' + esc(seg) + '</span>';
+        } else {
+            html += '<span class="bc-seg" data-path="' + esc(segPath) + '">' + esc(seg) + '</span>';
+        }
+    });
+    bcEl.innerHTML = html;
+    bcEl.querySelectorAll('.bc-seg').forEach(el => {
+        el.addEventListener('click', () => navigate(el.dataset.path || ''));
+    });
+}
+
+function sortEntries(entries) {
+    return entries.slice().sort((a, b) => {
+        // Dirs always first
+        if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
+        let av, bv;
+        if (sortKey === 'name') {
+            av = a.name.toLowerCase(); bv = b.name.toLowerCase();
+            return av < bv ? -sortDir : av > bv ? sortDir : 0;
+        }
+        if (sortKey === 'date') {
+            av = a.mtime || 0; bv = b.mtime || 0;
+            return (bv - av) * sortDir;
+        }
+        if (sortKey === 'size') {
+            av = a.size || 0; bv = b.size || 0;
+            return (bv - av) * sortDir;
+        }
+        return 0;
+    });
+}
+
+function filterEntries(entries, q) {
+    if (!q) return entries;
+    const lq = q.toLowerCase();
+    return entries.filter(e => e.name.toLowerCase().includes(lq));
+}
+
+function renderRows(entries) {
+    if (!entries.length) {
+        rowsEl.innerHTML = '<div class="ft-empty">No entries match</div>';
+        countEl.textContent = '0 entries';
+        return;
+    }
+    const sorted = sortEntries(filterEntries(entries, filterEl.value.trim()));
+    if (!sorted.length) {
+        rowsEl.innerHTML = '<div class="ft-empty">No matches</div>';
+        countEl.textContent = '0 of ' + entries.length + ' entries';
+        return;
+    }
+    countEl.textContent = (sorted.length === entries.length ? sorted.length : sorted.length + ' / ' + entries.length) + ' entries';
+    let html = '';
+    sorted.forEach(entry => {
+        const kind = entry.kind || 'file';
+        const entryPath = joinPath(currentPath, entry.name);
+        const szStr = entry.is_dir ? '—' : fmtSize(entry.size);
+        const dtStr = fmtDate(entry.mtime);
+        const selected = (!entry.is_dir && entryPath === selectedPath) ? ' selected' : '';
+        html +=
+            '<div class="ft-row' + selected + '" data-name="' + esc(entry.name) + '" data-kind="' + esc(kind) + '" data-path="' + esc(entryPath) + '" data-isdir="' + (entry.is_dir ? '1' : '0') + '">' +
+                '<span class="ft-icon kind-' + esc(kind) + '">' + (ICONS[kind] || ICONS.file) + '</span>' +
+                '<span class="ft-name" title="' + esc(entry.name) + '">' + esc(entry.name) + '</span>' +
+                '<span class="ft-size">' + esc(szStr) + '</span>' +
+                '<span class="ft-date">' + esc(dtStr) + '</span>' +
+            '</div>';
+    });
+    rowsEl.innerHTML = html;
+    rowsEl.querySelectorAll('.ft-row').forEach(row => {
+        row.addEventListener('click', () => {
+            if (row.dataset.isdir === '1') {
+                navigate(row.dataset.path);
+            } else {
+                openPreview(row.dataset.path, row.dataset.name, row.dataset.kind);
+            }
+        });
+    });
+}
+
+function rerender() {
+    renderRows(allEntries);
+}
+
+async function navigate(path) {
+    closePreview();
+    currentPath = path || '';
+    rowsEl.innerHTML = '<div class="loading"><span class="glyph"></span>Loading…</div>';
+    countEl.textContent = '—';
+    filterEl.value = '';
+    const encoded = encodeURIComponent(currentPath);
+    try {
+        const r = await fetch('/api/files/list?path=' + encoded);
+        if (r.status === 401) { location.href = '/login'; return; }
+        if (!r.ok) { throw new Error('HTTP ' + r.status); }
+        const data = await r.json();
+        allEntries = data.entries || [];
+        currentPath = data.cwd || currentPath;
+        renderBreadcrumb(currentPath);
+        truncEl.style.display = data.truncated ? '' : 'none';
+        renderRows(allEntries);
+    } catch (e) {
+        rowsEl.innerHTML = '<div class="loading" style="color:var(--amber)">error · ' + esc(e.message) + '</div>';
+    }
+}
+
+function rawUrl(path, dl) {
+    return '/api/files/raw?path=' + encodeURIComponent(path) + (dl ? '&dl=1' : '&dl=0');
+}
+
+async function openPreview(path, name, kind) {
+    selectedPath = path;
+    rerender(); // mark row selected
+    previewName.textContent = name;
+    previewDl.href = rawUrl(path, true);
+    previewDl.setAttribute('download', name);
+    previewPane.classList.add('open');
+
+    const raw0 = rawUrl(path, false);
+
+    let bodyHtml = '';
+    if (kind === 'image') {
+        bodyHtml = '<img class="preview-img" src="' + esc(raw0) + '" alt="' + esc(name) + '" loading="lazy">';
+    } else if (kind === 'video') {
+        bodyHtml = '<video class="preview-video" controls preload="metadata" src="' + esc(raw0) + '"></video>';
+    } else if (kind === 'audio') {
+        bodyHtml = '<audio class="preview-audio" controls preload="metadata" src="' + esc(raw0) + '"></audio>';
+    } else if (kind === 'pdf') {
+        bodyHtml = '<iframe class="preview-iframe" src="' + esc(raw0) + '" title="' + esc(name) + '"></iframe>';
+    } else if (kind === 'text' || kind === 'md') {
+        bodyHtml = '<div class="preview-text">Loading…</div>';
+        previewBody.innerHTML = bodyHtml;
+        try {
+            const r = await fetch(raw0);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const txt = await r.text();
+            const pre = document.createElement('pre');
+            pre.className = 'preview-text';
+            pre.textContent = txt;
+            previewBody.innerHTML = '';
+            previewBody.appendChild(pre);
+        } catch (e) {
+            previewBody.innerHTML = '<pre class="preview-text" style="color:var(--amber)">Error loading: ' + esc(e.message) + '</pre>';
+        }
+        return;
+    } else {
+        // Unknown / binary: metadata + download only
+        bodyHtml = '<div class="preview-meta"><span class="mk">name&nbsp;&nbsp; </span>' + esc(name) + '<br><span class="mk">path&nbsp;&nbsp; </span>' + esc(path) + '<br><span class="mk">kind&nbsp;&nbsp; </span>' + esc(kind) + '</div>';
+    }
+    previewBody.innerHTML = bodyHtml;
+}
+
+function closePreview() {
+    previewPane.classList.remove('open');
+    previewBody.innerHTML = '';
+    previewName.textContent = '—';
+    previewDl.href = '#';
+    selectedPath = '';
+    rerender();
+}
+
+// ── Event wiring ──────────────────────────────────────────────────────────
+
+previewClose.addEventListener('click', closePreview);
+
+filterEl.addEventListener('input', rerender);
+
+document.querySelectorAll('.sort-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const key = btn.dataset.sort;
+        if (sortKey === key) {
+            sortDir = -sortDir;
+        } else {
+            sortKey = key;
+            sortDir = key === 'date' ? -1 : 1;
+        }
+        document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        rerender();
+    });
+});
+
+// Boot: read ?path= from URL, else start at root
+(function init() {
+    const params = new URLSearchParams(location.search);
+    const startPath = params.get('path') || '';
+    navigate(startPath);
+}());
+</script>
+</body>
+</html>
