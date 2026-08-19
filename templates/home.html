@@ -746,13 +746,7 @@
                     </span>
                 </div>
                 <div class="mod-body">
-                    <svg class="thermal" viewBox="0 0 300 76" preserveAspectRatio="none" aria-hidden="true">
-                        <line class="th-grid" x1="0" y1="19" x2="300" y2="19"></line>
-                        <line class="th-grid" x1="0" y1="38" x2="300" y2="38"></line>
-                        <line class="th-grid" x1="0" y1="57" x2="300" y2="57"></line>
-                        <path class="th-line th-cpu" id="th-cpu" d=""></path>
-                        <path class="th-line th-gpu" id="th-gpu" d=""></path>
-                    </svg>
+                    <canvas class="thermal" id="cv-therm" aria-hidden="true"></canvas>
                     <div class="th-scale"><span id="th-hi">90&deg;C</span><span id="th-lo">0&deg;C</span></div>
                 </div>
             </section>
@@ -765,26 +759,17 @@
                 <div class="mod-body sparks">
                     <div class="spark-row">
                         <span class="spark-lab">CPU load</span>
-                        <svg class="spark" viewBox="0 0 400 36" preserveAspectRatio="none" aria-hidden="true">
-                            <path class="sp-fill sp-c-cpu" id="sp-cpu-f" d=""></path>
-                            <path class="sp-line sp-c-cpu" id="sp-cpu-l" d=""></path>
-                        </svg>
+                        <canvas class="spark" id="cv-cpu" aria-hidden="true"></canvas>
                         <span class="spark-val" id="sp-cpu-v">—</span>
                     </div>
                     <div class="spark-row">
                         <span class="spark-lab">Memory</span>
-                        <svg class="spark" viewBox="0 0 400 36" preserveAspectRatio="none" aria-hidden="true">
-                            <path class="sp-fill sp-c-mem" id="sp-mem-f" d=""></path>
-                            <path class="sp-line sp-c-mem" id="sp-mem-l" d=""></path>
-                        </svg>
+                        <canvas class="spark" id="cv-mem" aria-hidden="true"></canvas>
                         <span class="spark-val" id="sp-mem-v">—</span>
                     </div>
                     <div class="spark-row" id="tel-gpu-row">
                         <span class="spark-lab">GPU core</span>
-                        <svg class="spark" viewBox="0 0 400 36" preserveAspectRatio="none" aria-hidden="true">
-                            <path class="sp-fill sp-c-gpu" id="sp-gpu-f" d=""></path>
-                            <path class="sp-line sp-c-gpu" id="sp-gpu-l" d=""></path>
-                        </svg>
+                        <canvas class="spark" id="cv-gpu" aria-hidden="true"></canvas>
                         <span class="spark-val" id="sp-gpu-v">—</span>
                     </div>
                 </div>
@@ -1667,38 +1652,122 @@ function smoothIn(id, step) {
     /* no-op: kept so callers don't change */
 }
 
-function drawSpark(key, lineId, fillId, valId, suffix) {
-    var arr = HIST[key];
-    var r = histRange(arr, key === 'gpu' ? 8 : 6);   // %; floor so idle still reads as a live wiggle
-    setPath(lineId, seriesPath(arr, 400, 36, r[0], r[1], false));
-    setPath(fillId, seriesPath(arr, 400, 36, r[0], r[1], true));
-    if (arr && arr.length > 1) { var st = 400 / (arr.length - 1); smoothIn(lineId, st); smoothIn(fillId, st); }
-    var v = document.getElementById(valId);
-    if (v) {
-        var last = null;
-        for (var ix = arr.length - 1; ix >= 0; ix--) { if (arr[ix] != null) { last = arr[ix]; break; } }
-        v.textContent = last == null ? '—' : last.toFixed(0) + suffix;
+// ---- Canvas live charts --------------------------------------------------
+// Sparklines + thermal render on <canvas> (a cheap GPU bitmap) instead of
+// animated SVG paths, which re-rasterize every frame and stutter on Mac GPUs.
+// Smoothness comes from easing the drawn series toward each new 3s sample via a
+// short rAF loop that STOPS once settled and while the tab is hidden -- so there
+// is zero repaint cost between samples.
+var _cssRoot = getComputedStyle(document.documentElement);
+function _cssv(n, d) { return ((_cssRoot.getPropertyValue(n) || '').trim()) || d; }
+var COL = { ares: _cssv('--ares', '#f5402d'), bright: _cssv('--ares-bright', '#ff7a45'),
+            amber: _cssv('--amber', '#f59e0b'), rgb: _cssv('--ares-rgb', '245,64,45') };
+
+var CHARTS = [];          // {cv, series:[{key,stroke,fill}], grid, minSpan, thermScale}
+var _disp = {};           // key -> series eased toward HIST[key]
+
+function _regChart(id, series, opts) {
+    var cv = document.getElementById(id);
+    if (cv) CHARTS.push(Object.assign({ cv: cv, series: series }, opts || {}));
+}
+function _easeKey(key) {
+    var tgt = HIST[key]; if (!tgt) return 0;
+    var d = _disp[key];
+    if (!d || d.length !== tgt.length) { _disp[key] = tgt.slice(); return 1; }
+    var mx = 0;
+    for (var i = 0; i < tgt.length; i++) {
+        var t = tgt[i];
+        if (t == null) { d[i] = null; continue; }
+        if (d[i] == null) { d[i] = t; mx = 1; continue; }
+        var diff = t - d[i]; d[i] += diff * 0.18;
+        var ad = diff < 0 ? -diff : diff; if (ad > mx) mx = ad;
+    }
+    return mx;
+}
+function _sizeCanvas(cv) {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = cv.clientWidth || 300, h = cv.clientHeight || 40;
+    var bw = Math.round(w * dpr), bh = Math.round(h * dpr);
+    if (cv.width !== bw) cv.width = bw;
+    if (cv.height !== bh) cv.height = bh;
+    return { w: w, h: h, dpr: dpr };
+}
+function _strokeSeries(ctx, arr, w, h, lo, hi) {
+    var span = (hi - lo) || 1, step = w / (arr.length - 1), started = false;
+    for (var i = 0; i < arr.length; i++) {
+        var v = arr[i]; if (v == null) { started = false; continue; }
+        var cv = Math.max(lo, Math.min(hi, v));
+        var x = i * step, y = h - ((cv - lo) / span) * (h - 3) - 1.5;
+        if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
     }
 }
+function _drawChart(c) {
+    var g = _sizeCanvas(c.cv), ctx = c.cv.getContext('2d');
+    ctx.setTransform(g.dpr, 0, 0, g.dpr, 0, 0);
+    ctx.clearRect(0, 0, g.w, g.h);
+    var all = [], si;
+    for (si = 0; si < c.series.length; si++) { var a = _disp[c.series[si].key]; if (a) all = all.concat(a); }
+    var r = histRange(all, c.minSpan || 6);
+    if (c.grid) {
+        ctx.strokeStyle = 'rgba(' + COL.rgb + ',.1)'; ctx.lineWidth = 1;
+        for (var gy = 1; gy <= 3; gy++) { var yy = Math.round(g.h * gy / 4) + 0.5; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(g.w, yy); ctx.stroke(); }
+    }
+    for (si = 0; si < c.series.length; si++) {
+        var ser = c.series[si], arr2 = _disp[ser.key];
+        if (!arr2 || arr2.length < 2) continue;
+        if (ser.fill) {
+            ctx.beginPath(); _strokeSeries(ctx, arr2, g.w, g.h, r[0], r[1]);
+            ctx.lineTo(g.w, g.h); ctx.lineTo(0, g.h); ctx.closePath();
+            ctx.fillStyle = ser.fill; ctx.fill();
+        }
+        ctx.beginPath(); _strokeSeries(ctx, arr2, g.w, g.h, r[0], r[1]);
+        ctx.strokeStyle = ser.stroke; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke();
+    }
+    return r;
+}
+var _rafId = 0;
+function _animateCharts() {
+    var moving = false, i, s;
+    for (i = 0; i < CHARTS.length; i++)
+        for (s = 0; s < CHARTS[i].series.length; s++)
+            if (_easeKey(CHARTS[i].series[s].key) > 0.05) moving = true;
+    for (i = 0; i < CHARTS.length; i++) {
+        var r = _drawChart(CHARTS[i]);
+        if (CHARTS[i].thermScale) {
+            var hi = document.getElementById('th-hi'), lo = document.getElementById('th-lo');
+            if (hi) hi.textContent = Math.round(r[1]) + '°C';
+            if (lo) lo.textContent = Math.round(r[0]) + '°C';
+        }
+    }
+    _rafId = (moving && !document.hidden) ? requestAnimationFrame(_animateCharts) : 0;
+}
+function kickCharts() { if (!_rafId) _rafId = requestAnimationFrame(_animateCharts); }
 
+_regChart('cv-cpu', [{ key: 'cpu', stroke: COL.ares, fill: 'rgba(' + COL.rgb + ',.14)' }], { minSpan: 6 });
+_regChart('cv-mem', [{ key: 'mem', stroke: COL.bright, fill: 'rgba(' + COL.rgb + ',.13)' }], { minSpan: 6 });
+_regChart('cv-gpu', [{ key: 'gpu', stroke: COL.amber, fill: 'rgba(' + COL.rgb + ',.10)' }], { minSpan: 8 });
+_regChart('cv-therm', [{ key: 'ctemp', stroke: COL.ares }, { key: 'gtemp', stroke: COL.amber }], { grid: true, minSpan: 6, thermScale: true });
+window.addEventListener('resize', kickCharts);
+document.addEventListener('visibilitychange', function () { if (!document.hidden) kickCharts(); });
+kickCharts();
+
+function _sparkVal(id, arr, suffix) {
+    var v = document.getElementById(id); if (!v) return;
+    var last = null;
+    for (var ix = arr.length - 1; ix >= 0; ix--) { if (arr[ix] != null) { last = arr[ix]; break; } }
+    v.textContent = last == null ? '—' : last.toFixed(0) + suffix;
+}
 function drawCharts() {
-    drawSpark('cpu', 'sp-cpu-l', 'sp-cpu-f', 'sp-cpu-v', '%');
-    drawSpark('mem', 'sp-mem-l', 'sp-mem-f', 'sp-mem-v', '%');
-    drawSpark('gpu', 'sp-gpu-l', 'sp-gpu-f', 'sp-gpu-v', '%');
-    // Thermals share a 0–90C scale so the two lines are directly comparable.
-    var tr = histRange(HIST.ctemp.concat(HIST.gtemp), 6);   // °C, shared so CPU vs GPU stay comparable
-    setPath('th-cpu', seriesPath(HIST.ctemp, 300, 76, tr[0], tr[1], false));
-    setPath('th-gpu', seriesPath(HIST.gtemp, 300, 76, tr[0], tr[1], false));
-    var _thi = document.getElementById('th-hi'), _tlo = document.getElementById('th-lo');
-    if (_thi) _thi.textContent = Math.round(tr[1]) + '\u00b0C';
-    if (_tlo) _tlo.textContent = Math.round(tr[0]) + '\u00b0C';
-    if (HIST.ctemp.length > 1) { var sh = 300 / (HIST.ctemp.length - 1); smoothIn('th-cpu', sh); smoothIn('th-gpu', sh); }
+    _sparkVal('sp-cpu-v', HIST.cpu, '%');
+    _sparkVal('sp-mem-v', HIST.mem, '%');
+    _sparkVal('sp-gpu-v', HIST.gpu, '%');
     var w = document.getElementById('tel-window');
     if (w) {
         var n = HIST.cpu.length;
         var mins = Math.round(n * 15 / 60);
         w.textContent = n < 2 ? (n + ' sample') : (mins < 1 ? n + ' samples' : '~' + mins + ' min');
     }
+    kickCharts();
 }
 
 // Array map: every disk the API reports, widest first.
