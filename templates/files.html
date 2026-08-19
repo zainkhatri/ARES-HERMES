@@ -5,9 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>{{ brand|default('ARES') }} · Files</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
-    <link rel="manifest" href="/static/manifest.json">
-    <link rel="apple-touch-icon" href="/static/icon-180.png">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23070403'/%3E%3Crect x='3' y='3' width='10' height='10' fill='none' stroke='%23f5402d' stroke-width='2'/%3E%3C/svg%3E">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#070403">
@@ -704,7 +702,7 @@
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
                         Up
                     </button>
-                    <input class="filter-input" id="filter-input" type="text" placeholder="Filter this folder" autocomplete="off" spellcheck="false">
+                    <input class="filter-input" id="filter-input" type="text" placeholder="Filter this folder" aria-label="Filter this folder" autocomplete="off" spellcheck="false">
                     <div class="sort-group" role="group" aria-label="Sort by">
                         <button class="sort-btn active" data-sort="name">Name</button>
                         <button class="sort-btn" data-sort="date">Date</button>
@@ -783,7 +781,7 @@
                 </div>
                 <div class="chat-msgs" id="chat-msgs"></div>
                 <div class="chat-footer">
-                    <textarea class="chat-input" id="chat-input" rows="1" placeholder="Ask about your files…" autocomplete="off" spellcheck="false"></textarea>
+                    <textarea class="chat-input" id="chat-input" rows="1" placeholder="Ask about your files…" aria-label="Ask about your files" autocomplete="off" spellcheck="false"></textarea>
                     <button class="chat-send-btn" id="chat-send-btn">Send</button>
                 </div>
             </div>
