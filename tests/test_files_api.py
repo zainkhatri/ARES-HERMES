@@ -123,7 +123,7 @@ def test_files_index_build_search_excludes_vault():
         open(os.path.join(root, "BUSINESS", "notes.txt"), "w").close()
         open(os.path.join(root, ".vault", "secret.pdf"), "w").close()
         n = files_index.build_index(root=root, db=db)
-        assert n == 2, "expected 2 indexed, got %d" % n
+        assert n == 4, "expected 2 dirs + 2 files, got %d" % n
         hits = files_index.search("ibtakar contract", db=db)
         assert any("ibtakar_contract" in h["path"] for h in hits), hits
         assert all(".vault" not in h["path"] for h in hits), "vault leaked"
