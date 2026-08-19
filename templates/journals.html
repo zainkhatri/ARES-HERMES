@@ -45,6 +45,23 @@
     .page-title em { font-style:normal; color:var(--accent); }
     .count-pill { font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); border:1px solid var(--line-2); border-radius:999px; padding:7px 14px; white-space:nowrap; }
 
+    /* ── Page layout: a centered column of panels (was full-viewport panels with
+          content re-centered inside → dark voids on the sides). ── */
+    .hud-shell > .mod { width:100%; max-width:1200px; margin-inline:auto; }
+    .mod-body .wrap { max-width:none; padding:2px 6px; }
+
+    /* ── Identity header — gives the page the wordmark presence home.html has ── */
+    .jr-hero { width:100%; max-width:1200px; margin:4px auto 2px; padding:0 6px;
+               display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; }
+    .jr-hero .page-title { margin-top:6px; text-shadow:0 0 34px rgba(var(--ares-rgb),.42), 0 0 3px rgba(var(--ares-rgb),.28); }
+    .jr-stats { display:flex; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.5); }
+    .jr-stats .stat { padding:11px 20px; border-left:1px solid var(--ember-dim); text-align:right; min-width:104px; }
+    .jr-stats .stat:first-child { border-left:0; }
+    .jr-stats .stat b { display:block; font-family:'Bricolage Grotesque',sans-serif; font-weight:800;
+                        font-size:25px; line-height:1; color:var(--ink); font-variant-numeric:tabular-nums; }
+    .jr-stats .stat span { font-size:9px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-faint); }
+    @media (max-width:560px){ .jr-stats { width:100%; } .jr-stats .stat { flex:1; text-align:center; min-width:0; } }
+
     /* ── Button system ── */
     .btn {
         display:inline-flex; align-items:center; gap:8px;
@@ -211,7 +228,7 @@
     .page-thumb img { width:100%; display:block; object-fit:contain; }
     .page-thumb .pn { text-align:center; font-size:9px; color:var(--ink-faint); padding:3px 0 4px; letter-spacing:.05em; }
 
-    .empty { text-align:center; padding:90px 20px; color:var(--ink-dim); }
+    .empty { text-align:center; padding:48px 20px; color:var(--ink-dim); }
     .empty .big { font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:24px; letter-spacing:-.01em; color:var(--ink); margin-bottom:20px; }
 
     /* spinner */
@@ -267,6 +284,18 @@
 <div class="hud-shell">
 
 {% with page_name='JOURNALS' %}{% include "_hud_nav.html" %}{% endwith %}
+
+<!-- ── Identity header ── -->
+<header class="jr-hero">
+    <div>
+        <div class="eyebrow">ARES · Handwritten Archive</div>
+        <h1 class="page-title">Journals</h1>
+    </div>
+    <div class="jr-stats">
+        <div class="stat"><b id="st-books">—</b><span>Notebooks</span></div>
+        <div class="stat"><b id="st-pages">—</b><span>Pages</span></div>
+    </div>
+</header>
 
 <!-- ── Search Archive panel ── -->
 <section class="mod c-tl c-tr c-bl c-br" id="jr-search">
@@ -595,6 +624,11 @@ function renderShelf() {
     if (countEl) countEl.textContent = viewable.length ? `${viewable.length} notebook${viewable.length!==1?'s':''}` : '—';
     const booksEl = document.getElementById('jr-books');
     if (booksEl) booksEl.textContent = viewable.length ? `${viewable.length} notebook${viewable.length!==1?'s':''}` : '—';
+
+    // Hero fact-grid
+    const totalPages = viewable.reduce((s, j) => s + (j.pages || 0), 0);
+    const sb = document.getElementById('st-books'); if (sb) sb.textContent = viewable.length ? String(viewable.length) : '0';
+    const sp = document.getElementById('st-pages'); if (sp) sp.textContent = totalPages ? totalPages.toLocaleString() : '0';
 
     if (viewable.length === 0) {
         el.innerHTML = `<div class="empty"><div class="big">An empty shelf.</div>
