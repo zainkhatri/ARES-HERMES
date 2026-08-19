@@ -65,10 +65,21 @@ def test_list_dir_filters_and_sorts():
 def test_serve_mode_policy():
     assert files_api.serve_mode("a.pdf", False) == ("application/pdf", False)
     assert files_api.serve_mode("a.png", False)[1] is False
-    assert files_api.serve_mode("a.py", False) == ("text/plain; charset=utf-8", False)
+    assert files_api.serve_mode("a.py", False) == ("text/plain", False)
     assert files_api.serve_mode("evil.html", False) == ("application/octet-stream", True)
     assert files_api.serve_mode("evil.svg", False) == ("application/octet-stream", True)
     assert files_api.serve_mode("a.png", True)[1] is True     # force download
+
+def test_list_dir_truncation():
+    root = tempfile.mkdtemp()
+    try:
+        for i in range(files_api.LIST_CAP + 5):
+            open(os.path.join(root, f"f{i}.txt"), "w").close()
+        out = files_api.list_dir(root, root=root)
+        assert len(out["entries"]) == files_api.LIST_CAP
+        assert out["truncated"] is True
+    finally:
+        shutil.rmtree(root)
 
 def test_open_checked_rejects_symlink():
     d = tempfile.mkdtemp()
