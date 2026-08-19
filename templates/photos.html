@@ -4966,6 +4966,12 @@ function setZoomLevel(level, showToast, _skipFLIP) {
         }
     } else {
         var cols = ZOOM_COLS[level] || 4;
+        /* The cols levels (2–5) are tuned for a phone. A wide desktop monitor at
+           "cols4" = 4 huge tiles + lots of blank space. Pack more columns on bigger
+           viewports so desktop is dense. --grid-cols drives BOTH the CSS grid and the
+           JS scroll geometry, so bumping it here keeps them in sync. */
+        if (window.matchMedia('(min-width:1700px)').matches) cols += 3;
+        else if (window.matchMedia('(min-width:1100px)').matches) cols += 2;
         document.documentElement.style.setProperty('--grid-cols', String(cols));
         body.classList.add('gallery-mode-cols');
         document.getElementById('fastscroll').style.display = '';
