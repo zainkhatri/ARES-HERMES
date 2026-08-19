@@ -1544,8 +1544,11 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
                     // derive parent dir: everything before last '/'
                     const slash = locPath.lastIndexOf('/');
                     const parent = slash > 0 ? locPath.slice(0, slash) : '';
+                    // close the panel first — on mobile it's a full overlay, so
+                    // navigating behind it looks like nothing happened.
+                    const cp = document.querySelector('.chat-panel');
+                    if (cp) cp.classList.remove('open');
                     navigate(parent);
-                    // keep panel open — user may want to ask follow-ups
                 });
                 btns.appendChild(jumpBtn);
 
