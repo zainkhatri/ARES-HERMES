@@ -187,32 +187,6 @@
     .key-grow { flex:1 1 auto; }
     .key-kbd { color:var(--nav-text-2); }
 
-    /* === Native input bar (rides above the soft keyboard) === */
-    .inputbar {
-        flex:0 0 auto;
-        display:flex; align-items:stretch; gap:8px;
-        padding:9px 10px;
-        padding-bottom:calc(9px + env(safe-area-inset-bottom, 0px));
-        padding-left:calc(10px + env(safe-area-inset-left, 0px));
-        padding-right:calc(10px + env(safe-area-inset-right, 0px));
-        background:var(--bg-0); border-top:1px solid var(--nav-line-2);
-    }
-    #line {
-        flex:1 1 auto; min-width:0; min-height:42px;
-        background:var(--bg-2); border:1px solid var(--nav-line-2);
-        color:#ecf2fa; font-family:'JetBrains Mono', monospace; font-size:16px; /* 16px: stops iOS zoom-on-focus */
-        padding:0 13px; letter-spacing:0.01em; caret-color:var(--nav-ares);
-    }
-    #line::placeholder { color:var(--nav-text-3); }
-    #line:focus { outline:none; border-color:var(--nav-ares); }
-    .send {
-        flex:0 0 auto; min-height:42px; padding:0 18px;
-        background:var(--nav-ares); border:1px solid var(--nav-ares); color:#fff;
-        font-family:'Bricolage Grotesque', sans-serif; font-weight:700; font-size:13px;
-        letter-spacing:0.06em; cursor:pointer; touch-action:manipulation;
-        transition:opacity .12s;
-    }
-    .send:active { opacity:0.7; }
     </style>
 </head>
 <body>
@@ -274,16 +248,6 @@
                  font-size:12px;padding:7px 14px;border-radius:4px;opacity:0;transition:opacity 0.4s;
                  pointer-events:none;white-space:nowrap;z-index:999;"></div>
 
-            <!-- Native input box. Typing into a real same-origin <input> is rock-solid on
-                 iOS (unlike xterm's hidden textarea inside the iframe), so this is the
-                 reliable way to talk to whatever's running in the terminal — e.g. Claude
-                 Code. Send injects the text + Enter via the control service. -->
-            <form class="inputbar" id="inputbar" autocomplete="off">
-                <input id="line" type="text" inputmode="text" enterkeyhint="send"
-                       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                       placeholder="Type here → sends into the terminal…">
-                <button class="send" id="send" type="submit" aria-label="Send">Send</button>
-            </form>
         </div>
     </section>
 </div>
@@ -298,7 +262,6 @@
     var PTY_WS_URL = onHttps
         ? 'wss://' + location.host + '/pty-ws/'
         : 'ws://100.77.42.110:7686';
-    var SESSION_NAME = 'web';
 
     // xterm.js terminal instance (Task 1). PTY wire-up in Task 2.
     var term = new Terminal({
@@ -320,8 +283,6 @@
     var _currentView = 'raw';
     var _blockPollTimer = null;
     var _claudePollTimer = null;
-    var _ptyWs = null;
-    var _ptyWsReady = false;
 
     function _activeWin() {
         var w = lastWindows.find(function (w) { return w.active; });
@@ -382,39 +343,38 @@
         }
     }
 
-    function _openPtyWs() {
-        try {
-            if (_ptyWs) { _ptyWs.onclose = null; _ptyWs.onmessage = null; _ptyWs.close(); }
-        } catch (e) {}
-        _ptyWs = new WebSocket(PTY_WS_URL);
-        _ptyWs.onopen = function () {
-            _ptyWsReady = true;
-            _ptyWs.send(JSON.stringify({ open: SESSION_NAME, mode: 'console' }));
-            _ptyWs.send(JSON.stringify({ ctl: 'windows' }));
-        };
-        _ptyWs.onmessage = function (e) {
-            var d;
-            try { d = JSON.parse(e.data); } catch (_) { return; }
-            if (d.windows) {
-                // Merge kind info into _windowKinds; update tab strip.
-                d.windows.forEach(function (w) {
-                    var idx = w.i !== undefined ? w.i : w.index;
-                    if (idx !== undefined && w.kind) _windowKinds[idx] = w.kind;
-                });
-                renderTabs(d.windows);
-            }
-            if (d.blocks)    _renderBlocks(d.blocks);
-            if (d.claudelog) _renderClaudelog(d.claudelog);
-        };
-        _ptyWs.onclose = function () {
-            _ptyWsReady = false;
-            setTimeout(_openPtyWs, 2000);
-        };
+    var ws = null;
+    var _wsRetry = 0;
+    function wsSend(s) {                                  // input MUST be binary frames
+        if (ws && ws.readyState === 1) ws.send(new TextEncoder().encode(s));
     }
+    function connectPty() {
+        ws = new WebSocket(PTY_WS_URL);
+        ws.binaryType = 'arraybuffer';                    // so PTY output arrives as ArrayBuffer
+        ws.onopen = function () {
+            _wsRetry = 0;
+            ws.send(JSON.stringify({ open: 'web' }));     // attach tmux session "web"
+            try { fit.fit(); ws.send(JSON.stringify({ cols: term.cols, rows: term.rows })); } catch (e) {}
+            term.focus();
+        };
+        ws.onmessage = function (ev) {
+            if (typeof ev.data === 'string') {            // control JSON (e.g. {windows:[...]})
+                try { var d = JSON.parse(ev.data); if (d.windows) renderTabs(d.windows); } catch (e) {}
+            } else {
+                term.write(new Uint8Array(ev.data));      // raw PTY bytes
+            }
+        };
+        ws.onclose = function () {
+            _wsRetry = Math.min(_wsRetry + 1, 6);
+            setTimeout(connectPty, 400 * _wsRetry);       // backoff reconnect
+        };
+        ws.onerror = function () { try { ws.close(); } catch (e) {} };
+    }
+    term.onData(function (data) { wsSend(data); });       // keystrokes → PTY
 
     function _ptyCtl(msg) {
-        if (_ptyWsReady && _ptyWs && _ptyWs.readyState === 1) {
-            _ptyWs.send(JSON.stringify(msg));
+        if (ws && ws.readyState === 1) {
+            ws.send(JSON.stringify(msg));
         }
     }
 
@@ -532,12 +492,13 @@
     }
 
     /* ── Keybar ─────────────────────────────────────────────────────── */
-    var line = document.getElementById('line');
     document.getElementById('keys').addEventListener('click', function (e) {
         var btn = e.target.closest('.key');
         if (!btn) return;
         if (btn.id === 'kbd-toggle') {
-            if (document.activeElement === line) line.blur(); else line.focus();
+            // ponytail: focus/blur xterm textarea to show/hide soft keyboard
+            var xtArea = document.querySelector('#term textarea');
+            if (xtArea) { if (document.activeElement === xtArea) xtArea.blur(); else xtArea.focus(); }
             return;
         }
         if (btn.dataset.tab === 'new')   { guard(api('/new', { target: 'ares' })); return; }
@@ -567,19 +528,6 @@
             }).catch(function () {});
         });
     }
-
-    /* ── Native input → inject ──────────────────────────────────────── */
-    var form = document.getElementById('inputbar');
-    form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var text = line.value.trim();
-        if (!text) return;
-        line.value = '';
-        line.focus();
-        api('/text', { text: text, enter: true }).catch(function () {
-            if (!line.value) line.value = text;  // restore on failure
-        });
-    });
 
     /* ── Image paste → upload → inject path ─────────────────────────── */
     // Works in the page (not inside the cross-origin iframe). User pastes
@@ -618,7 +566,7 @@
     }
 
     /* ── Poll tabs ──────────────────────────────────────────────────── */
-    _openPtyWs();
+    connectPty();
     setView('raw');
     refresh();
     setInterval(refresh, 3000);
