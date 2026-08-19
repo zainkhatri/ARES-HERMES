@@ -12,7 +12,7 @@
     <meta name="theme-color" content="#04070d">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <style>
         :root {
             --bg-0:#070403; --bg-1:#0d0605; --bg-2:#140807; --bg-3:#1c0c09;
@@ -27,9 +27,9 @@
         /* ZEUS: lightning-blue palette. Keyed off data-brand on <html>; ARES = default red. */
         html[data-brand="ZEUS"] {
             --bg-0:#03060b; --bg-1:#060b14; --bg-2:#0a1220; --bg-3:#0e1a2e;
-            --ares:#38bdf8; --ares-rgb:56,189,248; --ares-bright:#7dd3fc; --ember:#0ea5e9;
+            --ares:#38bdf8; --ares-rgb:56,189,248; --ares-bright:#a78bfa; --ember:#6366f1;
             --text-1:#e9f2fb; --text-2:#90aecb; --text-3:#5a7690; --text-4:#374a5e;
-            --amber:#22d3ee; --panel-rgb:10,18,32;
+            --amber:#a855f7; --panel-rgb:10,18,32;   /* secondary hue = purple → blue→purple theme */
         }
         /* ZEUS density: it carries more panels than ARES, so tighten the gaps a
            touch to fit shorter MacBook viewports without scroll (no transform:scale). */
@@ -55,7 +55,7 @@
         /* ZEUS shrink-to-fit: the wordmark is decorative and the array map has 4
            volumes — compress both so the center column fits without clipping. */
         [data-brand] .mark { padding:2px 0; }
-        [data-brand] .mark pre { font-size:clamp(8px, 1.35vw, 17px); }
+        [data-brand] .mark pre { font-size:clamp(12px, 1.7vw, 32px); }
         html[data-brand="ZEUS"] .v-drive { padding:7px 12px; }
         html[data-brand="ZEUS"] .v-drive-bar { margin-top:6px; }
         html[data-brand="ZEUS"] .v-drive-stats { margin-top:5px; }
@@ -67,6 +67,31 @@
         /* Array map has more rows than the vitals tiles need — give it the larger
            share of the center column so every volume shows (both boxes). */
         .col-mid > .mod:last-child { flex:2.4 1 0; }
+        /* ── ZEUS "fill the space" ──────────────────────────────────────────────────
+           ZEUS is a sparse box (2 drives, 2 outreach clients) on a full 3-col grid, so
+           panels used to stretch tall around tiny content and pool it at the top. Fix
+           is to make the CONTENT big: thick storage bars, tall client cards, charts
+           that fill. All ZEUS-scoped so ARES (dense) is untouched. */
+        /* Array map: moderate bars + the %/free line so the 4 volumes fill the center
+           without the thin-bar dead space OR the oversized bars (ZEUS only). */
+        html[data-brand="ZEUS"] .col-mid .arr-bar { height:22px; margin-top:10px; }
+        html[data-brand="ZEUS"] .col-mid .arr-meta { display:flex; font-size:11px; margin-top:8px; }
+        html[data-brand="ZEUS"] .col-mid .arr-name { font-size:16px; }
+        html[data-brand="ZEUS"] .col-mid .arr-cap { font-size:13px; }
+        html[data-brand="ZEUS"] .col-mid .arr-list .arr-row { justify-content:center; }
+        html[data-brand="ZEUS"] #panel-outreach .mod-body.outreach-list { justify-content:stretch; gap:14px; }
+        html[data-brand="ZEUS"] #panel-outreach .oc-row { flex:1 1 0; display:flex; flex-direction:column; justify-content:center; padding:18px 16px; }
+        html[data-brand="ZEUS"] #panel-outreach .oc-stats { gap:22px; margin-top:16px; }
+        html[data-brand="ZEUS"] #panel-outreach .oc-stat b { font-size:24px; }
+        html[data-brand="ZEUS"] #panel-outreach .oc-stat i { font-size:9px; }
+        html[data-brand="ZEUS"] #panel-outreach .oc-name { font-size:15px; }
+        /* Right column: each panel is a flex column whose body fills its height, so the
+           thermal graph and telemetry sparks stretch instead of pinning to the top. */
+        html[data-brand="ZEUS"] .hud-grid > .col:last-child > .mod { display:flex; flex-direction:column; }
+        html[data-brand="ZEUS"] .hud-grid > .col:last-child > .mod > .mod-body { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+        html[data-brand="ZEUS"] .hud-grid > .col:last-child .thermal { flex:1 1 0; height:auto; min-height:0; }
+        html[data-brand="ZEUS"] .hud-grid > .col:last-child .mod-body.sparks { justify-content:space-around; }
+        html[data-brand="ZEUS"] #panel-net > .mod-body, html[data-brand="ZEUS"] #panel-diskio > .mod-body { justify-content:space-around; }
         * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         html, body {
             min-height:100%; background:var(--bg-0); color:var(--text-1);
@@ -107,8 +132,13 @@
 
         .mod-head { display:flex; align-items:center; justify-content:space-between; gap:10px;
                     padding:9px 12px; border-bottom:1px solid rgba(var(--ares-rgb),.14); }
-        .mod-title { font-size:10.5px; letter-spacing:.16em; color:var(--text-2); text-transform:uppercase; }
-        .mod-meta  { font-size:10px; letter-spacing:.1em; color:var(--text-3); }
+        .mod-title { font-size:13px; letter-spacing:.16em; color:var(--text-2); text-transform:uppercase; }
+        .mod-meta  { font-size:12px; letter-spacing:.1em; color:var(--text-3); }
+        /* Pixel-art title glyphs (see pixelGlyphs() JS) — themed to the box accent,
+           crisp-scaled like the ASCII wordmark. Purely decorative. */
+        .tico { display:inline-block; height:13px; width:auto; margin-right:8px; vertical-align:-2px;
+                fill:var(--ares); opacity:.85; shape-rendering:crispEdges; }
+        .mod-title, .fbreak-head > span:first-child { display:inline-flex; align-items:center; }
         .gpu-src { display:inline-block; margin-right:7px; padding:1px 5px; font-size:8.5px; font-weight:700;
                    letter-spacing:.12em; color:#0b1220; background:var(--amber); border-radius:2px; vertical-align:middle; }
         .mod-body  { padding:12px; }
@@ -140,8 +170,8 @@
 
         .readouts { display:flex; gap:8px; }
         .ro { min-width:132px; padding:8px 12px; }
-        .ro-k { font-size:9px; letter-spacing:.18em; color:var(--text-3); text-transform:uppercase; }
-        .ro-v { font-size:15px; font-weight:700; color:var(--text-1); letter-spacing:.04em; margin-top:2px; }
+        .ro-k { font-size:11px; letter-spacing:.18em; color:var(--text-3); text-transform:uppercase; }
+        .ro-v { font-size:18px; font-weight:700; color:var(--text-1); letter-spacing:.04em; margin-top:2px; }
 
         /* ---- main grid --------------------------------------------------- */
         .hud-grid { flex:1; display:grid; grid-template-columns:326px minmax(0,1fr) 326px; gap:14px;
@@ -196,8 +226,8 @@
         .facts { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:rgba(var(--ares-rgb),.14);
                  border-top:1px solid rgba(var(--ares-rgb),.14); }
         .fact { background:var(--bg-1); padding:7px 10px; min-width:0; }
-        .fact-k { font-size:8.5px; letter-spacing:.15em; color:var(--text-3); text-transform:uppercase; }
-        .fact-v { font-size:12px; color:var(--text-1); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .fact-k { font-size:10.5px; letter-spacing:.15em; color:var(--text-3); text-transform:uppercase; }
+        .fact-v { font-size:15px; color:var(--text-1); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
         /* Observed-load trace. Samples are collected client side each poll — this
            is real history of what the page saw, not synthetic data. */
@@ -265,6 +295,7 @@
             font-weight:700; letter-spacing:0; white-space:pre; margin:0;
             text-shadow:0 0 16px rgba(var(--ares-rgb),.5), 0 0 44px rgba(var(--ares-rgb),.22);
         }
+        /* Two-tone wordmark: first half the box accent (blue/red), second half white. */
         .mark .m-ar { color:var(--ares); }
         .mark .m-es { color:#f4f8fd; text-shadow:0 0 16px rgba(244,248,253,.4), 0 0 44px rgba(244,248,253,.18); }
 
@@ -276,7 +307,7 @@
         .v-tile:hover { border-color:var(--ares); }
         .v-tile-key { display:flex; align-items:center; justify-content:space-between; gap:8px;
                       font-size:9px; letter-spacing:.16em; color:var(--text-2); text-transform:uppercase; }
-        .v-tile-tag { color:var(--text-3); font-size:8.5px; letter-spacing:.1em;
+        .v-tile-tag { color:var(--text-3); font-size:10.5px; letter-spacing:.1em;
                       overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:56%; }
         .v-tile-num { font-size:27px; font-weight:700; color:var(--text-1); line-height:1.1; margin-top:5px; }
         .v-tile-num .unit { font-size:12px; color:var(--ares); margin-left:3px; letter-spacing:.04em; }
@@ -349,23 +380,23 @@
         /* ---- telemetry sparklines --------------------------------------------- */
         .sparks { display:flex; flex-direction:column; gap:11px; }
         .spark-row { display:flex; align-items:center; gap:12px; }
-        .spark-lab { flex:none; width:70px; font-size:9px; letter-spacing:.14em;
+        .spark-lab { flex:none; width:80px; font-size:11px; letter-spacing:.14em;
                      color:var(--text-3); text-transform:uppercase; }
         .spark { flex:1; min-width:0; height:48px; display:block;
                  background:linear-gradient(180deg, rgba(var(--ares-rgb),.04), transparent); }
-        .spark-val { flex:none; width:60px; text-align:right; font-size:14px; font-weight:700; color:var(--text-1); }
+        .spark-val { flex:none; width:66px; text-align:right; font-size:17px; font-weight:700; color:var(--text-1); }
         /* Network / Disk I/O rows (ZEUS) */
         .io-body { display:flex; flex-direction:column; justify-content:center; gap:13px; }
         .io-row { display:flex; align-items:center; gap:12px; }
-        .io-lab { flex:none; width:52px; font-size:9.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--text-3); }
+        .io-lab { flex:none; width:60px; font-size:11.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--text-3); }
         .io-bar { flex:1; height:6px; background:rgba(var(--ares-rgb),.13); overflow:hidden; min-width:0; }
         .io-bar > i { display:block; height:100%; width:0; background:var(--ares); transition:width var(--dur) var(--ease-out); }
-        .io-val { flex:none; width:78px; text-align:right; font-size:14px; font-weight:700; color:var(--text-1); font-variant-numeric:tabular-nums; }
+        .io-val { flex:none; width:84px; text-align:right; font-size:17px; font-weight:700; color:var(--text-1); font-variant-numeric:tabular-nums; }
         .io-load { display:flex; align-items:center; gap:12px; margin-top:2px; padding-top:11px; border-top:1px solid var(--ember-dim); }
-        .io-load::before { content:'LOAD'; flex:none; width:52px; font-size:9.5px; letter-spacing:.13em; color:var(--text-3); }
+        .io-load::before { content:'LOAD'; flex:none; width:60px; font-size:11.5px; letter-spacing:.13em; color:var(--text-3); }
         .io-load-bar { flex:1; height:6px; background:rgba(var(--ares-rgb),.13); overflow:hidden; min-width:0; }
         .io-load-bar > i { display:block; height:100%; width:0; background:var(--amber); transition:width var(--dur) var(--ease-out); }
-        .io-load-v { flex:none; width:78px; text-align:right; font-size:12px; font-weight:700; color:var(--text-2); font-variant-numeric:tabular-nums; }
+        .io-load-v { flex:none; width:84px; text-align:right; font-size:15px; font-weight:700; color:var(--text-2); font-variant-numeric:tabular-nums; }
         .sp-line { fill:none; stroke-width:1.6; vector-effect:non-scaling-stroke; }
         .sp-fill { stroke:none; }
         .sp-c-cpu.sp-line { stroke:var(--ares); }
@@ -431,14 +462,14 @@
         /* center Array map fills its panel: rows split the height, content centered */
         .col-mid .mod-body.arr-list { flex:1; justify-content:space-between; }
         .col-mid .arr-list .arr-row { flex:1 1 0; display:flex; flex-direction:column; justify-content:center; }
-        .col-mid .arr-name { font-size:14px; }
-        .col-mid .arr-cap, .col-mid .arr-meta { font-size:11px; }
+        .col-mid .arr-name { font-size:17px; }
+        .col-mid .arr-cap, .col-mid .arr-meta { font-size:13px; }
         .col-mid .arr-bar { height:12px; margin-top:8px; }
         .arr-empty { font-size:10px; letter-spacing:.1em; color:var(--text-3); }
         .arr-row { display:block; }
         .arr-top { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
-        .arr-name { font-size:11.5px; font-weight:700; color:var(--text-1); letter-spacing:.05em; }
-        .arr-cap { font-size:9.5px; color:var(--text-2); }
+        .arr-name { font-size:14px; font-weight:700; color:var(--text-1); letter-spacing:.05em; }
+        .arr-cap { font-size:12px; color:var(--text-2); }
         .arr-bar { position:relative; height:8px; margin-top:6px; background:rgba(var(--ares-rgb),.1);
                    border:1px solid rgba(var(--ares-rgb),.14); overflow:hidden; }
         /* segmented fill so it reads as an instrument, not a progress bar */
@@ -559,7 +590,7 @@
             <section class="mod c-bl c-tr" id="panel-ops">
                 <div class="mod-head">
                     <span class="mod-title">Operation modules</span>
-                    <span class="mod-meta">04 active</span>
+                    <span class="mod-meta">05 active</span>
                 </div>
                 <div class="mod-body">
                     <nav class="ops">
@@ -581,6 +612,11 @@
                         <a href="/breakdown" class="op">
                             <span class="op-num">004</span>
                             <span class="op-body"><span class="op-lab">Money / Net Worth</span><span class="op-name">Finance</span></span>
+                            <svg class="op-arrow" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                        </a>
+                        <a href="/files" class="op">
+                            <span class="op-num">005</span>
+                            <span class="op-body"><span class="op-lab">Storage / Explorer</span><span class="op-name">Files</span></span>
                             <svg class="op-arrow" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
                         </a>
                     </nav>
@@ -638,7 +674,7 @@
 
             
 
-            <section class="mod c-bl c-br">
+            <section class="mod c-bl c-br" id="panel-array">
                 <div class="mod-head">
                     <span class="mod-title">Array map</span>
                     <span class="mod-meta" id="arr-count">—</span>
@@ -791,10 +827,48 @@
 
 <script>
 function tick() {
-    var t = new Date().toLocaleTimeString('en-US', {hour12:false});
+    var t = new Date().toLocaleTimeString('en-US', {hour12:true});
     var f = document.getElementById('f-time'); if (f) f.textContent = t;
 }
 tick(); setInterval(tick, 30000);
+
+// Pixel-art glyphs beside panel titles — decorative, themed to the box accent.
+// Bitmaps are '#'=filled; scaled crisp to 13px via viewBox + shape-rendering.
+(function pixelGlyphs() {
+    var G = {
+        chip:  ["..#.#.#..",".#######.","##.....##",".#.###.#.","#.#.#.#.#",".#.###.#.","##.....##",".#######.","..#.#.#.."],
+        stack: [".#######.","#########",".#######.","#########",".#######.","#########",".#######."],
+        thermo:["..###..",".#...#.",".#.#.#.",".#.#.#.",".#.#.#.",".#.#.#.","#..#..#","#.###.#",".#####."],
+        bars:  ["........#","......#.#","....#.#.#","..#.#.#.#","..#.#.#.#","#.#.#.#.#","#.#.#.#.#"],
+        net:   ["..###..",".#####.","###.###",".......","###.###",".#####.","..###.."],
+        floppy:["#######.","#.###.##","#.###.##","#......#","#.####.#","#.####.#","#......#","########"],
+        mail:  ["#########","##.....##","#.#...#.#","#..#.#..#","#...#...#","##.....##","#########"],
+        folder:[".###.....","#####....","#########","#.......#","#.......#","#.......#","#########"],
+        clock: ["..#####..",".#.....#.","#...#...#","#...#...#","#...####.","#.......#","#.......#",".#.....#.","..#####.."],
+        blocks:["###.###","###.###","###.###",".......","###.###","###.###","###.###"],
+        card:  ["#########","#.#####.#","#.#####.#","#.#####.#","#########","..#...#..","..#...#.."],
+        blip:  ["..#..",".###.","#####",".###.","..#.."]
+    };
+    var MAP = {
+        'cpu load':'chip','system':'chip','array map':'stack','thermals':'thermo','telemetry':'bars',
+        'network':'net','disk i/o':'floppy','outreach':'mail','to reply':'mail','needs attention':'mail',
+        'attention':'mail','where it lives':'folder','scheduled jobs':'clock','operation modules':'blocks',
+        'services':'blocks','gpu relay':'card'
+    };
+    function svg(rows) {
+        var w = rows[0].length, h = rows.length, r = '';
+        for (var y = 0; y < h; y++) for (var x = 0; x < w; x++)
+            if (rows[y][x] === '#') r += '<rect x="' + x + '" y="' + y + '" width="1" height="1"/>';
+        return '<svg class="tico" viewBox="0 0 ' + w + ' ' + h + '" aria-hidden="true">' + r + '</svg>';
+    }
+    function inject(el) {
+        if (!el || el.querySelector('.tico')) return;
+        var g = G[MAP[el.textContent.trim().toLowerCase().replace(/\s+/g, ' ')] || 'blip'];
+        el.insertAdjacentHTML('afterbegin', svg(g));
+    }
+    document.querySelectorAll('.mod-title, .fbreak-head > span:first-child').forEach(inject);
+})();
+
 
 function tileClass(p) { return p > 90 ? 'crit' : p > 75 ? 'warn' : ''; }
 
@@ -1034,19 +1108,19 @@ function renderOutreach(list) {
     if (!el) return;
     if (!list || !list.length) { el.innerHTML = '<div class="arr-empty">no outreach data</div>'; return; }
     el.innerHTML = list.map(function(c) {
-        var w = c.week || { sent: 0, replied: 0, reply_rate: 0 };
+        var w = c.week || { sent: 0 };
         var nr = c.needs_reply ? '<span class="oc-nr">' + c.needs_reply + ' to reply</span>' : '';
         return '<div class="oc-row"><div class="oc-top">' +
                '<span class="oc-name">' + esc(c.company) + '</span>' + nr + '</div>' +
                '<div class="oc-stats">' +
-                 '<div class="oc-stat"><b>' + fmtN(w.sent) + '</b><i>sent</i></div>' +
-                 '<div class="oc-stat"><b>' + fmtN(w.replied) + '</b><i>replies</i></div>' +
-                 '<div class="oc-stat"><b>' + (w.reply_rate || 0) + '%</b><i>reply</i></div>' +
+                 '<div class="oc-stat"><b>' + fmtN(w.sent) + '</b><i>sent · wk</i></div>' +
+                 '<div class="oc-stat"><b>' + fmtN(c.replied || 0) + '</b><i>replies</i></div>' +
+                 '<div class="oc-stat"><b>' + (c.reply_rate || 0) + '%</b><i>reply</i></div>' +
                  '<div class="oc-stat"><b>' + (c.meetings || 0) + '</b><i>mtgs</i></div>' +
                '</div></div>';
     }).join('');
     var m = document.getElementById('outreach-meta');
-    if (m) m.textContent = 'this week · ' + list.length + ' client' + (list.length > 1 ? 's' : '');
+    if (m) m.textContent = 'sent this week · totals · ' + list.length + ' client' + (list.length > 1 ? 's' : '');
     renderReply(list);
     // weekly chart removed
     __att.reply = list.reduce(function(a, c){ return a + (c.needs_reply || 0); }, 0); renderAttention();
@@ -1319,7 +1393,7 @@ function applyVitals(i) {
 
             var _BR = document.documentElement.getAttribute('data-brand');
             var TC = (_BR === 'ZEUS')
-                ? {temp:'#22d3ee', cpu:'#38bdf8', mem:'#818cf8', gpu:'#38bdf8', pool:'#0ea5e9'}
+                ? {temp:'#38bdf8', cpu:'#6366f1', mem:'#a855f7', gpu:'#818cf8', pool:'#7c3aed'}
                 : {temp:'#fb923c', cpu:'#ef4444', mem:'#f43f5e', gpu:'#eab308', pool:'#ea580c'};
             var tiles = [];
             if (i.cpu_temp != null) {
@@ -1630,7 +1704,7 @@ function drawCharts() {
 
 // Array map: every disk the API reports, widest first.
 var ARR_COLOR = (document.documentElement.getAttribute('data-brand') === 'ZEUS')
-    ? { '970-EVO': '#38bdf8', '990-PRO': '#22d3ee', 'PROMETHEUS': '#0ea5e9' }
+    ? { '970-EVO': '#38bdf8', '990-PRO': '#22d3ee', 'PROMETHEUS': '#38bdf8', 'T5': '#6366f1', 'T7': '#8b5cf6', 'T9': '#a855f7' }
     : { '970-EVO': '#fb923c', '990-PRO': '#f59e0b', 'PROMETHEUS': '#ef4444' };
 
 function renderArray(disks) {
