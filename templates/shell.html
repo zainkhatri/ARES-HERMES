@@ -180,7 +180,7 @@
     <section class="mod c-tl c-tr c-bl c-br term-panel">
         <div class="mod-head">
             <span class="mod-title">Shell · pve</span>
-            <span class="mod-meta" id="term-status">ttyd</span>
+            <span class="mod-meta" id="term-status">connecting…</span>
         </div>
         <div class="mod-body">
             <!-- Session tabs (= tmux windows). -->
@@ -239,7 +239,16 @@
         cursorBlink: true,
         cursorStyle: 'block',
         scrollback: 5000,
-        allowProposedApi: true
+        allowProposedApi: true,
+        theme: {
+            background: '#070403', foreground: '#f6ece9',
+            cursor: '#f5402d', cursorAccent: '#070403',
+            selectionBackground: 'rgba(245,64,45,0.30)',
+            black: '#1c0c09', red: '#f5402d', green: '#10b981', yellow: '#f59e0b',
+            blue: '#7dd3fc', magenta: '#ff7a45', cyan: '#22d3ee', white: '#c99a90',
+            brightBlack: '#5a3d37', brightRed: '#ff7a45', brightGreen: '#34d399', brightYellow: '#fbbf24',
+            brightBlue: '#93c5fd', brightMagenta: '#ff9d5c', brightCyan: '#67e8f9', brightWhite: '#f6ece9'
+        }
     });
     var fit = new FitAddon.FitAddon();
     term.loadAddon(fit);
@@ -324,6 +333,7 @@
             ws.send(JSON.stringify({ open: 'web' }));     // attach tmux session "web"
             try { fit.fit(); ws.send(JSON.stringify({ cols: term.cols, rows: term.rows })); } catch (e) {}
             term.focus();
+            var st = document.getElementById('term-status'); if (st) st.textContent = 'pty · web';
         };
         ws.onmessage = function (ev) {
             if (typeof ev.data === 'string') {            // control JSON (e.g. {windows:[...]})
@@ -334,6 +344,7 @@
         };
         ws.onclose = function () {
             _wsRetry = Math.min(_wsRetry + 1, 6);
+            var st = document.getElementById('term-status'); if (st) st.textContent = 'reconnecting…';
             setTimeout(connectPty, 400 * _wsRetry);       // backoff reconnect
         };
         ws.onerror = function () { try { ws.close(); } catch (e) {} };
@@ -510,20 +521,16 @@
     var copyBtn = document.getElementById('kbd-copy');
     if (copyBtn) {
         copyBtn.addEventListener('click', function () {
-            api('/capture').then(function (d) {
-                var text = (d.text || '').trim();
-                if (!text) return;
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(text).then(function () {
-                        copyBtn.textContent = '✓';
-                        setTimeout(function () { copyBtn.textContent = 'copy'; }, 1200);
-                    }).catch(function () {
-                        prompt('Pane content (select all, copy):', text);
-                    });
-                } else {
-                    prompt('Pane content (select all, copy):', text);
-                }
-            }).catch(function () {});
+            var text = term.getSelection();             // native xterm selection
+            if (!text) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function () {
+                    copyBtn.textContent = '✓';
+                    setTimeout(function () { copyBtn.textContent = 'copy'; }, 1200);
+                }).catch(function () { prompt('Selection (copy):', text); });
+            } else {
+                prompt('Selection (copy):', text);
+            }
         });
     }
 
@@ -547,7 +554,7 @@
             .then(function (r) { return r.json(); })
             .then(function (d) {
                 if (d.path) {
-                    api('/text', { text: d.path, enter: false }).catch(function(){});
+                    wsSend(d.path);                     // inject the path over the PTY WS
                     _showBanner('Image saved → ' + d.path);
                 }
             })
