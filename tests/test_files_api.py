@@ -1,4 +1,4 @@
-import os, tempfile, shutil
+import os, tempfile, shutil, pytest
 from system import files_api
 
 def _mk_root():
@@ -61,3 +61,22 @@ def test_list_dir_filters_and_sorts():
         assert out["entries"][2]["kind"] == "text"
     finally:
         shutil.rmtree(root)
+
+def test_serve_mode_policy():
+    assert files_api.serve_mode("a.pdf", False) == ("application/pdf", False)
+    assert files_api.serve_mode("a.png", False)[1] is False
+    assert files_api.serve_mode("a.py", False) == ("text/plain; charset=utf-8", False)
+    assert files_api.serve_mode("evil.html", False) == ("application/octet-stream", True)
+    assert files_api.serve_mode("evil.svg", False) == ("application/octet-stream", True)
+    assert files_api.serve_mode("a.png", True)[1] is True     # force download
+
+def test_open_checked_rejects_symlink():
+    d = tempfile.mkdtemp()
+    try:
+        real = os.path.join(d, "f.txt"); open(real, "w").close()
+        link = os.path.join(d, "l.txt"); os.symlink(real, link)
+        fd = files_api.open_checked(real); os.close(fd)        # regular file ok
+        with pytest.raises(OSError):
+            files_api.open_checked(link)                        # symlink rejected
+    finally:
+        shutil.rmtree(d)

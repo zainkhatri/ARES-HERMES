@@ -4,6 +4,8 @@ All filesystem paths MUST pass through safe_resolve() before use. Read-only:
 this module never writes, renames, or deletes.
 """
 import os
+import mimetypes
+import stat as _stat_mod
 from system.system_info import POOL_ROOT
 
 ROOT = os.path.realpath(POOL_ROOT)
@@ -102,3 +104,38 @@ def list_dir(abspath, root=ROOT):
     rel = "" if os.path.realpath(abspath) == root else os.path.relpath(abspath, root)
     parent = None if rel == "" else os.path.dirname(rel)
     return {"cwd": rel, "parent": parent, "entries": entries, "truncated": truncated}
+
+
+_INLINE_TOP = {"image", "video", "audio"}
+_TEXT_SAFE = {".txt", ".log", ".csv", ".json", ".xml", ".yml", ".yaml", ".py",
+             ".js", ".ts", ".css", ".sh", ".conf", ".ini", ".toml"}
+
+
+def serve_mode(name, force_dl):
+    """Decide (mimetype, as_attachment). Attachment-by-default; strict inline allowlist."""
+    assert isinstance(name, str), "name must be str"
+    assert isinstance(force_dl, bool), "force_dl must be bool"
+    mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+    if force_dl:
+        return mime, True
+    ext = os.path.splitext(name)[1].lower()
+    if ext == ".svg":
+        return "application/octet-stream", True
+    top = mime.split("/", 1)[0]
+    if mime == "application/pdf" or top in _INLINE_TOP:
+        return mime, False
+    if ext in _TEXT_SAFE or kind_for(name) == "md":
+        return "text/plain; charset=utf-8", False
+    return "application/octet-stream", True
+
+
+def open_checked(abspath):
+    """Open a regular file without following a final symlink. Returns fd; caller closes."""
+    assert isinstance(abspath, str) and abspath, "abspath required"
+    assert os.path.isabs(abspath), "abspath must be absolute"
+    fd = os.open(abspath, os.O_RDONLY | os.O_NOFOLLOW)
+    st = os.fstat(fd)
+    if not _stat_mod.S_ISREG(st.st_mode):
+        os.close(fd)
+        raise OSError("not a regular file")
+    return fd
