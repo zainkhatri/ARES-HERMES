@@ -1,28 +1,42 @@
 {# ARES · Files — Finder-style storage explorer. #}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-brand="{{ brand|default('') }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ARES · Files</title>
+    <title>{{ brand|default('ARES') }} · Files</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="apple-touch-icon" href="/static/icon-180.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#04070d">
+    <meta name="theme-color" content="#070403">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-0:#04070d; --bg-1:#070c16; --bg-2:#0a121f; --bg-3:#0d1726;
-            --line-1:rgba(239,68,68,0.08); --line-2:rgba(239,68,68,0.18);
-            --text-1:#e8f0f8; --text-2:#8ba3c0; --text-3:#4a5d78; --text-4:#2d3a4e;
-            --blue:#6495ed; --blue-bright:#9ab5f5; --cyan:#67e8f9;
-            --green:#10b981; --amber:#f59e0b; --red:#ef4444; --magenta:#c084fc;
-            --ares:#ef4444; --ares-bright:#f87171;
+            --bg-0:#070403; --bg-1:#0d0605; --bg-2:#140807; --bg-3:#1c0c09;
+            --ares:#f5402d; --ares-rgb:245,64,45; --panel-rgb:20,8,7; --ares-bright:#ff7a45; --ember:#c2301f; --ember-dim:rgba(var(--ares-rgb),.28);
+            --grid:rgba(var(--ares-rgb),.055);
+            --text-1:#f6ece9; --text-2:#c99a90; --text-3:#8d6259; --text-4:#5a3d37;
+            --green:#10b981; --amber:#f59e0b; --red:#ef4444;
+            --dur-fast:120ms; --dur:180ms; --dur-slow:280ms;
+            --ease-out:cubic-bezier(.16,1,.3,1);
             --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
             --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
+            /* line tokens re-mapped to ember borders (was cool blue-gray) */
+            --line-1:rgba(var(--ares-rgb),.10); --line-2:var(--ember-dim);
+            /* type-badge hues, warm-compatible (was cyan/magenta/blue) */
+            --cyan:var(--ares-bright); --magenta:var(--amber); --blue:var(--green);
             --sidebar-w:220px;
+        }
+        /* ZEUS: lightning-blue palette. Keyed off data-brand; ARES = default red. One file themes both boxes. */
+        html[data-brand="ZEUS"] {
+            --bg-0:#03060b; --bg-1:#060b14; --bg-2:#0a1220; --bg-3:#0e1a2e;
+            --ares:#38bdf8; --ares-rgb:56,189,248; --ares-bright:#a78bfa; --ember:#6366f1;
+            --text-1:#e9f2fb; --text-2:#90aecb; --text-3:#5a7690; --text-4:#374a5e;
+            --amber:#a855f7; --panel-rgb:10,18,32;
         }
         * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         html, body {
@@ -33,11 +47,38 @@
         ::selection { background:var(--ares); color:var(--bg-0); }
         .app { display:flex; flex-direction:column; min-height:100vh; min-height:100dvh; }
 
+        /* ═══ Panel chrome (verbatim from home) ═══ */
+        .mod { position:relative; contain:layout paint; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.55);
+               box-shadow:inset 0 0 22px rgba(var(--ares-rgb),.045); }
+        .mod::before, .mod::after {
+            position:absolute; width:11px; height:11px; border:2px solid var(--ares); pointer-events:none;
+        }
+        .c-tl::before { content:''; top:-2px; left:-2px; border-right:0; border-bottom:0; }
+        .c-tr::before { content:''; top:-2px; right:-2px; border-left:0; border-bottom:0; }
+        .c-bl::after  { content:''; bottom:-2px; left:-2px; border-right:0; border-top:0; }
+        .c-br::after  { content:''; bottom:-2px; right:-2px; border-left:0; border-top:0; }
+        .mod-head { display:flex; align-items:center; justify-content:space-between; gap:10px;
+                    padding:9px 12px; border-bottom:1px solid rgba(var(--ares-rgb),.14); }
+        .mod-title { font-size:13px; letter-spacing:.16em; color:var(--text-2); text-transform:uppercase; }
+        .mod-meta  { font-size:12px; letter-spacing:.1em; color:var(--text-3); }
+        .mod-body  { padding:12px; }
+        /* scrolling panels: drop paint-containment so corner brackets (drawn at
+           -2px) aren't clipped, and keep their own overflow behaviour. */
+        .sidebar.mod, .explorer-preview.mod, .chat-panel.mod { contain:layout; }
+        /* toolbar mod: tighter body, no double margin (controls already spaced) */
+        .toolbar-mod { margin-bottom:12px; }
+        .toolbar-mod .mod-body { padding:12px 14px; }
+        .toolbar-mod .breadcrumb { margin-bottom:10px; }
+        .toolbar-mod .controls { margin-bottom:0; }
+        /* files listing mod: let the grid/table breathe inside the panel */
+        .files-mod .mod-body { padding:12px; }
+        .files-mod .file-table, .files-mod .file-grid { border:0; }
+
         /* ═══ Navbar ═══ */
         .navbar {
             position:sticky; top:0; z-index:1000;
-            background:rgba(4,7,13,0.92);
-            border-bottom:1px solid var(--line-1);
+            background:rgba(var(--panel-rgb),0.92);
+            border-bottom:1px solid var(--line-2);
             padding:14px 24px;
             padding-top:calc(14px + var(--sat));
             padding-left:calc(24px + var(--sal));
@@ -69,7 +110,7 @@
             transition:color 0.15s, border-color 0.15s, background 0.15s, gap 0.15s;
         }
         .back-chip svg { transition:transform 0.18s ease; }
-        .back-chip:hover { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.05); }
+        .back-chip:hover { color:var(--ares); border-color:var(--ares); background:rgba(var(--ares-rgb),.06); }
         .back-chip:hover svg { transform:translateX(-2px); }
         /* hamburger (mobile sidebar toggle) */
         .hamburger {
@@ -129,7 +170,7 @@
             .sidebar.collapsed { transform:translateX(calc(-1 * var(--sidebar-w))); width:var(--sidebar-w); }
             .sidebar-overlay {
                 display:none; position:fixed; inset:0; z-index:499;
-                background:rgba(4,7,13,0.6); backdrop-filter:blur(2px);
+                background:rgba(var(--panel-rgb),.6); backdrop-filter:blur(2px);
             }
             .sidebar-overlay.open { display:block; }
         }
@@ -145,7 +186,7 @@
             user-select:none; white-space:nowrap;
         }
         .tree-row:hover { background:var(--bg-2); color:var(--text-1); }
-        .tree-row.active { color:var(--ares); background:rgba(239,68,68,0.07); }
+        .tree-row.active { color:var(--ares); background:rgba(var(--ares-rgb),.08); }
         .tree-toggle {
             width:12px; flex-shrink:0; color:var(--text-4);
             transition:transform 0.15s;
@@ -187,9 +228,10 @@
         }
         .section-title {
             font-family:'Bricolage Grotesque', sans-serif;
-            font-weight:700; font-size:18px; letter-spacing:-0.01em;
+            font-weight:700; font-size:22px; letter-spacing:.02em;
             color:var(--text-1);
         }
+        .section-title em { font-style:normal; color:var(--ares); }
         .section-title .dim { color:var(--text-3); font-weight:500; }
         .section-meta {
             display:flex; align-items:center; gap:10px;
@@ -228,7 +270,7 @@
             padding:6px 12px; cursor:pointer; flex-shrink:0;
             transition:color 0.15s, border-color 0.15s, background 0.15s;
         }
-        .up-btn:hover:not(:disabled) { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.05); }
+        .up-btn:hover:not(:disabled) { color:var(--ares); border-color:var(--ares); background:rgba(var(--ares-rgb),.06); }
         .up-btn:disabled { opacity:0.3; cursor:not-allowed; }
         .filter-input {
             flex:1; min-width:160px; max-width:300px;
@@ -249,7 +291,7 @@
         }
         .sort-btn:first-child { margin-left:0; }
         .sort-btn:hover { color:var(--text-1); }
-        .sort-btn.active { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.06); z-index:1; position:relative; }
+        .sort-btn.active { color:var(--ares); border-color:var(--ares); background:rgba(var(--ares-rgb),.07); z-index:1; position:relative; }
         /* View toggle */
         .view-toggle { display:flex; gap:0; flex-shrink:0; }
         .view-btn {
@@ -261,14 +303,14 @@
             display:flex; align-items:center; gap:5px;
         }
         .view-btn:first-child { margin-left:0; }
-        .view-btn.active { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.06); z-index:1; position:relative; }
+        .view-btn.active { color:var(--ares); border-color:var(--ares); background:rgba(var(--ares-rgb),.07); z-index:1; position:relative; }
 
         /* ═══ Truncation notice ═══ */
         .truncated-notice {
             font-family:'JetBrains Mono', monospace; font-size:10px;
             color:var(--amber); letter-spacing:0.12em;
-            padding:7px 14px; border:1px solid rgba(245,158,11,0.25);
-            background:rgba(245,158,11,0.04); margin-bottom:12px;
+            padding:7px 14px; border:1px solid rgba(var(--ares-rgb),.22);
+            background:rgba(var(--ares-rgb),.05); margin-bottom:12px;
         }
 
         /* ═══ GRID view ═══ */
@@ -285,7 +327,7 @@
             user-select:none; min-width:0;
         }
         .fg-tile:hover { background:var(--bg-2); border-color:var(--line-2); }
-        .fg-tile.selected { border-color:var(--ares); background:rgba(239,68,68,0.06); }
+        .fg-tile.selected { border-color:var(--ares); background:rgba(var(--ares-rgb),.07); }
         .fg-thumb-wrap {
             width:80px; height:80px; flex-shrink:0;
             display:flex; align-items:center; justify-content:center;
@@ -336,7 +378,7 @@
         }
         .ft-row:last-child { border-bottom:0; }
         .ft-row:hover { background:var(--bg-2); }
-        .ft-row.selected { background:rgba(239,68,68,0.06); }
+        .ft-row.selected { background:rgba(var(--ares-rgb),.07); }
         .ft-icon {
             display:flex; align-items:center; justify-content:center;
             width:18px; height:18px; flex-shrink:0; color:var(--text-3);
@@ -417,7 +459,7 @@
             padding:6px 14px; border:1px solid var(--line-2);
             transition:color 0.15s, border-color 0.15s, background 0.15s;
         }
-        .dl-btn:hover { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.05); }
+        .dl-btn:hover { color:var(--ares); border-color:var(--ares); background:rgba(var(--ares-rgb),.06); }
 
         /* ═══ Loading spinner ═══ */
         .loading {
@@ -473,7 +515,7 @@
             margin-left:auto;
         }
         .ask-toggle:hover, .ask-toggle.active {
-            color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.05);
+            color:var(--ares); border-color:var(--ares); background:rgba(var(--ares-rgb),.06);
         }
         .chat-panel {
             width:340px; flex-shrink:0;
@@ -539,7 +581,7 @@
             background:var(--bg-2); border:1px solid var(--line-1);
             word-break:break-word;
         }
-        .chat-msg-bubble.user { border-color:rgba(239,68,68,0.15); background:rgba(239,68,68,0.04); color:var(--text-1); }
+        .chat-msg-bubble.user { border-color:rgba(var(--ares-rgb),.18); background:rgba(var(--ares-rgb),.05); color:var(--text-1); }
         .chat-msg-bubble.thinking { color:var(--text-4); font-style:italic; }
         .chat-locations { margin-top:6px; display:flex; flex-direction:column; gap:4px; }
         .chat-loc-row {
@@ -591,7 +633,7 @@
             transition:color 0.15s, border-color 0.15s, background 0.15s;
             align-self:flex-end;
         }
-        .chat-send-btn:hover:not(:disabled) { color:var(--ares); border-color:var(--ares); background:rgba(239,68,68,0.05); }
+        .chat-send-btn:hover:not(:disabled) { color:var(--ares); border-color:var(--ares); background:rgba(var(--ares-rgb),.06); }
         .chat-send-btn:disabled { opacity:0.35; cursor:not-allowed; }
         @media (max-width:900px) {
             .chat-panel {
@@ -615,9 +657,9 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             </button>
             <a href="/" class="nbr nbr-self">
-                <div class="nbr-mark m-a">A</div>
+                <div class="nbr-mark m-a">{{ (brand|default('ARES'))[0] }}</div>
                 <div class="nbr-id">
-                    <span class="nbr-name n-a">ARES</span>
+                    <span class="nbr-name n-a">{{ brand|default('ARES') }}</span>
                     <span class="nbr-sep">/</span>
                     <span class="nbr-tag">FILES</span>
                 </div>
@@ -634,7 +676,8 @@
 
     <main>
         <!-- ── Folder tree sidebar ── -->
-        <nav class="sidebar" id="sidebar" aria-label="Folder tree">
+        <nav class="sidebar mod c-tl c-bl" id="sidebar" aria-label="Folder tree">
+            <div class="mod-head"><span class="mod-title">Tree</span></div>
             <ul class="tree-root" id="tree-root"></ul>
         </nav>
 
@@ -642,10 +685,12 @@
         <div class="content-area">
             <div class="explorer-main">
                 <div class="section-head">
-                    <div class="section-title">Storage <span class="dim">/ explorer</span></div>
+                    <div class="section-title"><em>FILES</em> <span class="dim">/ storage explorer</span></div>
                     <div class="section-meta" id="entry-count">—</div>
                 </div>
 
+                <div class="mod c-tl c-tr c-bl c-br toolbar-mod">
+                  <div class="mod-body">
                 <nav class="breadcrumb" id="breadcrumb" aria-label="Current path"></nav>
 
                 <div class="controls">
@@ -671,11 +716,15 @@
                     </div>
                     <button class="ask-toggle" id="ask-toggle" title="Ask about files">✦ Ask</button>
                 </div>
+                  </div>
+                </div>
 
                 <div id="truncated-notice" class="truncated-notice" style="display:none">
                     Showing first 2000 entries — narrow with the filter to see more
                 </div>
 
+                <div class="mod c-tl c-tr c-bl c-br files-mod">
+                  <div class="mod-body">
                 <!-- grid view -->
                 <div id="grid-view" style="display:none">
                     <div class="file-grid" id="file-grid"></div>
@@ -695,9 +744,11 @@
                         </div>
                     </div>
                 </div>
+                  </div>
+                </div>
             </div>
 
-            <div class="explorer-preview" id="preview-pane">
+            <div class="explorer-preview mod c-tr c-br" id="preview-pane">
                 <div class="preview-head">
                     <span class="preview-name" id="preview-name">—</span>
                     <button class="preview-close" id="preview-close">✕ close</button>
@@ -712,7 +763,7 @@
             </div>
 
             <!-- ── Chat side-panel ── -->
-            <div class="chat-panel" id="chat-panel" role="complementary" aria-label="Ask about files">
+            <div class="chat-panel mod c-tr c-br" id="chat-panel" role="complementary" aria-label="Ask about files">
                 <div class="chat-head">
                     <div class="chat-head-left">
                         <span class="chat-head-title">✦ Ask</span>
