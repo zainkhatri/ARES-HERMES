@@ -152,3 +152,35 @@ def test_content_search_indexes_docs_not_code():
         assert any("net" in h["snippet"].lower() for h in hits), hits
     finally:
         shutil.rmtree(root); shutil.rmtree(dbdir, ignore_errors=True)
+
+
+def test_semantic_search_meaning_based():
+    import os, tempfile, shutil
+    from system import files_index
+    root = tempfile.mkdtemp(); dbdir = tempfile.mkdtemp(); db = os.path.join(dbdir, "idx.db")
+    # deterministic fake embedder (3-dim keyword counts) — no network
+    def fake_embed(texts):
+        return [[float(t.lower().count("cost") + t.lower().count("pric")),
+                 float(t.lower().count("cat") + t.lower().count("kitten")),
+                 1.0] for t in texts]
+    orig_e, orig_ef, orig_cf = files_index._embed, files_index.EMB_FILE, files_index.CHUNKS_FILE
+    orig_ar = files_index._APP_ROOT
+    files_index._embed = fake_embed
+    files_index.EMB_FILE = os.path.join(dbdir, "emb.npy")
+    files_index.CHUNKS_FILE = os.path.join(dbdir, "chunks.json")
+    files_index._APP_ROOT = dbdir          # no .gpu-on-loan flag here -> embed runs
+    try:
+        os.makedirs(os.path.join(root, "docs"))
+        open(os.path.join(root, "docs", "money.md"), "w").write(
+            "Our cost structure and pricing model for the product.")
+        open(os.path.join(root, "docs", "pets.md"), "w").write(
+            "The cat and the kitten played all day in the sun.")
+        files_index.build_index(root=root, db=db)
+        assert files_index.semantic_search("pricing", db=db) == []   # not embedded yet
+        assert files_index.embed_docs(db=db) >= 2
+        hits = files_index.semantic_search("how much does it cost, pricing", k=3, db=db)
+        assert hits and "money.md" in hits[0]["path"], hits
+    finally:
+        files_index._embed, files_index.EMB_FILE, files_index.CHUNKS_FILE = orig_e, orig_ef, orig_cf
+        files_index._APP_ROOT = orig_ar
+        shutil.rmtree(root); shutil.rmtree(dbdir, ignore_errors=True)
