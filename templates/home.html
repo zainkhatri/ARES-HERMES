@@ -153,7 +153,7 @@
         .hud-top > * { min-width:0; max-width:100%; }
         .nodes { display:flex; gap:8px; flex-wrap:wrap; }
         .chip { display:flex; align-items:center; gap:8px; padding:6px 12px; text-decoration:none;
-                border:1px solid var(--ember-dim); color:var(--text-2); transition:all var(--dur) var(--ease-out); }
+                border:1px solid var(--ember-dim); color:var(--text-2); transition:border-color var(--dur) var(--ease-out),background var(--dur) var(--ease-out),color var(--dur) var(--ease-out); }
         .chip-mark { display:grid; place-items:center; width:17px; height:17px; font-size:10px; font-weight:700;
                      border:1px solid currentColor; }
         .chip-name { font-size:11px; font-weight:700; letter-spacing:.11em; }
@@ -211,9 +211,9 @@
         .gauge { transform:rotate(-90deg); }
         .gauge-track { fill:none; stroke:rgba(var(--ares-rgb),.14); stroke-width:7; }
         .gauge-load  { fill:none; stroke:var(--ares); stroke-width:7; stroke-linecap:round;
-                       transition:stroke-dashoffset 900ms var(--ease-out); }
+                       transition:stroke-dashoffset 450ms var(--ease-out); }
         .gauge-temp  { fill:none; stroke:var(--amber); stroke-width:3; stroke-linecap:round;
-                       transition:stroke-dashoffset 900ms var(--ease-out), stroke 400ms linear; }
+                       transition:stroke-dashoffset 450ms var(--ease-out), stroke 400ms linear; }
         .gauge-temp-track { fill:none; stroke:rgba(245,158,11,.12); stroke-width:3; }
         .gauge-mid { position:absolute; text-align:center; }
         .gauge-num { font-size:31px; font-weight:700; color:var(--text-1); line-height:1; }
@@ -313,7 +313,7 @@
         .v-tile-num .unit { font-size:12px; color:var(--ares); margin-left:3px; letter-spacing:.04em; }
         .v-tile-bar { height:3px; margin-top:9px; background:rgba(var(--ares-rgb),.13); overflow:hidden; }
         .v-tile-fill { height:100%; background:var(--accent-color,var(--ares));
-                       transition:width 900ms var(--ease-out); }
+                       transition:width 450ms var(--ease-out); }
         .v-tile-meta { display:flex; justify-content:space-between; gap:8px; margin-top:7px;
                        font-size:9px; letter-spacing:.06em; color:var(--text-2); }
         .v-tile-meta .lo { color:var(--text-3); }
@@ -357,7 +357,7 @@
         .v-drive-tag { font-size:9px; letter-spacing:.08em; color:var(--text-3); }
         .v-drive-bar { height:3px; margin-top:8px; background:rgba(var(--ares-rgb),.13); overflow:hidden; }
         .v-drive-bar-fill { height:100%; background:var(--drive-color,var(--ares));
-                            transition:width 900ms var(--ease-out); }
+                            transition:width 450ms var(--ease-out); }
         .v-drive-stats { display:flex; justify-content:space-between; gap:8px; margin-top:7px;
                          font-size:9.5px; color:var(--text-2); letter-spacing:.05em; }
         .v-drive-stats .pct { color:var(--text-1); font-weight:700; }
@@ -374,7 +374,7 @@
                    font-size:10px; letter-spacing:.1em; color:var(--text-2); text-transform:uppercase; }
         .gpu-row b { font-size:12px; color:var(--text-1); font-weight:700; letter-spacing:.02em; }
         .gpu-bar { height:3px; margin-top:5px; background:rgba(var(--ares-rgb),.13); overflow:hidden; }
-        .gpu-bar i { display:block; height:100%; background:var(--amber); transition:width 900ms var(--ease-out); }
+        .gpu-bar i { display:block; height:100%; background:var(--amber); transition:width 450ms var(--ease-out); }
         .gpu-off { font-size:11px; color:var(--text-3); letter-spacing:.1em; }
 
         /* ---- telemetry sparklines --------------------------------------------- */
@@ -415,7 +415,7 @@
         /* Fluid graphs: morph the path between 3s samples instead of hard-jumping.
            Chrome interpolates the `d` attribute; a long linear glide reads as
            continuous motion. (Reduced-motion is globally disabled below.) */
-        .sp-line, .sp-fill, .trace-line, .trace-fill, .th-line { transition: d 1800ms linear; }
+        .sp-line, .sp-fill, .trace-line, .trace-fill, .th-line { transition: d 250ms linear; }
         .th-scale { display:flex; justify-content:space-between; margin-top:5px;
                     font-size:8.5px; letter-spacing:.14em; color:var(--text-4); }
         .key-dot { display:inline-block; width:7px; height:2px; margin:0 4px 0 9px; vertical-align:middle; }
@@ -475,7 +475,7 @@
         /* segmented fill so it reads as an instrument, not a progress bar */
         .arr-fill { height:100%; background:
                         repeating-linear-gradient(90deg, var(--arr-color,var(--ares)) 0 4px, transparent 4px 6px);
-                    transition:width 900ms var(--ease-out); }
+                    transition:width 450ms var(--ease-out); }
         .arr-meta { display:flex; justify-content:space-between; gap:8px; margin-top:4px;
                     font-size:8.5px; letter-spacing:.1em; color:var(--text-3); text-transform:uppercase; }
         .arr-meta .hot { color:var(--amber); }
