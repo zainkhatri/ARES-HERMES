@@ -159,33 +159,16 @@
         padding: 2px 4px; word-break: break-all;
     }
 
-    /* === Accessory key/scroll bar — pinned above the soft keyboard === */
-    .keybar {
-        flex:0 0 auto;
-        display:flex; align-items:center; gap:6px;
-        padding:8px 10px;
-        padding-left:calc(10px + env(safe-area-inset-left, 0px));
-        padding-right:calc(10px + env(safe-area-inset-right, 0px));
-        background:var(--bg-1); border-top:1px solid var(--nav-line-2);
-        overflow-x:auto; overflow-y:hidden;
-        -webkit-overflow-scrolling:touch; scrollbar-width:none;
-        font-family:'JetBrains Mono', monospace;
+    /* === Mobile key row — hidden on desktop, shown at ≤820px === */
+    .keyrow { display:none; }
+    @media (max-width:820px){
+      .keyrow { display:flex; gap:6px; overflow-x:auto; padding:8px 10px calc(8px + var(--sab));
+                border-top:1px solid rgba(var(--ares-rgb),.14); background:var(--bg-1); }
+      .keyrow .k { flex:0 0 auto; min-width:42px; height:38px; display:grid; place-items:center;
+                   font:inherit; font-size:12px; color:var(--text-2);
+                   border:1px solid var(--ember-dim); background:rgba(var(--ares-rgb),.05); cursor:pointer; }
+      .keyrow .k:active { border-color:var(--ares); color:var(--text-1); }
     }
-    .keybar::-webkit-scrollbar { display:none; }
-    .key {
-        flex:0 0 auto; min-width:44px; min-height:40px; padding:0 12px;
-        display:inline-flex; align-items:center; justify-content:center;
-        border:1px solid var(--nav-line-2); background:var(--bg-2);
-        color:#ecf2fa; font-size:14px; font-weight:600; letter-spacing:0.03em;
-        cursor:pointer; touch-action:manipulation; user-select:none;
-        transition:background .1s, border-color .1s, color .1s;
-    }
-    .key:active { background:rgba(239,68,68,0.18); border-color:var(--nav-ares); color:#fff; }
-    .key.warn:active { background:rgba(239,68,68,0.35); }
-    .key-sep { flex:0 0 auto; width:1px; height:26px; background:var(--nav-line-2); margin:0 3px; }
-    .key-lbl { flex:0 0 auto; color:var(--nav-text-3); font-size:9px; letter-spacing:0.18em; text-transform:uppercase; padding-right:2px; }
-    .key-grow { flex:1 1 auto; }
-    .key-kbd { color:var(--nav-text-2); }
 
     </style>
 </head>
@@ -213,35 +196,20 @@
             <!-- Claude view: chat feed for claude-kind windows -->
             <div id="claude-view"></div>
 
-            <!-- Accessory bar: scroll + the keys a phone keyboard lacks. Sits directly above
-                 the soft keyboard (it's the bottom child of the viewport-tracking .hud-shell). -->
-            <div class="keybar" id="keys">
-                <button class="key" id="kbd-toggle" title="Show / hide keyboard">⌨</button>
-                <span class="key-sep"></span>
-                <span class="key-lbl">scroll</span>
-                <button class="key" data-scroll="up"     title="Scroll up">▲</button>
-                <button class="key" data-scroll="down"   title="Scroll down">▼</button>
-                <button class="key" data-scroll="bottom" title="Jump to bottom">⤓</button>
-                <span class="key-sep"></span>
-                <button class="key" data-key="Escape">esc</button>
-                <button class="key" data-key="Tab">tab</button>
-                <button class="key warn" data-key="C-c">^C</button>
-                <button class="key" data-key="C-l">^L</button>
-                <button class="key" data-key="C-r">^R</button>
-                <span class="key-sep"></span>
-                <span class="key-lbl">tabs</span>
-                <button class="key" data-tab="new"  title="New tab">^T</button>
-                <button class="key" data-tab="next" title="Next tab">^B</button>
-                <button class="key warn" data-tab="close" title="Close tab">^Z</button>
-                <span class="key-sep"></span>
-                <button class="key" data-key="Left">←</button>
-                <button class="key" data-key="Up">↑</button>
-                <button class="key" data-key="Down">↓</button>
-                <button class="key" data-key="Right">→</button>
-                <span class="key-sep"></span>
-                <button class="key" data-key="Enter">⏎</button>
-                <span class="key-sep"></span>
-                <button class="key key-kbd" id="kbd-copy" title="Copy pane to clipboard">copy</button>
+            <!-- Mobile key row: raw escape bytes sent via wsSend. Hidden on desktop (>820px). -->
+            <div class="keyrow" id="keys">
+              <button class="k" data-k="esc">esc</button>
+              <button class="k" data-k="tab">tab</button>
+              <button class="k" data-k="ctrlc">ctrl-c</button>
+              <button class="k" data-k="up">↑</button>
+              <button class="k" data-k="down">↓</button>
+              <button class="k" data-k="left">←</button>
+              <button class="k" data-k="right">→</button>
+              <button class="k" data-k="slash">/</button>
+              <button class="k" data-k="pipe">|</button>
+              <button class="k" data-k="tilde">~</button>
+              <button class="k" data-k="bksp">⌫</button>
+              <button class="k" id="kbd-copy">copy</button>
             </div>
             <div id="img-banner" style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
                  background:rgba(239,68,68,0.78);color:#fff;font-family:'JetBrains Mono',monospace;
@@ -500,22 +468,43 @@
             guard(api('/kill', { index: String(a.index) }));
     }
 
-    /* ── Keybar ─────────────────────────────────────────────────────── */
+    /* ── Mobile key row ─────────────────────────────────────────────── */
+    var KEYSEQ = {
+        esc: '\x1b', tab: '\t', ctrlc: '\x03', bksp: '\x7f',
+        up: '\x1b[A', down: '\x1b[B', left: '\x1b[D', right: '\x1b[C',
+        slash: '/', pipe: '|', tilde: '~'
+    };
     document.getElementById('keys').addEventListener('click', function (e) {
-        var btn = e.target.closest('.key');
-        if (!btn) return;
-        if (btn.id === 'kbd-toggle') {
-            // ponytail: focus/blur xterm textarea to show/hide soft keyboard
-            var xtArea = document.querySelector('#term textarea');
-            if (xtArea) { if (document.activeElement === xtArea) xtArea.blur(); else xtArea.focus(); }
-            return;
-        }
-        if (btn.dataset.tab === 'new')   { guard(api('/new', { target: 'ares' })); return; }
-        if (btn.dataset.tab === 'next')  { nextTab(); return; }
-        if (btn.dataset.tab === 'close') { closeTab(); return; }
-        if (btn.dataset.key)    api('/key',    { key: btn.dataset.key }).catch(function(){});
-        if (btn.dataset.scroll) api('/scroll', { dir: btn.dataset.scroll }).catch(function(){});
+        var b = e.target.closest('.k'); if (!b) return;
+        if (b.id === 'kbd-copy') return;                  // handled in Task 5
+        var seq = KEYSEQ[b.getAttribute('data-k')];
+        if (seq != null) { wsSend(seq); term.focus(); }
     });
+
+    /* ── Soft-keyboard handling ─────────────────────────────────────── */
+    if (term.textarea) {
+        term.textarea.setAttribute('autocorrect', 'off');
+        term.textarea.setAttribute('autocapitalize', 'off');
+        term.textarea.setAttribute('spellcheck', 'false');
+    }
+    document.getElementById('term').addEventListener('click', function () { term.focus(); });
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', function () {
+            document.querySelector('.term-panel').style.maxHeight = window.visualViewport.height + 'px';
+            doFit();
+        });
+    }
+
+    /* ── kbd-toggle: show/hide soft keyboard (element may not exist in new keyrow) ── */
+    var kbdToggleEl = document.getElementById('kbd-toggle');
+    if (kbdToggleEl) {
+        kbdToggleEl.addEventListener('click', function () {
+            if (term.textarea) {
+                if (document.activeElement === term.textarea) { term.textarea.blur(); }
+                else { term.textarea.focus(); }
+            }
+        });
+    }
 
     /* ── Copy pane button ───────────────────────────────────────────── */
     var copyBtn = document.getElementById('kbd-copy');
