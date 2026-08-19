@@ -110,3 +110,23 @@ def test_make_thumb_image_and_reject():
         assert files_api.make_thumb(txt) is None            # non-thumbnailable
     finally:
         shutil.rmtree(d)
+
+
+def test_files_index_build_search_excludes_vault():
+    import os, tempfile, shutil
+    from system import files_index
+    root = tempfile.mkdtemp(); dbdir = tempfile.mkdtemp(); db = os.path.join(dbdir, "idx.db")
+    try:
+        os.makedirs(os.path.join(root, "BUSINESS", "IBT"))
+        os.makedirs(os.path.join(root, ".vault"))
+        open(os.path.join(root, "BUSINESS", "IBT", "ibtakar_contract_2024.pdf"), "w").close()
+        open(os.path.join(root, "BUSINESS", "notes.txt"), "w").close()
+        open(os.path.join(root, ".vault", "secret.pdf"), "w").close()
+        n = files_index.build_index(root=root, db=db)
+        assert n == 2, "expected 2 indexed, got %d" % n
+        hits = files_index.search("ibtakar contract", db=db)
+        assert any("ibtakar_contract" in h["path"] for h in hits), hits
+        assert all(".vault" not in h["path"] for h in hits), "vault leaked"
+        assert all(".vault" not in h["path"] for h in files_index.search("secret", db=db))
+    finally:
+        shutil.rmtree(root); shutil.rmtree(dbdir, ignore_errors=True)
