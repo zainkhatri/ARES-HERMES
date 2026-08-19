@@ -1,7 +1,8 @@
 """Read-only file explorer: confined, vault-excluded filesystem access.
 
 All filesystem paths MUST pass through safe_resolve() before use. Read-only:
-this module never writes, renames, or deletes.
+this module never writes to the browsed tree (the only writes are cached
+thumbnails, in a private cache dir outside the tree).
 """
 import os
 import mimetypes
@@ -142,3 +143,105 @@ def open_checked(abspath):
         os.close(fd)
         raise OSError("not a regular file")
     return fd
+
+
+# ── Thumbnails (Finder-style grid previews) ──────────────────────────────────
+# Small preview JPEGs for image/video/pdf. Writes ONLY to a private cache dir
+# (never the browsed tree). Bounded concurrency + lazy client requests keep a
+# large folder from wedging the box. PIL/pymupdf imported lazily so a missing
+# dep degrades to "no thumbnail" (404) instead of breaking module import.
+import hashlib as _hashlib
+import subprocess as _sp
+import tempfile as _tempfile
+import threading as _threading
+
+THUMB_PX = 320
+THUMB_KINDS = frozenset({"image", "video", "pdf"})
+THUMB_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_files_thumb_cache")
+try:
+    os.makedirs(THUMB_CACHE, exist_ok=True)
+except OSError:
+    THUMB_CACHE = os.path.join(_tempfile.gettempdir(), "files_thumb_cache")
+    os.makedirs(THUMB_CACHE, exist_ok=True)
+_thumb_sema = _threading.Semaphore(4)
+
+
+def _thumb_cache_path(abspath, st):
+    key = _hashlib.sha1(
+        ("%s|%d|%d|%d" % (abspath, int(st.st_mtime), st.st_size, THUMB_PX)).encode()
+    ).hexdigest()
+    return os.path.join(THUMB_CACHE, key + ".jpg")
+
+
+def _thumb_image(src, dst):
+    from PIL import Image, ImageOps
+    with Image.open(src) as im:
+        im = ImageOps.exif_transpose(im)
+        im.thumbnail((THUMB_PX, THUMB_PX))
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        im.save(dst, "JPEG", quality=82)
+
+
+def _thumb_video(src, dst):
+    with _tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
+        frame = tf.name
+    try:
+        _sp.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", "1", "-i", src,
+                 "-vframes", "1", "-vf", "scale=%d:-2" % THUMB_PX, frame],
+                timeout=20, check=True, stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+        os.replace(frame, dst)
+    finally:
+        if os.path.exists(frame):
+            os.remove(frame)
+
+
+def _thumb_pdf(src, dst):
+    import pymupdf
+    doc = pymupdf.open(src)
+    try:
+        page = doc.load_page(0)
+        r = page.rect
+        zoom = THUMB_PX / max(r.width, r.height, 1)
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
+        with open(dst, "wb") as f:
+            f.write(pix.tobytes("jpg"))
+    finally:
+        doc.close()
+
+
+def make_thumb(abspath):
+    """Return a cached JPEG thumbnail path for abspath, or None if not
+    thumbnailable / generation failed. abspath MUST already be vetted by
+    safe_resolve. Cache keyed by path+mtime+size; generation is bounded."""
+    assert isinstance(abspath, str) and abspath, "abspath required"
+    assert os.path.isabs(abspath), "abspath must be absolute"
+    kind = kind_for(os.path.basename(abspath))
+    if kind not in THUMB_KINDS:
+        return None
+    try:
+        st = os.stat(abspath)
+    except OSError:
+        return None
+    cache = _thumb_cache_path(abspath, st)
+    if os.path.exists(cache):
+        return cache
+    with _thumb_sema:
+        if os.path.exists(cache):
+            return cache
+        tmp = cache + ".tmp"
+        try:
+            if kind == "image":
+                _thumb_image(abspath, tmp)
+            elif kind == "video":
+                _thumb_video(abspath, tmp)
+            else:
+                _thumb_pdf(abspath, tmp)
+            os.replace(tmp, cache)
+            return cache
+        except Exception:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            return None

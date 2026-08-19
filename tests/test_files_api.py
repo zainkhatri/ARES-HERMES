@@ -91,3 +91,22 @@ def test_open_checked_rejects_symlink():
             files_api.open_checked(link)                        # symlink rejected
     finally:
         shutil.rmtree(d)
+
+
+def test_make_thumb_image_and_reject():
+    import os, tempfile, shutil
+    from system import files_api
+    from PIL import Image
+    d = tempfile.mkdtemp()
+    try:
+        img = os.path.join(d, "pic.png")
+        Image.new("RGB", (900, 600), (10, 20, 30)).save(img)
+        cache = files_api.make_thumb(img)
+        assert cache and os.path.exists(cache), "thumb not generated"
+        with Image.open(cache) as t:
+            assert max(t.size) <= files_api.THUMB_PX, "thumb not downsized"
+        assert files_api.make_thumb(img) == cache          # cached second call
+        txt = os.path.join(d, "a.txt"); open(txt, "w").write("x")
+        assert files_api.make_thumb(txt) is None            # non-thumbnailable
+    finally:
+        shutil.rmtree(d)
