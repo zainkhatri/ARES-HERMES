@@ -24,6 +24,8 @@ from ai import llm_interface
 from ai import claude_interface
 from ai.llm_interface import get_usage_stats
 from system.recycling_bin import trash_file, list_trash, restore as restore_trash
+from system import files_api
+from system import files_index
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET", secrets.token_hex(32))
@@ -580,6 +582,51 @@ _OUTREACH_DEFAULT = ("http://localhost:8080/snapshot.json,"
                      "http://localhost:8090/snapshot.json,"
                      "http://127.0.0.1:8093/snapshot.json")
 
+# The snapshot's own weekly buckets are miscounted (they've shown impossible
+# figures like "15 replies this week" for a client with 7 lifetime replies).
+# The real send ledger is the multi-tenant `sends` table — query it directly for
+# a trustworthy "sent this week" per tenant. Cached; node/pg/DATABASE_URL live in
+# the FAI bdr dir, so we borrow its resolution by running there.
+_OUTREACH_BDR = os.getenv(
+    "OUTREACH_BDR_DIR",
+    "/srv/mergerfs/PROMETHEUS/BUSINESS/AUTOMATION-IBT/FAMILYCARESF/bdr")
+_LEDGER_JS = (
+    "import('dotenv/config').then(async()=>{const{Pool}=await import('pg');"
+    "const p=new Pool({connectionString:process.env.DATABASE_URL});"
+    "const r=await p.query(\"SELECT t.slug, count(s.*)::int wk_sent FROM tenants t "
+    "LEFT JOIN sends s ON s.tenant_id=t.id AND s.sent_at > now()-interval '7 days' "
+    "GROUP BY t.slug\");console.log(JSON.stringify(r.rows));await p.end();})"
+    ".catch(e=>{console.error(e.message);process.exit(1);})")
+_ledger_cache = {"ts": 0.0, "by_slug": {}}
+
+
+def _outreach_ledger():
+    """{slug: sent_last_7_days} from the real `sends` ledger. Cached 5 min; {} if
+    the DB or node is unreachable (caller falls back to snapshot figures)."""
+    import subprocess
+    import time
+    if time.time() - _ledger_cache["ts"] < 300:
+        return _ledger_cache["by_slug"]
+    by_slug = {}
+    try:
+        r = subprocess.run(["node", "-e", _LEDGER_JS], cwd=_OUTREACH_BDR,
+                           capture_output=True, text=True, timeout=15)
+        for row in json.loads(r.stdout or "[]"):
+            by_slug[str(row.get("slug", "")).lower()] = int(row.get("wk_sent") or 0)
+    except Exception:
+        by_slug = _ledger_cache["by_slug"]        # keep last-good on a transient failure
+    _ledger_cache.update(ts=time.time(), by_slug=by_slug)
+    return by_slug
+
+
+def _ledger_wk_sent(ledger, company):
+    """Match a snapshot company name to a tenant slug (e.g. 'Ibtakar Labs'->'ibtakar')."""
+    norm = "".join(ch for ch in (company or "").lower() if ch.isalnum())
+    for slug, n in ledger.items():
+        if norm and (norm.startswith(slug) or slug.startswith(norm)):
+            return n
+    return None
+
 
 @app.route("/api/outreach")
 @require_auth
@@ -590,6 +637,7 @@ def api_outreach():
     if os.getenv("HOST_BRAND", "").upper() != "ZEUS":
         return jsonify([])
     import requests
+    ledger = _outreach_ledger()
     out = []
     for u in os.getenv("OUTREACH_SNAPSHOTS", _OUTREACH_DEFAULT).split(","):
         u = u.strip()
@@ -610,18 +658,18 @@ def api_outreach():
         wk = d.get("weekly")
         wk = wk if isinstance(wk, list) else []
         company = d.get("company") or "?"
-        last = wk[-1] if wk else {}
-        wk_sent = last.get("sent") or 0
-        wk_replied = last.get("replied") or 0
+        # "Sent this week" comes from the real ledger, not the miscounted snapshot
+        # bucket; fall back to the snapshot only if the ledger is unreachable.
+        led = _ledger_wk_sent(ledger, company)
+        wk_sent = led if led is not None else ((wk[-1] if wk else {}).get("sent") or 0)
         out.append({
             "company": company,
             "sent": s.get("totalSends") or contacted or 0,
             "contacted": contacted,
             "replied": replied,
             "reply_rate": round(100 * replied / contacted, 1) if contacted else 0,
-            # this week's activity (last weekly bucket)
-            "week": {"sent": wk_sent, "replied": wk_replied,
-                     "reply_rate": round(100 * wk_replied / wk_sent, 1) if wk_sent else 0},
+            # sent this week is ledger-true; reply metrics stay lifetime (accurate)
+            "week": {"sent": wk_sent},
             "meetings": s.get("meetings") or 0,
             "warm": s.get("warm") or 0,
             "needs_reply": len(nr),
@@ -2831,6 +2879,43 @@ def storage_breakdown():
     return jsonify(payload)
 
 
+def _oled_solo_after_start():
+    """After VM 200 boots, disable the Virtual Display Driver so the desk OLED
+    is the sole display (user wants one screen, not the VDD phantom, when they
+    tap in via VNC/Moonlight). Reuses the VM's existing C:\\gamemode\\vdd-disable.ps1.
+
+    GameModeDisplayRest re-enables the VDD on its LogonTrigger, so we wait for
+    boot+logon to settle, then disable last to win the race. Disable-PnpDevice
+    is a global op, so guest-exec (session 0) is enough; no trampoline needed.
+    Runs in a daemon thread."""
+    import subprocess as _sp
+    host = "root@192.168.20.51"
+    ssh_base = ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5", host]
+    ping = "qm agent 200 ping"
+    disable = ("qm guest exec 200 --timeout 20 -- powershell -NoProfile "
+               "-ExecutionPolicy Bypass -File C:\\gamemode\\vdd-disable.ps1")
+    up = False
+    for _ in range(40):                       # ceiling ~3.5 min waiting for guest agent
+        try:
+            _sp.check_output(ssh_base + [ping], timeout=8, stderr=_sp.DEVNULL)
+            up = True
+            break
+        except Exception:
+            time.sleep(5)
+    if not up:
+        return
+    # ponytail: fixed 45s lets logon + GameModeDisplayRest finish before we
+    # disable last. If the re-enable ever wins, poll its LastRunTime instead.
+    time.sleep(45)
+    for _ in range(2):                        # two idempotent fires, 15s apart
+        try:
+            _sp.run(ssh_base + [disable], timeout=30,
+                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+        except Exception:
+            pass
+        time.sleep(15)
+
+
 @app.route("/api/vm/<action>", methods=["POST"])
 @require_auth
 def vm_control(action):
@@ -2883,9 +2968,182 @@ def vm_control(action):
                  "root@192.168.20.51", cmd],
                 timeout=15, stderr=_sp.DEVNULL
             )
+            if action == "start":
+                # Once Windows is up, drop the VDD so the OLED is the only screen.
+                threading.Thread(target=_oled_solo_after_start, daemon=True).start()
             return jsonify({"ok": True, "action": action, "detached": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/files")
+@require_auth
+def files_view():
+    return render_template("files.html", boot=get_system_info())
+
+
+@app.route("/api/files/list")
+@require_auth
+def files_list():
+    rel = request.args.get("path", "")
+    ap = files_api.safe_resolve(rel)
+    if not ap or not os.path.isdir(ap):
+        abort(404)                                    # identical 404 for missing/forbidden
+    return jsonify(files_api.list_dir(ap))
+
+
+@app.route("/api/files/raw")
+@require_auth
+def files_raw():
+    rel = request.args.get("path", "")
+    force_dl = request.args.get("dl") == "1"
+    ap = files_api.safe_resolve(rel)
+    if not ap or not os.path.isfile(ap):
+        abort(404)
+    try:
+        fd = files_api.open_checked(ap)               # reject symlink-swap / non-regular
+        os.close(fd)
+    except OSError:
+        abort(404)
+    mimetype, as_attachment = files_api.serve_mode(os.path.basename(ap), force_dl)
+    resp = send_file(ap, mimetype=mimetype, as_attachment=as_attachment,
+                     conditional=True, download_name=os.path.basename(ap))
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["Content-Security-Policy"] = "sandbox"
+    return resp
+
+
+@app.route("/api/files/thumb")
+@require_auth
+def files_thumb():
+    rel = request.args.get("path", "")
+    ap = files_api.safe_resolve(rel)
+    if not ap or not os.path.isfile(ap):
+        abort(404)
+    cache = files_api.make_thumb(ap)
+    if not cache:
+        abort(404)
+    resp = send_file(cache, mimetype="image/jpeg", conditional=True, max_age=86400)
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    return resp
+
+
+def _ollama_complete(system_prompt, user_prompt):
+    """One-shot grounded Ollama completion (no tool-calling). Returns text."""
+    import requests as _rq
+    from ai.llm_interface import OLLAMA_HOST, OLLAMA_MODEL
+    try:
+        r = _rq.post(OLLAMA_HOST + "/api/chat", timeout=60, json={
+            "model": OLLAMA_MODEL, "stream": False,
+            "messages": [{"role": "system", "content": system_prompt},
+                         {"role": "user", "content": user_prompt}]})
+        return (r.json().get("message", {}).get("content") or "").strip() or "(no response)"
+    except Exception as e:
+        return "Assistant unavailable (%s)." % e
+
+
+def _peek_content(rel):
+    """Small bounded text peek at the top match so the assistant can actually
+    explain it (dir -> its README, else a listing; small text/md -> head). ~2KB."""
+    ap = files_api.safe_resolve(rel or "")
+    if not ap:
+        return None
+    try:
+        if os.path.isdir(ap):
+            for cand in ("README.md", "readme.md", "README", "README.txt", "about.md"):
+                p = os.path.join(ap, cand)
+                if os.path.isfile(p):
+                    with open(p, "r", errors="ignore") as fh:
+                        return "%s/%s:\n%s" % (rel, cand, fh.read(2000))
+            names = [e.name for e in os.scandir(ap) if not e.name.startswith(".")]
+            return "%s/ (folder) contains: %s" % (rel, ", ".join(names[:25]))
+        if files_api.kind_for(os.path.basename(ap)) in ("text", "md") \
+                and os.path.getsize(ap) < 100_000:
+            with open(ap, "r", errors="ignore") as fh:
+                return "%s:\n%s" % (rel, fh.read(2000))
+    except OSError:
+        return None
+    return None
+
+
+@app.route("/api/files/reindex", methods=["POST"])
+@require_auth
+def files_reindex():
+    started = files_index.start_reindex()
+    return jsonify({"started": started, "status": files_index.index_status()})
+
+
+@app.route("/api/files/index-status")
+@require_auth
+def files_index_status():
+    return jsonify(files_index.index_status())
+
+
+@app.route("/api/files/ask", methods=["POST"])
+@require_auth
+def files_ask():
+    data = request.get_json(force=True, silent=True) or {}
+    query = (data.get("query") or "").strip()
+    if not query:
+        return jsonify({"error": "empty query"}), 400
+    cands = files_index.search(query, limit=40)
+    passages = files_index.content_search(query, limit=6)          # keyword inside-doc
+    sem = files_index.semantic_search(query, k=6)                  # meaning-based
+    listing = "\n".join(
+        "- %s [%s] %s" % (c["path"], c["kind"],
+                          time.strftime("%Y-%m-%d", time.localtime(c["mtime"])))
+        for c in cands[:25]) or "(no candidates found)"
+    peek = _peek_content(cands[0]["path"]) if cands else None
+    sys_p = ("You are a file assistant for a personal home server. Answer DIRECTLY and "
+             "briefly. PASSAGES (both 'FROM DOCUMENTS' keyword hits and 'RELEVANT "
+             "PASSAGES (semantic)' meaning-based hits), when present, are real excerpts "
+             "from the user's files — use them to answer and cite the doc path, quoting "
+             "briefly. "
+             "CONTENT OF TOP MATCH (when present) is the contents of the most relevant "
+             "file/folder — use it to explain what that item IS, EVEN IF the user's exact "
+             "word does not appear in it. Refer to paths from CANDIDATES/PASSAGES only; "
+             "never invent one. For 'newest/latest' candidates are sorted newest-first. "
+             "Only if there is truly no relevant match, say so and name the closest folder "
+             "— never fabricate.")
+    user_p = "CANDIDATES (path [kind] date):\n%s\n" % listing
+    if passages:
+        user_p += "\nPASSAGES FROM DOCUMENTS:\n%s\n" % "\n".join(
+            "%s: %s" % (p["path"], p["snippet"][:400]) for p in passages)
+    if sem:
+        user_p += "\nRELEVANT PASSAGES (semantic):\n%s\n" % "\n".join(
+            "%s: %s" % (s["path"], " ".join(s["chunk"].split())[:400]) for s in sem)
+    if peek:
+        user_p += "\nCONTENT OF TOP MATCH:\n%s\n" % peek[:2200]
+    user_p += "\nQUESTION: %s" % query
+    answer = _ollama_complete(sys_p, user_p)
+    # small models sometimes echo a prompt label as the first line — strip it.
+    for _lbl in ("RELEVANT PASSAGES", "PASSAGES FROM DOCUMENTS", "CONTENT OF TOP MATCH", "CANDIDATES"):
+        while answer.lstrip().upper().startswith(_lbl):
+            answer = answer.split("\n", 1)[1] if "\n" in answer else ""
+    answer = answer.strip()
+    # chips: doc-content hits (keyword + semantic) first, then name matches, deduped
+    seen, locs = set(), []
+    for p in passages:
+        if p["path"] not in seen:
+            seen.add(p["path"])
+            locs.append({"name": p["path"].rsplit("/", 1)[-1], "path": p["path"],
+                         "kind": p["kind"], "size": None, "mtime": 0, "via": "content"})
+    for s in sem:
+        if s["path"] not in seen:
+            seen.add(s["path"])
+            locs.append({"name": s["path"].rsplit("/", 1)[-1], "path": s["path"],
+                         "kind": files_api.kind_for(s["path"].rsplit("/", 1)[-1]),
+                         "size": None, "mtime": 0, "via": "semantic"})
+    for c in cands:
+        if c["path"] not in seen:
+            seen.add(c["path"])
+            locs.append(c)
+    # Show ONE chip: the file the answer actually cites (validated against the real
+    # candidate set, so never hallucinated); else fall back to the top match.
+    cited = next((L for L in locs if L["path"] and L["path"] in answer), None)
+    final = [cited] if cited else locs[:1]
+    return jsonify({"answer": answer, "locations": final,
+                    "indexed": files_index.index_status().get("count", 0)})
 
 
 @app.route("/api/vm/vnc-ready", methods=["POST"])
@@ -4671,6 +4929,43 @@ def vault_remove():
         _save_vault()
 
     return jsonify({"removed": removed, "failed": failed, "count": len(removed)})
+
+
+@app.route("/api/vault/delete", methods=["POST"])
+@require_auth
+def vault_delete():
+    """Permanently delete vault items — remove from state + delete enc blob + thumbs.
+    Unlike /api/vault/remove (which restores the original to the library), this is gone-forever."""
+    if not _vault_session_active():
+        return jsonify({"error": "Vault locked"}), 403
+    _vault_touch()
+    data = request.get_json(silent=True) or {}
+    keys = data.get("thumb_keys", [])
+    if not keys or not isinstance(keys, list) or len(keys) > 500:
+        return jsonify({"error": "Bad request"}), 400
+    import shutil, glob as _glob
+    deleted = 0
+    for tk in keys:
+        if not isinstance(tk, str) or not tk or len(tk) > 64 or "/" in tk:
+            continue
+        with _vault_state_lock:
+            existed = tk in _vault_state["items"]
+            _vault_state["items"].pop(tk, None)
+        shutil.rmtree(os.path.join(_VAULT_ENC_DIR, tk), ignore_errors=True)
+        for p in (os.path.join(_VAULT_THUMB_DIR, tk + ".jpg"),
+                  os.path.join(_VAULT_THUMB_HQ_DIR, tk + ".jpg"),
+                  os.path.join(_VAULT_THUMB_PRV_DIR, tk + ".jpg"),
+                  os.path.join(_VAULT_THUMB_MAX_DIR, tk + ".webp")):
+            try: os.remove(p)
+            except OSError: pass
+        for base in (_VAULT_VIDEO_DIR, _VAULT_HLS_DIR):
+            for p in _glob.glob(os.path.join(base, tk + "*")):
+                try:
+                    shutil.rmtree(p, ignore_errors=True) if os.path.isdir(p) else os.remove(p)
+                except OSError: pass
+        if existed: deleted += 1
+    _save_vault()
+    return jsonify({"deleted": deleted})
 
 
 def _serve_vault_thumb(tier, thumb_key):
