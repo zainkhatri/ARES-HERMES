@@ -28,9 +28,36 @@ from system import files_api
 from system import files_index
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET", secrets.token_hex(32))
+_flask_secret = os.environ.get("FLASK_SECRET", "")
+assert _flask_secret and "change-in-prod" not in _flask_secret and "replace-me" not in _flask_secret, \
+    "FLASK_SECRET must be set to a real random value (see .env)"
+app.secret_key = _flask_secret
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.jinja_env.auto_reload = True
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=True,   # Caddy terminates TLS on :8443
+)
+
+# ponytail: per-worker in-memory login throttle. Single-user box; effective limit
+# is 5*workers/60s. Upgrade to a shared store only if that ceiling matters.
+import time as _time
+_login_fails = {}   # ip -> (count, first_ts)
+def _login_rate_ok(ip):
+    rec = _login_fails.get(ip)
+    if not rec:
+        return True
+    count, first = rec
+    if _time.time() - first > 60:
+        _login_fails.pop(ip, None)
+        return True
+    return count < 5
+def _login_rate_fail(ip):
+    count, first = _login_fails.get(ip, (0, _time.time()))
+    if _time.time() - first > 60:
+        count, first = 0, _time.time()
+    _login_fails[ip] = (count + 1, first)
 
 _GALLERY_TZ = ZoneInfo("America/Los_Angeles")
 
@@ -69,7 +96,9 @@ def _gzip_json(resp):
     resp.headers["Vary"] = "Accept-Encoding" if not vary else (vary + ", Accept-Encoding")
     return resp
 
-LOGIN_PASSWORD = os.getenv("ARES_PASSWORD", "prometheus")
+LOGIN_PASSWORD = os.environ.get("ARES_PASSWORD", "")
+assert LOGIN_PASSWORD and LOGIN_PASSWORD != "prometheus", \
+    "ARES_PASSWORD must be set to a non-default value (see .env)"
 LOGIN_USER = os.getenv("ARES_USER", "zainkhatri")
 API_TOKEN = os.getenv("ARES_API_TOKEN", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
@@ -399,17 +428,23 @@ def login_page():
 
 @app.route("/api/login", methods=["POST"])
 def login():
-    data = request.json
+    data = request.json or {}
     username = data.get("username", "")
     password = data.get("password", "")
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip()
 
-    if password == LOGIN_PASSWORD:
+    if not _login_rate_ok(ip):
+        return jsonify({"success": False, "error": "Too many attempts — wait 60s."}), 429
+
+    ok_pw = secrets.compare_digest(password, LOGIN_PASSWORD)
+    ok_user = secrets.compare_digest(username, LOGIN_USER) if username else True
+    if ok_pw and ok_user:
         session["authenticated"] = True
         session["username"] = "zain"
         session.permanent = False
         return jsonify({"success": True, "username": "zain"})
-    else:
-        return jsonify({"success": False, "error": "Authentication failed."}), 401
+    _login_rate_fail(ip)
+    return jsonify({"success": False, "error": "Authentication failed."}), 401
 
 
 @app.route("/api/logout", methods=["POST"])
@@ -556,10 +591,12 @@ def healthz():
         pass
     resp = jsonify({"ok": True, "brand": os.getenv("HOST_BRAND", ""),
                     "caps": _capabilities(), "stamp": stamp, "summary": summary})
-    # Non-secret, tailnet-only. CORS-open so the sister-node card on the OTHER box
-    # can read it cross-origin from the browser (the ARES dashboard runs in an LXC
-    # with no Tailscale, so it can't reach the peer server-side — the browser can).
-    resp.headers["Access-Control-Allow-Origin"] = "*"
+    # Non-secret, tailnet-only. Allow cross-origin reads ONLY from tailnet origins so the
+    # sister-node card on the OTHER box can read it from the browser — not from arbitrary sites.
+    _o = request.headers.get("Origin", "")
+    if _o.endswith(".ts.net"):
+        resp.headers["Access-Control-Allow-Origin"] = _o
+        resp.headers["Vary"] = "Origin"
     return resp
 
 
@@ -2035,6 +2072,17 @@ def list_journals():
     return jsonify({"journals": journals, "synced_at": gn_synced_at})
 
 
+def _journal_path(name):
+    """Confine a request-supplied journal filename to JOURNALS_DIR (realpath). None if it escapes."""
+    if not name or "\x00" in name:
+        return None
+    ap = os.path.realpath(os.path.join(JOURNALS_DIR, name))
+    root = os.path.realpath(JOURNALS_DIR)
+    if ap != root and not ap.startswith(root + os.sep):
+        return None
+    return ap
+
+
 @app.route("/api/journals/<name>/page-dates")
 @require_auth
 def journal_page_dates(name):
@@ -2151,8 +2199,8 @@ def journal_highlight():
     q = request.args.get("q", "").strip()
     if not pdf_name or page_num == "" or not q:
         return jsonify({"rects": []})
-    path = os.path.join(JOURNALS_DIR, pdf_name)
-    if not os.path.isfile(path):
+    path = _journal_path(pdf_name)
+    if not path or not os.path.isfile(path):
         return jsonify({"rects": []})
     try:
         page_num = int(page_num)
@@ -2280,8 +2328,8 @@ def journal_word_boxes():
     try:
         import fitz as _fitz
 
-        pdf_path = os.path.join(JOURNALS_DIR, pdf_name)
-        if not os.path.isfile(pdf_path):
+        pdf_path = _journal_path(pdf_name)
+        if not pdf_path or not os.path.isfile(pdf_path):
             return jsonify({"words": []})
 
         page_num = int(page_num)
@@ -2356,8 +2404,8 @@ def _get_pdf(path):
 @app.route("/api/journals/<name>/page/<int:page>")
 @require_auth
 def journal_page_image(name, page):
-    path = os.path.join(JOURNALS_DIR, name)
-    if not os.path.isfile(path):
+    path = _journal_path(name)
+    if not path or not os.path.isfile(path):
         abort(404)
 
     thumb = request.args.get("thumb")
@@ -3206,7 +3254,7 @@ def minecraft_public():
         "http://localhost",
         "http://127.0.0.1",
     ]
-    is_allowed = any(origin.startswith(o) for o in allowed_origins) or origin.endswith(".vercel.app")
+    is_allowed = origin in {"https://mordor.vercel.app", "https://zainkhatri.github.io"}
     cors_origin = origin if is_allowed else allowed_origins[0]
     cors_headers = {
         "Access-Control-Allow-Origin": cors_origin,
@@ -3253,7 +3301,7 @@ def minecraft_players():
         "http://localhost",
         "http://127.0.0.1",
     ]
-    is_allowed = any(origin.startswith(o) for o in allowed_origins) or origin.endswith(".vercel.app")
+    is_allowed = origin in {"https://mordor.vercel.app", "https://zainkhatri.github.io"}
     cors_origin = origin if is_allowed else allowed_origins[0]
     cors_headers = {
         "Access-Control-Allow-Origin": cors_origin,
@@ -3815,7 +3863,7 @@ def _vault_token_key(vt):
     if _vault_token_ser is None:
         _vault_token_ser = URLSafeTimedSerializer(app.secret_key, salt="vault-token")
     try:
-        payload = _vault_token_ser.loads(vt, max_age=3600)
+        payload = _vault_token_ser.loads(vt, max_age=900)  # was 3600; shortened, but long enough for the A&N offline bulk sync
     except Exception:
         return None
     kid = payload.get("kid") if isinstance(payload, dict) else None
@@ -5651,7 +5699,7 @@ def serve_media(filepath):
         filepath = alt
     elif not os.path.isfile(filepath):
         abort(404)
-    abs_path = os.path.abspath(filepath)
+    abs_path = os.path.realpath(filepath)
     allowed = ["/srv/mergerfs/PROMETHEUS/PHOTOS/", "/Volumes/PROMETHEUS/PHOTOS/"]
     if not any(abs_path.startswith(prefix) for prefix in allowed):
         abort(403)
@@ -9680,6 +9728,6 @@ if __name__ == "__main__":
         host=os.getenv("ARES_HOST", "0.0.0.0"),
         port=int(os.getenv("ARES_PORT", "8080")),
         threaded=True,
-        debug=use_debug, use_reloader=True,
+        debug=use_debug, use_reloader=use_debug,
         extra_files=extra_files,
     )
