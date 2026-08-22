@@ -36,8 +36,17 @@
 # multiplexes them all over a single connection, so a year click feels
 # instant even on a slow link.
 :8443 {
-	tls /etc/caddy/pve.crt /etc/caddy/pve.key
+	tls /etc/caddy/ares.crt /etc/caddy/ares.key
 	encode zstd gzip
+
+	# Security headers (defense-in-depth). CSP omitted for now — the dashboard uses
+	# inline scripts/styles + xterm websockets and needs a tested policy first.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
 
 	# Web shell on the ARES host: ttyd (at root) on 127.0.0.1:7681. handle_path
 	# strips the /shell prefix; reverse_proxy carries the websocket upgrade.
@@ -58,7 +67,9 @@
 		route {
 			@notts not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
 			respond @notts "Forbidden" 403
-			reverse_proxy 100.77.42.110:7683
+			reverse_proxy 100.77.42.110:7683 {
+				header_up Authorization "Bearer <ARES_API_TOKEN>"
+			}
 		}
 	}
 
@@ -66,14 +77,29 @@
 		route {
 			@notts not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
 			respond @notts "Forbidden" 403
-			reverse_proxy 100.77.42.110:7686
+			reverse_proxy 100.77.42.110:7686 {
+				header_up Authorization "Bearer <ARES_API_TOKEN>"
+			}
 		}
 	}
 
 	# Static photo media off disk (must precede the catch-all reverse_proxy).
 	import static_media
 
+	# Public funnel path: Minecraft control stays reachable (CORS-restricted in Flask).
+	handle /api/minecraft* {
+		reverse_proxy 192.168.20.213:8080 {
+			transport http {
+				versions 1.1
+			}
+			flush_interval -1
+		}
+	}
+
+	# Everything else: enforce the documented tailnet-only model at the network layer.
 	handle {
+		@notts not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
+		respond @notts "Forbidden" 403
 		reverse_proxy 192.168.20.213:8080 {
 			transport http {
 				versions 1.1
@@ -85,6 +111,15 @@
 
 :8080 {
 	encode zstd gzip
+
+	# Security headers (defense-in-depth). CSP omitted for now — the dashboard uses
+	# inline scripts/styles + xterm websockets and needs a tested policy first.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
 
 	handle_path /shell/* {
 		route {
@@ -101,7 +136,9 @@
 		route {
 			@notts not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
 			respond @notts "Forbidden" 403
-			reverse_proxy 100.77.42.110:7683
+			reverse_proxy 100.77.42.110:7683 {
+				header_up Authorization "Bearer <ARES_API_TOKEN>"
+			}
 		}
 	}
 
@@ -109,14 +146,29 @@
 		route {
 			@notts not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
 			respond @notts "Forbidden" 403
-			reverse_proxy 100.77.42.110:7686
+			reverse_proxy 100.77.42.110:7686 {
+				header_up Authorization "Bearer <ARES_API_TOKEN>"
+			}
 		}
 	}
 
 	# Static photo media off disk (must precede the catch-all reverse_proxy).
 	import static_media
 
+	# Public funnel path: Minecraft control stays reachable (CORS-restricted in Flask).
+	handle /api/minecraft* {
+		reverse_proxy 192.168.20.213:8080 {
+			transport http {
+				versions 1.1
+			}
+			flush_interval -1
+		}
+	}
+
+	# Everything else: enforce the documented tailnet-only model at the network layer.
 	handle {
+		@notts not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
+		respond @notts "Forbidden" 403
 		reverse_proxy 192.168.20.213:8080 {
 			transport http {
 				versions 1.1
