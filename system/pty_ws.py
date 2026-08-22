@@ -666,8 +666,23 @@ async def console_loop(ws, target):
             pass
 
 
+def _origin_ok(ws):
+    """CSWSH defense: a browser sends an Origin header — allow only the dashboard's own
+    origins (tailnet host / Tailscale IP). Native clients (URLSession) send no Origin →
+    allowed. An arbitrary website opening this root PTY is rejected."""
+    try:
+        origin = ws.request.headers.get("Origin", "") or ""
+    except Exception:
+        origin = ""
+    if not origin:
+        return True
+    return origin.endswith(".ts.net") or "100.77.42.110" in origin
+
+
 async def handle(ws):
     """One connection = one session. The first frame ({"list"} or {"open"}) decides which."""
+    if not _origin_ok(ws):
+        return
     # Wait for the opening control frame.
     try:
         first = await asyncio.wait_for(ws.recv(), timeout=15)
