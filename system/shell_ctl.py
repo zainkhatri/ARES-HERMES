@@ -17,6 +17,7 @@ Endpoints (JSON in, JSON out):
   POST /capture                 → return visible pane text (for copy)
 """
 import http.server
+import hmac
 import json
 import os
 import re
@@ -25,6 +26,18 @@ import sys
 
 HOST = "100.77.42.110"
 PORT = 7683
+
+# Bearer token gate. Caddy injects `Authorization: Bearer <ARES_API_TOKEN>` on /ctl; the
+# native app / anything else must send it too. Fails CLOSED if the token is unset (rejects
+# all) rather than crash-looping the service.
+API_TOKEN = os.environ.get("ARES_API_TOKEN", "")
+
+
+def _authed(headers):
+    got = (headers.get("Authorization", "") or "")
+    if got.startswith("Bearer "):
+        got = got[7:]
+    return bool(API_TOKEN) and bool(got) and hmac.compare_digest(got, API_TOKEN)
 SESSION = "web"
 HERMES_SSH = "zain@100.100.29.36"
 BLOCK_RC = "/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/system/block-shell.rc"
@@ -75,9 +88,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass  # suppress access log noise
 
     def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # No Access-Control-Allow-Origin: the browser reaches this SAME-ORIGIN via Caddy /ctl,
+        # so cross-origin reads must be blocked (prevents any website driving the host tmux).
         self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
     def _json(self, data, status=200):
         body = json.dumps(data).encode()
@@ -98,14 +112,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        if self.path == "/health":
+            self._json({"ok": True})          # unauth: trivial liveness only
+            return
+        if not _authed(self.headers):
+            self._json({"error": "unauthorized"}, 401)
+            return
         if self.path == "/windows":
             self._json({"windows": _windows()})
-        elif self.path == "/health":
-            self._json({"ok": True})
         else:
             self._json({"error": "not found"}, 404)
 
     def do_POST(self):
+        if not _authed(self.headers):
+            self._json({"error": "unauthorized"}, 401)
+            return
         try:
             d = self._body()
         except Exception:
