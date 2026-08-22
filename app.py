@@ -37,7 +37,9 @@ app.jinja_env.auto_reload = True
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=True,   # Caddy terminates TLS on :8443
+    # NOT Secure: the A&N iOS app authenticates over http://<tailscale-ip>:8080 (plain HTTP,
+    # but WireGuard-encrypted by Tailscale) and relies on this cookie — Secure would drop it.
+    # LAN plaintext exposure is closed by the Caddy tailnet-only gate (see hardening spec).
 )
 
 # ponytail: per-worker in-memory login throttle. Single-user box; effective limit
