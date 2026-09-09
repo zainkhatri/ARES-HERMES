@@ -6308,7 +6308,10 @@ def _transcode_to_h264(src_path, dest_path):
         return False  # GPU lent to a VM — never CPU-transcode while gaming; prewarm recovers after.
     if not _nvenc_available():
         return False
-    tmp = dest_path + ".part"
+    # Unique per-writer .part — a shared "<key>.part" lets two racing transcodes
+    # (e.g. a missed lock) interleave-write one temp and race os.replace. Still
+    # "*.part", so _video_cache_cleanup_partials sweeps it on restart.
+    tmp = dest_path + f".{os.getpid()}.{threading.get_ident()}.part"
 
     def _cmd(gpu_decode, encoder=None):
         """ffmpeg argv. gpu_decode=True keeps decode+scale on the 3080 too.
@@ -6561,8 +6564,20 @@ def _video_cache_cleanup_partials():
                 if os.path.getsize(p) < MIN_VALID_BYTES:
                     os.remove(p); pruned_tiny += 1
             except OSError: pass
-    if pruned_part or pruned_tiny:
-        print(f"[video-prewarm] startup cleanup: {pruned_part} .part, {pruned_tiny} corrupt .mp4 removed", flush=True)
+    # HLS leaves "<key>.part" DIRECTORIES when ffmpeg is killed mid-segmentation
+    # (service restart, OOM, watcher auto-restart on .py change). The .mp4 sweep
+    # above never touches _HLS_CACHE_DIR, so those orphan dirs accumulate forever.
+    pruned_hls = 0
+    try:
+        import shutil
+        for fname in os.listdir(_HLS_CACHE_DIR)[:MAX_FILES]:
+            if fname.endswith(".part"):
+                shutil.rmtree(os.path.join(_HLS_CACHE_DIR, fname), ignore_errors=True)
+                pruned_hls += 1
+    except OSError:
+        pass
+    if pruned_part or pruned_tiny or pruned_hls:
+        print(f"[video-prewarm] startup cleanup: {pruned_part} .part, {pruned_tiny} corrupt .mp4, {pruned_hls} orphan hls dirs removed", flush=True)
 
 
 def _video_prewarm_loop():
@@ -6616,6 +6631,14 @@ def _stream_progressive_transcode(rp):
     ]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                             stderr=subprocess.DEVNULL, bufsize=0)
+    # Wall-clock cap: if a client opens a video then stops reading (backgrounded
+    # tab), the pipe fills, ffmpeg blocks on write, and this thread blocks in
+    # read() forever. Enough of those starve the 32-thread worker. Kill after
+    # 300s so read() gets EOF and the generator unwinds. ponytail: single global
+    # timeout, no per-stream semaphore until this proves insufficient.
+    watchdog = threading.Timer(300, proc.kill)
+    watchdog.daemon = True
+    watchdog.start()
     def gen():
         try:
             while True:
@@ -6624,6 +6647,7 @@ def _stream_progressive_transcode(rp):
                     break
                 yield chunk
         finally:
+            watchdog.cancel()
             try:
                 proc.terminate(); proc.wait(timeout=2)
             except Exception:
@@ -6735,6 +6759,8 @@ def _generate_hls(cached_mp4, hls_dir):
             return True
         tmp = hls_dir + ".part"
         try:
+            import shutil
+            shutil.rmtree(tmp, ignore_errors=True)  # discard any stale dir from a killed prior run
             os.makedirs(tmp, exist_ok=True)
             cmd = [
                 "ffmpeg", "-y", "-loglevel", "error",
@@ -6804,9 +6830,18 @@ def serve_hls_playlist():
             except OSError: pass
             shutil.rmtree(hls_dir, ignore_errors=True)
         if not os.path.exists(cached_mp4):
-            ok = _transcode_to_h264(rp, cached_mp4)
-            if not ok:
-                return jsonify({"error": "transcode failed"}), 500
+            # Take the SAME per-key lock every other cached_mp4 writer uses
+            # (_ensure_video_cached, _kick_background_transcode). Without it, two
+            # concurrent HLS requests both call _transcode_to_h264 on the same
+            # dest → both write the shared "<key>.mp4.part" and race os.replace →
+            # corrupt/truncated cache + doubled GPU load. Double-check inside.
+            with _video_transcode_locks_mutex:
+                _tlock = _video_transcode_locks.setdefault(key, threading.Lock())
+            with _tlock:
+                if not os.path.exists(cached_mp4):
+                    ok = _transcode_to_h264(rp, cached_mp4)
+                    if not ok:
+                        return jsonify({"error": "transcode failed"}), 500
         ok = _generate_hls(cached_mp4, hls_dir)
         if not ok:
             return jsonify({"error": "hls generation failed"}), 500
