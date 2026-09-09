@@ -1,0 +1,210 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recycle Bin · ARES</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── Palette lifted from photos.html house style ── */
+  :root{
+    --bg-0:#070403; --bg-2:#140807; --bg-3:#1c0c09;
+    --hairline:rgba(255,255,255,0.04);
+    --text-1:#f6ece9; --text-2:#c99a90; --text-3:#8d6259;
+    --red:#ef4444; --green:#10b981;
+    --ares:#f5402d; --ares-dim:rgba(245,64,45,0.08);
+    --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+    --ease:cubic-bezier(0.16,1,0.3,1);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg-0); color:var(--text-1);
+    font-family:'Bricolage Grotesque',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ── chrome bar — mirrors photos.html ── */
+  .chrome{
+    position:sticky; top:0; z-index:100;
+    height:calc(60px + var(--sat)); padding-top:var(--sat);
+    padding-left:20px; padding-right:20px;
+    display:flex; align-items:center; gap:14px;
+    background:rgba(7,4,3,0.86);
+    backdrop-filter:blur(14px) saturate(1.2);
+    -webkit-backdrop-filter:blur(14px) saturate(1.2);
+    border-bottom:1px solid var(--hairline);
+  }
+  .chrome::after{
+    content:''; position:absolute; left:0; right:0; bottom:-1px; height:1px;
+    background:linear-gradient(90deg,transparent,rgba(245,64,45,0.18) 30%,rgba(245,64,45,0.18) 70%,transparent);
+  }
+  .hud-chip{
+    display:inline-flex; align-items:center; gap:7px; padding:5px 11px;
+    border:1px solid rgba(245,64,45,0.28); color:var(--text-2);
+    text-decoration:none; font-family:'JetBrains Mono',monospace;
+    white-space:nowrap; transition:border-color .18s,color .18s,background .18s;
+  }
+  .hud-chip:hover{ border-color:var(--ares); color:var(--text-1); background:rgba(245,64,45,0.1); }
+  .hud-chip.is-active{
+    border-color:var(--ares); color:var(--ares); background:rgba(245,64,45,0.07);
+    box-shadow:0 0 16px -7px var(--ares), inset 0 0 22px -14px var(--ares);
+  }
+  .hud-chip-mark{
+    display:grid; place-items:center; width:16px; height:16px; border:1px solid currentColor;
+    font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:10px; line-height:1;
+  }
+  .hud-chip.is-active .hud-chip-mark{ background:rgba(245,64,45,0.14); }
+  .hud-chip-label{ font-size:10.5px; font-weight:700; letter-spacing:0.11em; text-transform:uppercase; }
+  .hud-chip-tag{ font-size:9px; letter-spacing:0.10em; text-transform:uppercase; opacity:0.72; }
+  .spacer{ flex:1; }
+  .count{
+    font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-2);
+    letter-spacing:0.06em; font-variant-numeric:tabular-nums;
+  }
+  .empty-btn{
+    font-family:'JetBrains Mono',monospace; font-size:10.5px; font-weight:600;
+    letter-spacing:0.14em; text-transform:uppercase;
+    padding:8px 14px; background:transparent; color:var(--red);
+    border:1px solid rgba(239,68,68,0.32); cursor:pointer;
+    transition:border-color .15s,background .15s,color .15s;
+  }
+  .empty-btn:hover{ border-color:var(--red); background:rgba(239,68,68,0.1); color:#fff; }
+  .empty-btn:disabled{ opacity:0.35; cursor:default; }
+
+  /* ── page ── */
+  .page{ padding:28px 20px calc(40px + var(--sab)); }
+  .lede{
+    font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-3);
+    letter-spacing:0.10em; text-transform:uppercase; margin:0 0 20px;
+  }
+
+  /* ── grid + tiles — sharp corners, 3px gap, ares hover ── */
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:3px; }
+  .card{
+    background:var(--bg-2); border:1px solid var(--hairline);
+    display:flex; flex-direction:column; overflow:hidden;
+    transition:border-color .15s, transform .28s var(--ease), opacity .28s var(--ease);
+  }
+  .card:hover{ border-color:rgba(245,64,45,0.3); }
+  .card.gone{ opacity:0; transform:scale(0.96); }
+  .thumb{ width:100%; aspect-ratio:1; object-fit:cover; background:#000; display:block; }
+  .meta{ padding:9px 10px 4px; }
+  .fn{
+    font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-1);
+    word-break:break-all; line-height:1.4;
+  }
+  .sub{
+    font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--text-3);
+    letter-spacing:0.04em; margin-top:4px;
+  }
+  .sub .purge{ color:var(--ares); }
+  .row{ display:flex; gap:1px; margin-top:6px; }
+  .row button{
+    flex:1; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:600;
+    letter-spacing:0.12em; text-transform:uppercase; padding:9px 4px; cursor:pointer;
+    background:rgba(255,255,255,0.015); color:var(--text-2);
+    border:1px solid var(--hairline); border-radius:0;
+    transition:color .15s,border-color .15s,background .15s;
+  }
+  .row .restore:hover{ color:var(--green); border-color:rgba(16,185,129,0.4); background:rgba(16,185,129,0.08); }
+  .row .del:hover{ color:var(--red); border-color:rgba(239,68,68,0.4); background:rgba(239,68,68,0.08); }
+  .row button:disabled{ opacity:0.35; cursor:default; }
+
+  .empty-state{
+    grid-column:1/-1; text-align:center; padding:80px 20px;
+    font-family:'JetBrains Mono',monospace; color:var(--text-3);
+    font-size:12px; letter-spacing:0.08em;
+  }
+  .empty-state svg{ width:40px; height:40px; stroke:var(--text-4,#5a3d37); stroke-width:1.4; fill:none; opacity:0.5; margin-bottom:14px; }
+
+  .toast{
+    position:fixed; bottom:calc(18px + var(--sab)); left:50%; transform:translateX(-50%);
+    background:var(--bg-3); border:1px solid rgba(245,64,45,0.28); color:var(--text-1);
+    font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.03em;
+    padding:10px 16px; z-index:200; box-shadow:0 8px 32px -12px rgba(0,0,0,0.8);
+  }
+
+  @media (max-width:640px){
+    .chrome{ padding-left:14px; padding-right:14px; gap:8px; }
+    .hud-chip-tag{ display:none; }
+    .page{ padding:22px 14px calc(40px + var(--sab)); }
+    .grid{ grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); }
+  }
+</style></head><body>
+
+<header class="chrome">
+  <a href="/" class="hud-chip" title="Dashboard home">
+    <span class="hud-chip-label">HOME</span><span class="hud-chip-tag">→</span>
+  </a>
+  <span class="hud-chip is-active" aria-current="page">
+    <span class="hud-chip-mark">A</span><span class="hud-chip-label">ARES</span><span class="hud-chip-tag">· RECYCLE</span>
+  </span>
+  <a href="/photos" class="hud-chip" title="Back to Photos">
+    <span class="hud-chip-label">PHOTOS</span><span class="hud-chip-tag">←</span>
+  </a>
+  <span class="spacer"></span>
+  <span class="count" id="count">—</span>
+  <button class="empty-btn" id="empty-btn" onclick="emptyBin()">Empty bin</button>
+</header>
+
+<main class="page">
+  <p class="lede">Deleted media · restored to your library or purged after the retention window</p>
+  <div id="grid" class="grid"></div>
+</main>
+
+<script>
+async function load(){
+  const r = await fetch('/api/photos/trash/list'); const items = await r.json();
+  document.getElementById('count').textContent = items.length + (items.length===1?' item':' items');
+  document.getElementById('empty-btn').disabled = !items.length;
+  const g = document.getElementById('grid');
+  if(!items.length){
+    g.innerHTML = '<div class="empty-state">'
+      + '<svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
+      + '<div>Recycle bin is empty</div></div>';
+    return;
+  }
+  g.innerHTML = items.map(function(it){
+    return '<div class="card" data-tn="'+encodeURIComponent(it.trash_name)+'">'
+      + '<img class="thumb" loading="lazy" src="/api/photos/trash/thumb/'+encodeURIComponent(it.trash_name)+'" '
+      + 'onerror="this.style.opacity=0.25">'
+      + '<div class="meta"><div class="fn">'+it.filename+'</div>'
+      + '<div class="sub">'+it.age_str+' · <span class="purge">purges in '+it.purge_in+'d</span></div>'
+      + '<div class="row"><button class="restore" onclick="act(this,\'restore\')">Restore</button>'
+      + '<button class="del" onclick="act(this,\'purge\')">Delete</button></div></div></div>';
+  }).join('');
+}
+async function act(btn, kind){
+  const card = btn.closest('.card'); const tn = decodeURIComponent(card.dataset.tn);
+  if(kind==='purge' && !confirm('Permanently delete '+tn+'? This cannot be undone.')) return;
+  card.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+  const r = await fetch('/api/photos/trash/'+kind, {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({trash_name:tn})});
+  const res = await r.json();
+  if(res.success){
+    if(kind==='restore'){
+      var where=(res.message||'').replace('Restored to: ','');
+      var folder=where.split('/').slice(-3,-1).join('/');
+      toast('Restored to '+ (folder||'your library'));
+    } else { toast('Deleted permanently'); }
+    card.classList.add('gone');
+    setTimeout(function(){ card.remove(); refreshCount(); }, 280);
+  } else { alert(res.error||'failed'); card.querySelectorAll('button').forEach(function(b){ b.disabled=false; }); }
+}
+function refreshCount(){
+  var n = document.querySelectorAll('.card').length;
+  document.getElementById('count').textContent = n + (n===1?' item':' items');
+  document.getElementById('empty-btn').disabled = !n;
+  if(!n) load();
+}
+function toast(msg){
+  var t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(function(){ t.remove(); }, 2500);
+}
+async function emptyBin(){
+  if(!confirm('Permanently delete ALL media in the recycle bin? This cannot be undone.')) return;
+  const r = await fetch('/api/photos/trash/empty',{method:'POST'});
+  const res = await r.json(); toast('Emptied bin — '+res.purged+' removed'); load();
+}
+load();
+</script></body></html>

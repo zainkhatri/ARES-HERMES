@@ -2997,6 +2997,9 @@
         <button class="icon-btn vault-btn" id="vault-btn" type="button" aria-label="My Eyes Only vault" title="My Eyes Only">
             <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         </button>
+        <a class="icon-btn" href="/photos/recycle" aria-label="Recycle Bin" title="Recycle Bin">
+            <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </a>
         <button class="icon-btn" id="overflow-toggle" type="button" aria-label="More" aria-haspopup="menu" aria-expanded="false">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="18" r="1.4"/></svg>
         </button>
@@ -3429,6 +3432,70 @@ var monthOfItem = [];
 var dataLoadedMonths = new Set();
 var dataLoadingMonths = new Set();
 var renderedMonths = new Set();
+
+/* ── BlurHash placeholders ──────────────────────────────────────────────
+   {thumb_hash: blurhash} fetched lazily from /api/photos/blurhashes AFTER the
+   grid paints (never blocks first paint). Decoded on demand to a tiny data-URL
+   used as the tile background — a real blurred preview instead of a flat colour
+   block, so slow/cold thumbnail loads show the photo forming. */
+var blurhashMap = {};
+var _bhCache = {};               // thumb_hash -> decoded data-URL (or undefined = not tried)
+var _BH83 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~";
+function _bh83(s){ var v=0; for(var i=0;i<s.length;i++){ v=v*83+_BH83.indexOf(s[i]); } return v; }
+function _bhLin(v){ var x=v/255; return x<=0.04045 ? x/12.92 : Math.pow((x+0.055)/1.055,2.4); }
+function _bhSRGB(v){ var x=Math.max(0,Math.min(1,v)); return x<=0.0031308 ? Math.round(x*12.92*255+0.5) : Math.round((1.055*Math.pow(x,1/2.4)-0.055)*255+0.5); }
+function _bhSignPow(v,e){ return (v<0?-1:1)*Math.pow(Math.abs(v),e); }
+function decodeBlurhash(bh, w, h){
+    if(!bh || bh.length < 6) return null;
+    var sizeFlag=_bh83(bh[0]), numX=(sizeFlag%9)+1, numY=Math.floor(sizeFlag/9)+1;
+    var maxV=(_bh83(bh[1])+1)/166, n=numX*numY;
+    if(bh.length !== 4+2*n) return null;
+    var colors=new Array(n);
+    for(var i=0;i<n;i++){
+        if(i===0){ var d=_bh83(bh.substr(2,4)); colors[0]=[_bhLin(d>>16),_bhLin((d>>8)&255),_bhLin(d&255)]; }
+        else{ var ac=_bh83(bh.substr(4+(i-1)*2,2));
+              colors[i]=[ _bhSignPow((Math.floor(ac/(19*19))-9)/9,2)*maxV,
+                          _bhSignPow((Math.floor(ac/19)%19-9)/9,2)*maxV,
+                          _bhSignPow(((ac%19)-9)/9,2)*maxV ]; }
+    }
+    var px=new Uint8ClampedArray(w*h*4);
+    for(var y=0;y<h;y++) for(var x=0;x<w;x++){
+        var r=0,g=0,b=0;
+        for(var j=0;j<numY;j++) for(var ii=0;ii<numX;ii++){
+            var basis=Math.cos(Math.PI*x*ii/w)*Math.cos(Math.PI*y*j/h);
+            var c=colors[j*numX+ii]; r+=c[0]*basis; g+=c[1]*basis; b+=c[2]*basis;
+        }
+        var o=4*(y*w+x); px[o]=_bhSRGB(r); px[o+1]=_bhSRGB(g); px[o+2]=_bhSRGB(b); px[o+3]=255;
+    }
+    var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+    cv.getContext('2d').putImageData(new ImageData(px,w,h),0,0);
+    return cv.toDataURL('image/png');
+}
+function bhDataURL(hash){
+    if(!hash) return null;
+    if(_bhCache[hash]!==undefined) return _bhCache[hash];
+    var bh=blurhashMap[hash];
+    if(!bh) return null;                     // map not loaded yet — don't cache the miss
+    var u=null; try{ u=decodeBlurhash(bh,24,24); }catch(e){}
+    _bhCache[hash]=u; return u;
+}
+function _bhHashFromThumb(src){ var p=(src||'').split('?')[0].split('/').pop()||''; return p.replace('.jpg',''); }
+/* After the map arrives, upgrade any on-screen tiles whose thumb hasn't loaded yet. */
+function applyBlurhashes(){
+    var tiles=document.querySelectorAll('.thumb[data-h]');
+    for(var i=0;i<tiles.length;i++){
+        var t=tiles[i], img=t.querySelector('img');
+        if(img && img.classList.contains('loaded')) continue;
+        var u=bhDataURL(t.getAttribute('data-h'));
+        if(u){ t.style.backgroundImage='url('+u+')'; t.style.backgroundSize='cover'; t.style.backgroundPosition='center'; }
+    }
+}
+function loadBlurhashes(){
+    fetch('/api/photos/blurhashes',{credentials:'include'})
+        .then(function(r){ return r.ok ? r.json() : {}; })
+        .then(function(m){ blurhashMap=m||{}; applyBlurhashes(); })
+        .catch(function(){});
+}
 
 /* ── Precomputed per-month layout offsets ─────────────────────────────
    _monthTopOffsets[i] = { top: px from gallery top, height: px }
@@ -3887,8 +3954,13 @@ function thumbHTML(item, globalIdx, eager) {
     // Color placeholder: paint item.c behind each tile so the correct average
     // color shows immediately while the thumbnail decodes.  Falls back to the
     // neutral --bg-2 already on .thumb when c is absent.
-    var bgStyle = (item.c && item.c.length === 6) ? ';background:#' + item.c : '';
-    return '<div class="thumb' + (isVideo ? ' video' : '') + '" data-idx="' + globalIdx + '" style="--ar:' + itemAr(item) + bgStyle + '">' +
+    // Prefer a decoded BlurHash preview (real blurred photo) if the map has arrived; else the
+    // flat avg-color. data-h lets applyBlurhashes() upgrade this tile when the map loads later.
+    var _hh = _bhHashFromThumb(thumbSrc);
+    var _bu = bhDataURL(_hh);
+    var bgStyle = _bu ? (';background-image:url(' + _bu + ');background-size:cover;background-position:center')
+                      : ((item.c && item.c.length === 6) ? ';background:#' + item.c : '');
+    return '<div class="thumb' + (isVideo ? ' video' : '') + '" data-idx="' + globalIdx + '" data-h="' + _hh + '" style="--ar:' + itemAr(item) + bgStyle + '">' +
         '<img src="' + thumbSrc + '"' + loadAttr + ' decoding="async" alt="" onload="this.classList.add(\'loaded\')" onerror="_thumbErr(this)">' +
         arrow +
         '<span class="thumb-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>' +
@@ -5421,9 +5493,36 @@ function openLightbox(idx, thumbEl) {
     if (it.type !== 'video') scheduleChromeAutoHide(2000);
 }
 
+// The single live hls.js instance for the lightbox. Shared (not per-showLbItem-local) so
+// navigating video→video can destroy the PREVIOUS one — otherwise each opened video leaked
+// its MediaSource + decode pipeline and the browser ran out of decoders after browsing a lot.
+var _lbHls = null;
+function _destroyLbHls() { if (_lbHls) { try { _lbHls.destroy(); } catch (e) {} _lbHls = null; } }
+
+/* Fully kill EVERY lightbox video's audio+decoder. pause()+remove() alone is
+   not enough on WebKit (iOS): a paused-then-removed <video> can keep decoding
+   audio, and once it leaves the DOM later opens can't reach it — so ghost
+   audio survives close AND new opens. muted + src-detach + load() is the
+   reliable stop. querySelectorAll (not the first-match .lb-video) catches any
+   stray element. */
+function _teardownLbVideos() {
+    var stage = document.getElementById('lb-stage');
+    if (!stage) return;
+    var vids = stage.querySelectorAll('video');
+    for (var i = 0; i < vids.length; i++) {
+        var v = vids[i];
+        try { v.pause(); } catch (e) {}
+        try { v.muted = true; } catch (e) {}
+        try { v.removeAttribute('src'); v.load(); } catch (e) {}
+        try { v.remove(); } catch (e) {}
+    }
+}
+
 function closeLightbox() {
     if (!lbOpen) return;
     lbOpen = false;
+    if (typeof _cleanupVaultSynths === 'function') _cleanupVaultSynths();
+    _destroyLbHls();
     clearLbState();
     /* close exif panel if open */
     if (typeof _closeExifPanel !== 'undefined') _closeExifPanel();
@@ -5431,18 +5530,16 @@ function closeLightbox() {
     var _ib = document.getElementById('lb-infuse'); if (_ib) _ib.style.display = 'none';
     if (lbChromeHideTimer) { clearTimeout(lbChromeHideTimer); lbChromeHideTimer = null; }
     document.body.style.overflow = '';
-    /* pause video immediately */
-    var stage = document.getElementById('lb-stage');
-    var oldVid = stage.querySelector('.lb-video');
-    if (oldVid) oldVid.pause();
+    /* fully tear down video audio+decoder immediately — deferring to the morph
+       callback let iOS keep playing audio during the close animation */
+    _teardownLbVideos();
 
     _lbMorphClose(function() {
         lb.classList.remove('open', 'lb-animating-close', 'lb-drag-dismiss');
         lb.style.opacity = '';
         lb.style.transform = '';
-        /* cleanup DOM after close */
-        var v = stage.querySelector('.lb-video');
-        if (v) v.remove();
+        /* belt-and-suspenders: kill any video re-created mid-animation */
+        _teardownLbVideos();
         lbImage.style.display = '';
         lbImage.src = '';
         lbSlotPrev.innerHTML = '';
@@ -5615,8 +5712,12 @@ function showLbItem() {
     lbTrack.style.transition = '';
     lbTrack.style.transform  = '';
     var stage = document.getElementById('lb-stage');
-    var oldVid = stage.querySelector('.lb-video');
-    if (oldVid) { oldVid.pause(); oldVid.remove(); }
+    // Tear down the outgoing video's decode session NOW: destroy its hls.js instance and
+    // fully detach every media element (mute+removeAttribute+load frees the native decoder
+    // and audio track). Without this, browsing video→video leaked one decode pipeline per
+    // video → decoder exhaustion, and audio kept playing after nav.
+    _destroyLbHls();
+    _teardownLbVideos();
     if (item.type === 'video') {
         lb.classList.add('has-video');
         lbImage.style.display = 'none';
@@ -5671,19 +5772,19 @@ function showLbItem() {
            copy (~1s for first call, instant thereafter) then redirects to
            Caddy-served /static/hls/{key}/index.m3u8. Browser fetches only
            the first 4-second chunk to begin playback. */
-        var _hlsInst = null;
         function _playHls(m3u8) {
             if (window.__lbDiag) window.__lbDiag.info('HLS: ' + m3u8);
             if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-                _hlsInst = new Hls({ maxBufferLength: 30, enableWorker: true });
-                _hlsInst.loadSource(m3u8);
-                _hlsInst.attachMedia(vid);
-                _hlsInst.on(Hls.Events.MANIFEST_PARSED, function() {
+                _destroyLbHls();                 // never leave a prior instance attached
+                _lbHls = new Hls({ maxBufferLength: 30, enableWorker: true });
+                _lbHls.loadSource(m3u8);
+                _lbHls.attachMedia(vid);
+                _lbHls.on(Hls.Events.MANIFEST_PARSED, function() {
                     var p = vid.play();
                     if (p && p.catch) p.catch(function() { vid.muted = true; vid.play().catch(function(){}); });
                 });
-                _hlsInst.on(Hls.Events.ERROR, function(ev, d) {
-                    if (d.fatal) { _hlsInst.destroy(); _hlsInst = null; vid.src = videoURL; }
+                _lbHls.on(Hls.Events.ERROR, function(ev, d) {
+                    if (d.fatal) { _destroyLbHls(); vid.src = videoURL; }
                 });
             } else if (vid.canPlayType('application/vnd.apple.mpegurl')) {
                 vid.src = m3u8;
@@ -5702,9 +5803,8 @@ function showLbItem() {
                 .then(function(r) { if (!r.ok) throw new Error(r.status); _playHls(r.url); })
                 .catch(function() { vid.src = videoURL; var p = vid.play(); if (p && p.catch) p.catch(function() { vid.muted = true; vid.play().catch(function(){}); }); });
         }
-        lb.addEventListener('transitionend', function _hc() {
-            if (!lb.classList.contains('open') && _hlsInst) { _hlsInst.destroy(); _hlsInst = null; lb.removeEventListener('transitionend', _hc); }
-        });
+        /* hls teardown is handled by _destroyLbHls() on nav + close — no per-open
+           transitionend handler (those accumulated one listener per video opened). */
 
         /* Infuse button — fetches a 24h token and opens infuse:// deep link */
         (function() {
@@ -6128,9 +6228,30 @@ function _openExifPanel() {
         _exifBody.innerHTML = '<div class="lb-exif-loading">Loading…</div>';
         fetch('/api/photos/exif?path=' + encodeURIComponent(item.path), { credentials: 'same-origin' })
             .then(function(r) { return r.ok ? r.json() : null; })
-            .then(function(d) { _renderExif(d); })
+            .then(function(d) { _renderExif(d); _loadFaces(item); })
             .catch(function() { _exifBody.innerHTML = '<div class="lb-exif-loading">No metadata available</div>'; });
     }
+}
+function _loadFaces(item) {
+    var h = _itemHash(item);
+    if (!h) return;
+    fetch('/api/photos/' + h + '/faces', { credentials: 'same-origin' })
+        .then(function(r) { return r.ok ? r.json() : []; })
+        .then(function(faces) {
+            if (!faces || !faces.length) return;
+            var rows = faces.map(function(f) {
+                var who = f.name ? escapeHtml(f.name) : 'unknown';
+                var meta = [];
+                if (f.confident) meta.push('tagged');
+                else if (f.name && f.distance != null) meta.push('guess ' + f.distance);
+                else if (f.distance != null) meta.push('no match ' + f.distance);
+                var sub = meta.length ? ' <span style="color:rgba(255,255,255,0.35)">· ' + meta.join(' · ') + '</span>' : '';
+                return '<div class="lb-exif-row"><span class="lb-exif-key">Face</span><span class="lb-exif-val">' + who + sub + '</span></div>';
+            });
+            _exifBody.insertAdjacentHTML('beforeend',
+                '<div class="lb-exif-row" style="border-bottom:none;padding-top:14px"><span class="lb-exif-key" style="color:rgba(255,255,255,0.55)">Faces (' + faces.length + ')</span><span class="lb-exif-val"></span></div>' + rows.join(''));
+        })
+        .catch(function() {});
 }
 function _closeExifPanel() {
     _exifOpen = false;
@@ -8483,6 +8604,7 @@ async function preloadAllMonths() {
         // Warm the immediate viewport window now that all item data is loaded.
         // Months outside KEEP_WINDOW are evicted to keep the DOM bounded.
         renderAllMonthsProgressive();
+        loadBlurhashes();   // lazy: fill blurred placeholders after the grid is up (non-blocking)
         /* After the render pass, do a full DOM-truth sweep in index order
            to correct any remaining formula drift for rendered months.
            Two rAFs: first lets the render flush, second reads layout. */
@@ -8882,6 +9004,17 @@ async function _vaultRemove(thumbKey, el) {
     } catch(e) {}
 }
 
+/* Synthetic vault entries appended to allItems for the shared lightbox. Tracked
+   here so closeLightbox can splice them back out — otherwise every vault open
+   leaked one entry onto allItems forever. */
+var _vaultSynths = [];
+function _cleanupVaultSynths() {
+    for (var i = 0; i < _vaultSynths.length; i++) {
+        var at = allItems.lastIndexOf(_vaultSynths[i]);   // synths live at the tail
+        if (at >= 0) allItems.splice(at, 1);
+    }
+    _vaultSynths = [];
+}
 function _openVaultLightbox(item, allVaultItems) {
     /* Reuse the main lightbox by temporarily injecting the vault item */
     if (!item || !item.path) return;
@@ -8893,9 +9026,11 @@ function _openVaultLightbox(item, allVaultItems) {
         _vaultKey: item.key || '',
     });
     if (typeof openLightbox === 'function') {
-        /* Push into allItems at end, open it */
+        /* clear any stragglers from a prior open, then push+open */
+        _cleanupVaultSynths();
         var idx = allItems.length;
         allItems.push(synth);
+        _vaultSynths.push(synth);
         openLightbox(idx);
     }
 }

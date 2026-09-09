@@ -144,8 +144,8 @@
         .mod-body  { padding:12px; }
 
         /* ---- header ----------------------------------------------------- */
-        /* Single-screen by design — never scroll. fitScale() shrinks the .hud to fit
-           the viewport height, so nothing overflows. */
+        /* Single-screen by design — never scroll. Everything (incl. the peer
+           biome strip) is sized to fit one viewport. */
         html, body { overflow:hidden; }
         .hud-top { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
         /* Flex/grid children default to min-width:auto and refuse to shrink below
@@ -524,31 +524,6 @@
 
 <div class="hud">
 
-    <header class="hud-top">
-        <div>
-            {% set is_zeus = boot and (boot.hostname or '')|upper == 'ZEUS' %}
-            <div class="nodes">
-                <a href="{{ 'http://100.77.42.110:8080/' if is_zeus else '/' }}" data-fx="#f5402d" class="chip{{ '' if is_zeus else ' is-active' }}"{{ '' if is_zeus else ' aria-current=page'|safe }} aria-label="ARES">
-                    <span class="chip-mark">A</span>
-                    <span class="chip-name">ARES</span><span class="chip-tag">/ SUPER-NAS</span>
-                </a>
-                <a href="{{ '/' if is_zeus else '/jump/zeus' }}" data-fx="#38bdf8" class="chip{{ ' is-active' if is_zeus else '' }}" aria-label="ZEUS">
-                    <span class="chip-mark">Z</span>
-                    <span class="chip-name">ZEUS</span><span class="chip-tag">/ MID-NAS</span>
-                </a>
-            </div>
-        </div>
-        <div class="readouts">
-            <div class="mod c-tl c-br ro">
-                <div class="ro-k">Mission clock</div>
-                <div class="ro-v" id="f-time">—</div>
-            </div>
-            <div class="mod c-tr c-bl ro">
-                <div class="ro-k">Kernel relay</div>
-                <div class="ro-v"><span class="skeleton" id="h-kernel"></span></div>
-            </div>
-        </div>
-    </header>
 
     <div class="hud-grid">
 
@@ -578,6 +553,7 @@
                             <div class="l">PKG / 90&deg;</div>
                         </div>
                     </div>
+                    <canvas class="cpu-scope" id="cpu-scope"></canvas>
                 </div>
                 <div class="facts">
                     <div class="fact"><div class="fact-k">Processor</div><div class="fact-v"><span class="skeleton" id="h-cpu"></span></div></div>
@@ -624,6 +600,8 @@
             </section>
 
             <!-- ZEUS: business outreach (stats + weekly trend). -->
+            
+
             <section class="mod c-bl c-tr" id="panel-outreach" style="display:none">
                 <div class="mod-head">
                     <span class="mod-title">Outreach</span>
@@ -666,10 +644,6 @@
 ██╔══╝  ╚════██║
 ███████╗███████║
 ╚══════╝╚══════╝</pre>{% endif %}</div>
-            <section class="fbreak">
-                <div class="fbreak-head"><span>Where it lives</span><span id="fbreak-total">—</span></div>
-                <div id="fbreak-list"><div class="arr-empty">measuring…</div></div>
-            </section>
             <div class="vitals" id="vitals-hero"><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div></div>
 
             
@@ -682,6 +656,10 @@
                 <div class="mod-body arr-list" id="arr-list">
                     <div class="arr-empty">waiting for array…</div>
                 </div>
+            </section>
+            <section class="fbreak">
+                <div class="fbreak-head"><span>Where it lives</span><span id="fbreak-total">—</span></div>
+                <div id="fbreak-list"><div class="arr-empty">measuring…</div></div>
             </section>
         </div>
 
@@ -775,6 +753,8 @@
                 </div>
             </section>
 
+            
+
             <!-- ZEUS: live network throughput (fills the right column). -->
             <section class="mod c-bl c-br" id="panel-net" style="display:none">
                 <div class="mod-head">
@@ -802,20 +782,267 @@
         </div>
     </div>
 
-    <footer class="rail">
-        <span><span id="foot-brand">ARES</span> <b>· v1.0</b></span>
-        <span>Uptime <b id="v-uptime">—</b></span>
-        <span>Relay <b>ares.tail3045df.ts.net</b></span>
-    </footer>
-</div>
+<style>
+    /* ══ EROS / ZEUS — fleshed sections, ARES theme recolored (EROS amber, ZEUS blue) ══ */
+    #panel-eros { --ares:#f59e0b; --ares-rgb:245,158,11; }
+    #panel-zeus { --ares:#38bdf8; --ares-rgb:56,189,248; }
+    .pk-hd { align-items:center; gap:13px; }
+    .pk-wm { display:flex; align-items:flex-start; }
+    .pk-wm pre { margin:0; white-space:pre; font-family:ui-monospace,monospace; font-size:7px; line-height:1.03; }
+    .pk-wm .a { color:var(--ares); text-shadow:0 0 13px rgba(var(--ares-rgb),.6); }
+    .pk-wm .b { color:#f4f8fd; text-shadow:0 0 13px rgba(244,248,253,.4); }
+    .pk-meta { margin-left:auto; font-size:11px; letter-spacing:.06em; color:var(--text-3); }
+    .pk-compute { display:flex; gap:16px; align-items:center; margin-bottom:13px; }
+    .pk-gauge { position:relative; flex:none; width:90px; height:90px; }
+    .pk-gauge .gt { fill:none; stroke:rgba(var(--ares-rgb),.16); stroke-width:7; }
+    .pk-gauge .gl { fill:none; stroke:var(--ares); stroke-width:7; stroke-linecap:round; transform:rotate(-90deg);
+                    transform-origin:center; filter:drop-shadow(0 0 4px rgba(var(--ares-rgb),.5)); transition:stroke-dashoffset .6s var(--ease-out); }
+    .pk-gauge .mid { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+    .pk-gauge .n { font-size:22px; font-weight:700; color:var(--text-1); font-variant-numeric:tabular-nums; }
+    .pk-gauge .n small { font-size:10px; color:var(--ares); }
+    .pk-gauge .l { font-size:7px; letter-spacing:.1em; color:var(--text-3); margin-top:1px; }
+    .pk-meters { flex:1; display:flex; flex-direction:column; gap:11px; min-width:0; }
+    .pk-mt-top { display:flex; justify-content:space-between; font-size:10.5px; margin-bottom:4px; }
+    .pk-mt-top .k { letter-spacing:.1em; color:var(--text-3); text-transform:uppercase; }
+    .pk-mt-top .v { font-weight:600; font-variant-numeric:tabular-nums; }
+    .pk-bar { height:6px; background:rgba(var(--ares-rgb),.14); overflow:hidden; }
+    .pk-bar > i { display:block; height:100%; width:0; background:var(--ares); box-shadow:0 0 7px rgba(var(--ares-rgb),.55); transition:width .6s var(--ease-out); }
+    .peer-ops { display:flex; flex-direction:column; gap:7px; }
+    .peer-ops .op { padding:7px 12px 7px 14px; gap:11px; cursor:default; }
+    .peer-ops .op-num { width:23px; height:23px; }
+    .peer-ops .op-name { font-size:13px; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .op-dot { flex:0 0 auto; width:9px; height:9px; border-radius:50%; align-self:center; background:var(--text-3); }
+    .op-dot.ok{background:#22c55e;box-shadow:0 0 8px -1px #22c55e}.op-dot.run{background:#f59e0b;box-shadow:0 0 8px -1px #f59e0b}.op-dot.bad{background:#ef4444;box-shadow:0 0 8px -1px #ef4444}
 
+    /* ── LAYOUT: ARES HUD is compact up top (content height); EROS + ZEUS fill
+       the whole leftover space as a big bottom band, with their real content. ── */
+    .hud-grid { flex:0 0 auto; }
+    .peer-band { flex:1 1 auto; min-height:0; display:grid; grid-template-columns:1.15fr 1fr; gap:14px; }
+    .peer-band > .mod { display:flex; flex-direction:column; min-height:0; }
+    .peer-band > .mod > .mod-body { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+    /* Rich band: EROS = dual gauges | meters | rows ; ZEUS = stat tiles | rows. */
+    .pk-body { flex-direction:row !important; align-items:stretch; gap:26px; }
+    .pk-gauges { flex:none; display:flex; align-items:center; gap:16px; }
+    .peer-band .pk-gauge { width:104px; height:104px; }
+    .pk-meters { flex:1.3 1 0; display:flex; flex-direction:column; justify-content:center; gap:12px; min-width:0; }
+    .pk-rows { flex:1.1 1 0; display:flex; flex-direction:column; justify-content:center; gap:8px; min-width:0; margin-top:0 !important; }
+    .pk-rows .op { flex:1 1 0; }
+    .pk-stats { flex:none; display:flex; flex-direction:column; justify-content:center; gap:11px; }
+    .pk-stat { border:1px solid var(--ember-dim); background:rgba(var(--ares-rgb),.05); padding:9px 16px; min-width:130px; }
+    .pk-stat-v { font-size:24px; font-weight:700; color:var(--ares); font-variant-numeric:tabular-nums; line-height:1; }
+    .pk-stat-k { font-size:8.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-3); margin-top:5px; }
+    /* free vertical room for the (now data-rich) peer band */
+    .col-mid .mark pre { font-size:clamp(11px, 1.2vw, 21px) !important; }
+    .peer-band { min-height:240px; }
+    .peer-band .pk-gauge { width:90px; height:90px; }
+    .peer-band .pk-gauge .n { font-size:19px; }
+    .peer-band .mod-head.pk-hd { padding-top:8px; padding-bottom:8px; }
+    .pk-meters { gap:9px; }
+    .pk-mt-top { font-size:10px; }
+    /* ── READABILITY: the micro-labels were unreadable; bump them up ────────── */
+    .v-tile-key  { font-size:12px !important; }
+    .v-tile-meta { font-size:11px !important; }
+    .v-tile-tag  { font-size:11px !important; }
+    .v-tile-num  { font-size:30px !important; }
+    .mod-title   { font-size:14px; }
+    .mod-meta    { font-size:12.5px; }
+    .pk-meta     { font-size:13px !important; }
+    .pk-mt-top   { font-size:13px !important; }
+    .peer-panel .op-lab  { font-size:11px; }
+    .peer-panel .op-name { font-size:15px; }
+    .peer-band .pk-gauge .n { font-size:22px; }
+    .pk-gauge .l { font-size:9.5px; }
+    /* ── ZEUS 3 SSD health tiles ────────────────────────────────────────────── */
+    .pk-ssds { flex:none; display:flex; flex-direction:column; justify-content:center; gap:10px; min-width:172px; }
+    .pk-ssd { border:1px solid var(--ember-dim); background:rgba(var(--ares-rgb),.045); padding:8px 13px; }
+    .pk-ssd-hd { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+    .pk-ssd-name { font-size:13px; font-weight:700; color:var(--text-1); letter-spacing:.02em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pk-ssd-h { font-size:11px; letter-spacing:.08em; color:var(--text-3); flex:none; }
+    .pk-ssd-h.ok { color:#22c55e; } .pk-ssd-h.bad { color:#ef4444; } .pk-ssd-h.run { color:#f59e0b; }
+    .pk-ssd .pk-bar { margin-top:7px; }
+    .pk-ssd-meta { font-size:11px; color:var(--text-3); margin-top:5px; font-variant-numeric:tabular-nums; }
+    /* wordmark + "where it lives" share one row instead of stacking */
+    .mast { display:flex; align-items:center; gap:28px; flex:0 0 auto; }
+    .mast > .mark { flex:none; }
+    .mast > .fbreak { flex:1 1 auto; min-width:0; }
+    /* hide until fitScale has run + data settled, then fade in — no "big→small" snap */
+    .hud { opacity:0; transition:opacity .2s ease-out; }
+    /* trim ~vertical so fitScale barely zooms (fonts stay full size) */
+    .peer-band { min-height:190px; }
+    .col-mid #vitals-hero .v-tile { padding:8px 12px 9px; }
+    /* compact Array Map — the 3 volume bars were stretching to fill the panel
+       (arr-list flex:1 + space-between + arr-row flex:1 1 0). Force content-height,
+       clustered at the top — !important to beat the earlier rules. */
+    .col-mid #panel-array { flex:0 0 auto !important; }
+    .col-mid .mod-body.arr-list { flex:0 0 auto !important; justify-content:flex-start !important; gap:9px; padding:9px 12px; }
+    .col-mid .arr-list .arr-row { flex:0 0 auto !important; }
+    .col-mid #panel-array .mod-head { padding-top:6px; padding-bottom:6px; }
+    .col-mid .arr-name { font-size:12px; }
+    .col-mid .arr-cap { font-size:11px; }
+    .col-mid .arr-bar { height:5px !important; margin-top:4px !important; }
+    /* vitals also content-height (no stretched empty tiles); center packs from the top */
+    .col-mid #vitals-hero { flex:0 0 auto !important; grid-auto-rows:auto !important; align-content:start; }
+    .col-mid { justify-content:flex-start; }
+    /* compress the tallest ARES panels so the grid shrinks and the EROS/ZEUS
+       band claims the dead space. col0 (CPU gauge + ops) was forcing 542px. */
+    .hud { gap:7px; }
+    .hud-grid > .col:first-child .gauge { width:116px !important; height:116px !important; }
+    .hud-grid > .col:first-child .gauge-wrap { padding:2px 0 4px !important; }
+    .facts { align-content:start !important; grid-auto-rows:min-content !important; }
+    .fact { padding:6px 11px !important; }
+    .fact-v { margin-top:1px !important; }
+    #panel-ops .op { padding:6px 14px 6px 16px !important; }
+    #cron-list .crow, .cron-list .crow { padding:3px 2px !important; }
+    .thermal { height:60px !important; }
+    .spark { height:22px !important; }
+    .sparks { gap:6px !important; }
+    .peer-band { min-height:0; }
+    .col-mid #vitals-hero .v-tile-num { font-size:26px !important; }
+    /* EROS: ollama chips + stat cells (replaces the ugly text rows) */
+    .pk-side { flex:1.1 1 0; display:flex; flex-direction:column; justify-content:center; gap:10px; min-width:0; }
+    .pk-side-h { font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-3); }
+    .pk-chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .pk-chip { font-size:11.5px; padding:4px 10px; border:1px solid rgba(var(--ares-rgb),.45); color:var(--ares);
+               background:rgba(var(--ares-rgb),.07); white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .pk-cells { display:flex; gap:9px; margin-top:2px; }
+    .pk-cell { flex:1; border:1px solid var(--ember-dim); padding:7px 11px; background:rgba(var(--ares-rgb),.04); }
+    .pk-cell b { display:block; font-size:19px; color:var(--text-1); font-variant-numeric:tabular-nums; line-height:1.1; }
+    .pk-cell span { font-size:8.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-3); }
+    /* ZEUS: SSD lifespan tiles (ring = life left) */
+    .pk-ssds { flex:none; display:flex; flex-direction:column; justify-content:center; gap:9px; min-width:224px; }
+    .pk-ssd { display:flex; align-items:center; gap:13px; border:1px solid var(--ember-dim); background:rgba(var(--ares-rgb),.045); padding:8px 13px; }
+    .pk-ssd-ring { position:relative; flex:none; width:48px; height:48px; }
+    .pk-ssd-ring svg { width:48px; height:48px; }
+    .pk-ssd-ring .rt { fill:none; stroke:rgba(var(--ares-rgb),.16); stroke-width:5; }
+    .pk-ssd-ring .rl { fill:none; stroke:var(--ares); stroke-width:5; stroke-linecap:round; transform:rotate(-90deg); transform-origin:center; filter:drop-shadow(0 0 3px rgba(var(--ares-rgb),.5)); }
+    .pk-ssd-life { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; color:var(--text-1); }
+    .pk-ssd-life small { font-size:8px; color:var(--ares); }
+    .pk-ssd-info { flex:1; min-width:0; }
+    .pk-ssd-name { font-size:14px; font-weight:700; color:var(--text-1); display:flex; align-items:center; gap:8px; }
+    .pk-ssd-h { font-size:9px; letter-spacing:.1em; font-weight:600; }
+    .pk-ssd-h.ok { color:#22c55e; } .pk-ssd-h.bad { color:#ef4444; } .pk-ssd-h.run { color:#f59e0b; }
+    .pk-ssd-sub { font-size:10.5px; color:var(--text-3); margin-top:2px; }
+    .pk-ssd-usebar { height:4px; background:rgba(var(--ares-rgb),.14); margin-top:6px; overflow:hidden; }
+    .pk-ssd-usebar > i { display:block; height:100%; background:var(--ares); }
+    /* ZEUS: compact backup block (replaces the ugly rows) */
+    .pk-bkp { flex:1 1 0; display:flex; flex-direction:column; justify-content:center; gap:10px; min-width:0; padding-left:6px; }
+    .pk-bkp-hd { font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--text-3); }
+    .pk-bkp-row { display:flex; align-items:center; gap:11px; font-size:15px; color:var(--text-1); }
+    .pk-bkp-row .dot { width:9px; height:9px; border-radius:50%; flex:none; }
+    .pk-bkp-row .dot.ok{background:#22c55e;box-shadow:0 0 8px -1px #22c55e}.pk-bkp-row .dot.bad{background:#ef4444;box-shadow:0 0 8px -1px #ef4444}.pk-bkp-row .dot.run{background:#f59e0b;box-shadow:0 0 8px -1px #f59e0b}
+    .pk-bkp-row b { margin-left:auto; font-variant-numeric:tabular-nums; color:var(--text-2); }
+    .pk-bkp-foot { font-size:11px; color:var(--text-3); margin-top:2px; }
+    /* header facts tabs (EROS/ZEUS), mirrors the ARES CPU-panel facts */
+    .pk-facts { display:flex; margin-left:18px; border:1px solid var(--ember-dim); background:rgba(var(--ares-rgb),.04); }
+    .pk-fact { padding:5px 14px; border-right:1px solid var(--ember-dim); }
+    .pk-fact:last-child { border-right:0; }
+    .pk-fact-k { font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); }
+    .pk-fact-v { font-size:12.5px; color:var(--text-1); margin-top:2px; font-weight:600; white-space:nowrap; }
+    /* EROS interactive Ollama chat */
+    .pk-chat { flex:1.3 1 0; display:flex; flex-direction:column; min-width:0; gap:6px; }
+    .pk-chat-hd { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); display:flex; align-items:center; gap:8px; }
+    .pk-chat-hd select { background:var(--bg-1); color:var(--ares); border:1px solid rgba(var(--ares-rgb),.4); font-size:10px; padding:2px 5px; font-family:inherit; max-width:150px; }
+    .pk-chat-out { flex:1 1 auto; min-height:56px; overflow-y:auto; border:1px solid var(--ember-dim); background:rgba(0,0,0,.28); padding:8px 11px; font-size:12px; line-height:1.5; }
+    .pk-chat-hint { color:var(--text-3); font-size:11px; }
+    .pk-chat-q { color:var(--ares); font-weight:600; margin-bottom:5px; }
+    .pk-chat-a { color:var(--text-1); white-space:pre-wrap; }
+    .pk-chat-cursor { animation:pkblink 1s steps(2,end) infinite; color:var(--ares); }
+    @keyframes pkblink { 50% { opacity:0; } }
+    .pk-chat-in { display:flex; gap:6px; }
+    .pk-chat-in input { flex:1; min-width:0; background:var(--bg-1); border:1px solid var(--ember-dim); color:var(--text-1); padding:7px 11px; font-family:inherit; font-size:12.5px; }
+    .pk-chat-in input:focus { outline:none; border-color:var(--ares); }
+    .pk-chat-in button { flex:none; width:36px; background:rgba(var(--ares-rgb),.12); border:1px solid var(--ares); color:var(--ares); cursor:pointer; font-size:13px; }
+    .pk-chat-in button:hover { background:rgba(var(--ares-rgb),.25); }
+    .pk-chat-in button:disabled { opacity:.5; cursor:wait; }
+    /* ARES CPU oscilloscope */
+    .cpu-scope { display:block; width:100%; height:42px; margin-top:2px; }
+    /* ZEUS 3D data-core */
+    .pk-core { flex:1 1 0; position:relative; display:flex; flex-direction:column; min-width:0; }
+    .pk-core canvas { flex:1 1 auto; width:100%; min-height:130px; display:block; }
+    .pk-core-cap { font-size:11px; color:var(--text-3); text-align:center; padding-top:3px; }
+    .pk-core-cap b { color:var(--text-2); font-variant-numeric:tabular-nums; }
+    /* EROS: fill the panel instead of floating tiny content in the middle */
+    .peer-band #panel-eros .pk-gauges { flex-direction:column !important; justify-content:space-around !important; align-items:center; gap:0 !important; }
+    .peer-band #panel-eros .pk-gauge { width:120px !important; height:120px !important; }
+    .peer-band #panel-eros .pk-gauge .n { font-size:26px !important; }
+    .peer-band #panel-eros .pk-meters { justify-content:space-around !important; gap:0 !important; }
+    .peer-band #panel-eros .pk-mt-top { font-size:13px; margin-bottom:7px; }
+    .peer-band #panel-eros .pk-bar { height:8px; }
+    .peer-band #panel-eros .pk-chat-out { min-height:120px; }
+    /* ZEUS: fill the panel like EROS — spread SSD tiles + let the core fill */
+    .peer-band #panel-zeus .pk-ssds { justify-content:space-between !important; }
+    .peer-band #panel-zeus .pk-ssd { padding:10px 14px; }
+    .peer-band #panel-zeus .pk-ssd-ring, .peer-band #panel-zeus .pk-ssd-ring svg { width:52px; height:52px; }
+    .peer-band #panel-zeus .pk-core canvas { min-height:170px; }
+    @media (max-width:900px){ .peer-band { grid-template-columns:1fr; } }
+    </style>
+    <div class="peer-band">
+<section class="mod c-tr c-br peer-panel" id="panel-eros">
+                <div class="mod-head pk-hd"><span class="pk-wm"><pre class="a">███████╗██████╗ 
+██╔════╝██╔══██╗
+█████╗  ██████╔╝
+██╔══╝  ██╔══██╗
+███████╗██║  ██║
+╚══════╝╚═╝  ╚═╝</pre><pre class="b"> ██████╗ ███████╗
+██╔═══██╗██╔════╝
+██║   ██║███████╗
+██║   ██║╚════██║
+╚██████╔╝███████║
+ ╚═════╝ ╚══════╝</pre></span><div class="pk-facts">
+                        <div class="pk-fact"><div class="pk-fact-k">Processor</div><div class="pk-fact-v">Ryzen 7 5700X</div></div>
+                        <div class="pk-fact"><div class="pk-fact-k">Memory</div><div class="pk-fact-v" id="eros-f-mem">—</div></div>
+                        <div class="pk-fact"><div class="pk-fact-k">Uptime</div><div class="pk-fact-v" id="eros-f-up">—</div></div>
+                        <div class="pk-fact"><div class="pk-fact-k">Cores</div><div class="pk-fact-v" id="eros-f-cores">—</div></div>
+                    </div><span class="pk-meta" id="eros-meta">—</span></div>
+                <div class="mod-body pk-body">
+                    <div class="pk-gauges"><div class="pk-gauge"><svg viewBox="0 0 90 90" aria-hidden="true"><circle class="gt" cx="45" cy="45" r="38"></circle><circle class="gl" id="eros-cpu-arc" cx="45" cy="45" r="38" stroke-dasharray="238.76" stroke-dashoffset="238.76"></circle></svg><div class="mid"><div class="n"><span id="eros-cpu">—</span><small>%</small></div><div class="l" id="eros-cpu-lab">—</div></div></div><div class="pk-gauge"><svg viewBox="0 0 90 90" aria-hidden="true"><circle class="gt" cx="45" cy="45" r="38"></circle><circle class="gl" id="eros-gpu-arc" cx="45" cy="45" r="38" stroke-dasharray="238.76" stroke-dashoffset="238.76"></circle></svg><div class="mid"><div class="n"><span id="eros-gpu">—</span><small>%</small></div><div class="l" id="eros-gpu-lab">—</div></div></div></div>
+                    <div class="pk-meters">
+                        <div><div class="pk-mt-top"><span class="k">Memory</span><span class="v" id="eros-mem">—</span></div><div class="pk-bar"><i id="eros-mem-bar"></i></div></div>
+                        <div><div class="pk-mt-top"><span class="k">Disk /</span><span class="v" id="eros-disk">—</span></div><div class="pk-bar"><i id="eros-disk-bar"></i></div></div>
+                        <div><div class="pk-mt-top"><span class="k">GPU VRAM</span><span class="v" id="eros-vram">—</span></div><div class="pk-bar"><i id="eros-vram-bar"></i></div></div>
+                        <div><div class="pk-mt-top"><span class="k">Net · rx</span><span class="v" id="eros-net">—</span></div><div class="pk-bar"><i id="eros-net-bar"></i></div></div>
+                    </div>
+                    <div class="pk-chat">
+                        <div class="pk-chat-hd">▸ Ollama <select id="eros-model" title="model"></select></div>
+                        <div class="pk-chat-out" id="eros-chat-out"><span class="pk-chat-hint">ask a model running on the EROS GPU…</span></div>
+                        <form class="pk-chat-in" id="eros-chat-form" autocomplete="off">
+                            <input id="eros-prompt" placeholder="prompt…" autocomplete="off">
+                            <button type="submit" id="eros-send" title="send">▶</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+<section class="mod c-bl c-tr peer-panel" id="panel-zeus">
+                <div class="mod-head pk-hd"><span class="pk-wm"><pre class="a">███████╗███████╗
+╚══███╔╝██╔════╝
+  ███╔╝ █████╗  
+ ███╔╝  ██╔══╝  
+███████╗███████╗
+╚══════╝╚══════╝</pre><pre class="b">██╗   ██╗███████╗
+██║   ██║██╔════╝
+██║   ██║███████╗
+██║   ██║╚════██║
+╚██████╔╝███████║
+ ╚═════╝ ╚══════╝</pre></span><div class="pk-facts">
+                        <div class="pk-fact"><div class="pk-fact-k">Host</div><div class="pk-fact-v">100.100.29.36</div></div>
+                        <div class="pk-fact"><div class="pk-fact-k">Role</div><div class="pk-fact-v">Backup mule</div></div>
+                        <div class="pk-fact"><div class="pk-fact-k">Disks</div><div class="pk-fact-v" id="zeus-f-disks">3 SSD</div></div>
+                        <div class="pk-fact"><div class="pk-fact-k">Status</div><div class="pk-fact-v" id="zeus-f-status">—</div></div>
+                    </div><span class="pk-meta" id="zeus-meta">—</span></div>
+                <div class="mod-body pk-body">
+                    <div class="pk-ssds" id="zeus-ssds"></div>
+                    <div class="pk-core"><canvas id="zeus-core"></canvas><div class="pk-core-cap" id="zeus-bkp"></div></div>
+                </div>
+            </section>
+    </div>
+</div>
 
 <script>
 function tick() {
     var t = new Date().toLocaleTimeString('en-US', {hour12:true});
     var f = document.getElementById('f-time'); if (f) f.textContent = t;
 }
-tick(); setInterval(tick, 30000);
+tick(); setInterval(tick, 1000);
 
 // Pixel-art glyphs beside panel titles — decorative, themed to the box accent.
 // Bitmaps are '#'=filled; scaled crisp to 13px via viewBox + shape-rendering.
@@ -1065,6 +1292,172 @@ async function pollPeer() {
                        up: !!(h && h.ok), summary: h && h.summary });
     } catch (e) {}
     finally { _peerBusy = false; }
+}
+
+// Fleet: EROS vitals + ARES/ZEUS backup health, from /api/fleet (a file the host
+// collector writes; the LXC can't reach the peer IPs itself). Panels stay hidden
+// until real data arrives, so ZEUS (no fleet.json) never shows empty boxes.
+var _fleetBusy = false;
+function _fmtAgo(epoch) {
+    if (!epoch) return '—';
+    var s = Math.floor(Date.now() / 1000) - epoch;
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    return Math.floor(s / 86400) + 'd ago';
+}
+function _setBar(id, pct) {
+    var el = document.getElementById(id);
+    if (el) el.style.width = Math.max(0, Math.min(100, +pct || 0)) + '%';
+}
+function _txt(id, v){ var el=document.getElementById(id); if(el) el.textContent=v; }
+// EROS/ZEUS status feeds the crest cards (top-right of the wordmark).
+function _arc(id, pct){ var a=document.getElementById(id); if(a) a.style.strokeDashoffset=(238.76*(1-Math.max(0,Math.min(100,+pct||0))/100)).toFixed(1); }
+function renderEros(d) {
+    var e = d.eros || {}, g = e.gpu || {}, panel = document.getElementById('panel-eros'), meta = document.getElementById('eros-meta');
+    if (panel) panel.style.display = '';
+    if (!e.up) {
+        if (meta) meta.textContent = 'offline';
+        ['eros-cpu','eros-cpu-lab','eros-gpu','eros-gpu-lab','eros-mem','eros-disk','eros-vram','eros-net','eros-load2','eros-vms2','eros-pow'].forEach(function(i){ _txt(i,'—'); });
+        _arc('eros-cpu-arc',0); _arc('eros-gpu-arc',0);
+        ['eros-mem-bar','eros-disk-bar','eros-vram-bar','eros-net-bar'].forEach(function(i){ _setBar(i,0); });
+        var ch=document.getElementById('eros-chips'); if(ch) ch.innerHTML='';
+        return;
+    }
+    if (meta) meta.textContent = (d.stale ? 'stale · ' : '') + (e.uptime ? 'up ' + e.uptime : 'online') + (e.cores ? '  ·  ' + e.cores + ' cores' : '');
+    _txt('eros-cpu', e.cpu_pct != null ? e.cpu_pct : '—'); _arc('eros-cpu-arc', e.cpu_pct);
+    _txt('eros-cpu-lab', e.load != null ? ('load ' + e.load) : 'CPU');
+    _txt('eros-gpu', g.util != null ? g.util : '—'); _arc('eros-gpu-arc', g.util);
+    _txt('eros-gpu-lab', g.temp != null ? (g.temp + '°C GPU') : 'GPU');
+    _txt('eros-mem', (e.mem_used_gb != null ? e.mem_used_gb : '—') + ' / ' + (e.mem_total_gb != null ? e.mem_total_gb : '—') + ' GB');
+    _setBar('eros-mem-bar', (e.mem_used_gb != null && e.mem_total_gb) ? (e.mem_used_gb / e.mem_total_gb * 100) : 0);
+    _txt('eros-disk', (e.disk_used_gb != null ? e.disk_used_gb : '—') + ' / ' + (e.disk_total_gb != null ? e.disk_total_gb : '—') + ' GB');
+    _setBar('eros-disk-bar', e.disk_pct);
+    _txt('eros-vram', g.mem_total ? (g.mem_used + ' / ' + g.mem_total + ' MB') : '—');
+    _setBar('eros-vram-bar', g.mem_total ? (g.mem_used / g.mem_total * 100) : 0);
+    _txt('eros-net', (e.net_rx_mbs != null ? e.net_rx_mbs : '—') + ' MB/s');
+    _setBar('eros-net-bar', e.net_rx_mbs != null ? Math.min(100, e.net_rx_mbs / 125 * 100) : 0);
+    // header facts
+    _txt('eros-f-mem', (e.mem_used_gb != null ? e.mem_used_gb : '—') + ' / ' + (e.mem_total_gb != null ? e.mem_total_gb : '—') + ' GB');
+    _txt('eros-f-up', e.uptime || '—');
+    _txt('eros-f-cores', e.cores != null ? e.cores : '—');
+    // populate the ollama model picker (chat models only)
+    var sel = document.getElementById('eros-model');
+    if (sel && sel.dataset.filled !== '1') {
+        var chat = (e.models || []).filter(function(m){ return !/embed/i.test(m); });
+        if (chat.length) { sel.innerHTML = chat.map(function(m){ return '<option value="' + esc(m) + '">' + esc(m.replace(':latest','').replace('-instruct-q5_K_M','')) + '</option>'; }).join(''); sel.dataset.filled = '1'; }
+    }
+}
+// EROS interactive Ollama chat — streams tokens from the model on EROS's GPU.
+document.addEventListener('submit', function(ev) {
+    if (!ev.target || ev.target.id !== 'eros-chat-form') return;
+    ev.preventDefault();
+    var inp = document.getElementById('eros-prompt'), out = document.getElementById('eros-chat-out'),
+        sel = document.getElementById('eros-model'), btn = document.getElementById('eros-send');
+    var prompt = (inp.value || '').trim(); if (!prompt) return;
+    var model = sel && sel.value ? sel.value : 'llama3.2:3b';
+    out.innerHTML = '<div class="pk-chat-q">' + esc(prompt) + '</div><div class="pk-chat-a" id="eros-chat-a"><span class="pk-chat-cursor">\u258d</span></div>';
+    inp.value = ''; if (btn) btn.disabled = true;
+    var a = document.getElementById('eros-chat-a'), acc = '';
+    fetch('/api/eros/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: model, prompt: prompt }) })
+      .then(function(r) {
+        var reader = r.body.getReader(), dec = new TextDecoder(), buf = '';
+        function pump() {
+            return reader.read().then(function(res) {
+                if (res.done) { if (btn) btn.disabled = false; return; }
+                buf += dec.decode(res.value, { stream: true });
+                var parts = buf.split('\n\n'); buf = parts.pop();
+                parts.forEach(function(pt) {
+                    var m = pt.match(/^data: (.*)$/m); if (!m) return;
+                    try { var o = JSON.parse(m[1]); if (o.t) { acc += o.t; a.textContent = acc; } if (o.err) { a.textContent = '\u26a0 ' + o.err; } } catch (e) {}
+                });
+                out.scrollTop = out.scrollHeight; return pump();
+            });
+        }
+        return pump();
+      }).catch(function(e) { if (a) a.textContent = '\u26a0 ' + e; if (btn) btn.disabled = false; });
+});
+function _ssdName(n){ var m = String(n || '').match(/T[0-9]+/i); if (m) return m[0].toUpperCase(); if (/portable|samsung/i.test(n)) return 'T5'; return n || 'SSD'; }
+function renderBackups(d) {
+    var b = d.backups || {}, panel = document.getElementById('panel-zeus'), meta = document.getElementById('zeus-meta');
+    if (panel) panel.style.display = '';
+    if (meta) meta.textContent = b.zeus_reachable ? 'awake' : 'asleep · horcrux';
+    var disks = b.disks || [], ss = document.getElementById('zeus-ssds');
+    _txt('zeus-f-disks', disks.length ? (disks.length + ' SSD') : '3 SSD');
+    _txt('zeus-f-status', b.zeus_reachable ? 'awake' : 'asleep');
+    function ssdTile(x) {
+        var h = String(x.health || '').toUpperCase(), cls = (h === 'PASSED' || h === 'OK') ? 'ok' : (h === 'FAILED' ? 'bad' : 'run');
+        var hasLife = (x.life != null), C = 113.1, off = hasLife ? (C * (1 - Math.max(0, Math.min(100, x.life)) / 100)).toFixed(1) : C;
+        var use = Math.max(0, Math.min(100, x.use || 0));
+        return '<div class="pk-ssd"><div class="pk-ssd-ring"><svg viewBox="0 0 48 48"><circle class="rt" cx="24" cy="24" r="18"></circle>' +
+               '<circle class="rl" cx="24" cy="24" r="18" stroke-dasharray="113.1" stroke-dashoffset="' + off + '"' + (hasLife ? '' : ' style="opacity:.25"') + '></circle></svg>' +
+               '<div class="pk-ssd-life">' + (hasLife ? x.life + '<small>%</small>' : '<small style="font-size:9px">n/a</small>') + '</div></div>' +
+               '<div class="pk-ssd-info"><div class="pk-ssd-name">' + esc(_ssdName(x.name)) + '<span class="pk-ssd-h ' + cls + '">' + (h || '—') + '</span></div>' +
+               '<div class="pk-ssd-sub">' + (hasLife ? 'life left' : 'SMART ok') + (x.temp != null ? ' · ' + x.temp + '°C' : '') + ' · ' + use + '% full</div>' +
+               '<div class="pk-ssd-usebar"><i style="width:' + use + '%"></i></div></div></div>';
+    }
+    if (ss) {
+        ss.innerHTML = disks.length
+            ? disks.slice(0, 3).map(ssdTile).join('')
+            : [0,1,2].map(function(){ return '<div class="pk-ssd"><div class="pk-ssd-ring"><svg viewBox="0 0 48 48"><circle class="rt" cx="24" cy="24" r="18"></circle></svg><div class="pk-ssd-life"><small style="font-size:8px">zzz</small></div></div><div class="pk-ssd-info"><div class="pk-ssd-name" style="color:var(--text-3)">SSD</div><div class="pk-ssd-sub">reads at next 4am wake</div></div></div>'; }).join('');
+    }
+    var bkp = document.getElementById('zeus-bkp');
+    if (bkp) {
+        function bage(o){ return (o && o.epoch) ? _fmtAgo(o.epoch) : '—'; }
+        bkp.innerHTML = 'horcrux pull <b>' + bage(b.ares_to_zeus) + '</b> · ' + (b.zeus_reachable ? 'awake' : 'asleep') + ' · next wake <b>~4:00 AM</b>';
+    }
+    zeusCore();
+}
+// ── cool visuals ──────────────────────────────────────────────────────────
+function _cvSize(cv, dpr){ var r = cv.getBoundingClientRect(); var w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr)); if (cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; } return [cv.width, cv.height]; }
+// ARES CPU load oscilloscope — waveform whose amplitude tracks live SYS_LOAD
+function cpuScope(){
+    var cv = document.getElementById('cpu-scope'); if (!cv || cv._on) return; cv._on = 1;
+    var ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1), t = 0;
+    (function frame(){
+        if (!document.getElementById('cpu-scope')) { cv._on = 0; return; }
+        var d = _cvSize(cv, dpr), w = d[0], h = d[1];
+        var ln = document.getElementById('g-load'); var load = ln ? (parseFloat(ln.textContent) || 0) : 0;
+        var amp = (0.06 + load / 100 * 0.82) * h * 0.5; t += 0.09;
+        ctx.clearRect(0, 0, w, h);
+        ctx.beginPath();
+        for (var x = 0; x <= w; x += 2 * dpr){
+            var ph = x / w * Math.PI * 6 - t;
+            var y = h/2 + Math.sin(ph) * amp * (0.6 + 0.4 * Math.sin(ph*0.5 + t*0.3)) + (Math.random()-0.5) * (load/100) * h * 0.14;
+            if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = 'rgba(245,64,45,0.85)'; ctx.lineWidth = 1.4 * dpr;
+        ctx.shadowColor = 'rgba(245,64,45,0.55)'; ctx.shadowBlur = 4 * dpr; ctx.stroke(); ctx.shadowBlur = 0;
+        requestAnimationFrame(frame);
+    })();
+}
+// ZEUS rotating 3D point-sphere "data core"
+function zeusCore(){
+    var cv = document.getElementById('zeus-core'); if (!cv || cv._on) return; cv._on = 1;
+    var ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1), ang = 0, pts = [];
+    for (var i = 1; i < 10; i++){ var th = Math.PI * i / 10; for (var j = 0; j < 16; j++){ var pph = 2 * Math.PI * j / 16; pts.push([Math.sin(th)*Math.cos(pph), Math.cos(th), Math.sin(th)*Math.sin(pph)]); } }
+    var ct = Math.cos(0.5), st = Math.sin(0.5);
+    (function frame(){
+        if (!document.getElementById('zeus-core')) { cv._on = 0; return; }
+        var d = _cvSize(cv, dpr), w = d[0], h = d[1], cx = w/2, cy = h/2, R = Math.min(w, h) * 0.4;
+        ctx.clearRect(0, 0, w, h); ang += 0.005;
+        var ca = Math.cos(ang), sa = Math.sin(ang);
+        for (var k = 0; k < pts.length; k++){ var p = pts[k];
+            var x = p[0]*ca - p[2]*sa, z = p[0]*sa + p[2]*ca, y = p[1];
+            var y2 = y*ct - z*st, z2 = y*st + z*ct, sc = 1 / (2 - z2 * 0.55), dep = (z2 + 1) / 2;
+            ctx.beginPath(); ctx.arc(cx + x*R*sc, cy + y2*R*sc, (0.7 + dep*1.8) * dpr, 0, 6.2832);
+            ctx.fillStyle = 'rgba(56,189,248,' + (0.16 + dep*0.64).toFixed(3) + ')'; ctx.fill();
+        }
+        requestAnimationFrame(frame);
+    })();
+}
+async function pollFleet() {
+    if (_fleetBusy) return;
+    _fleetBusy = true;
+    try {
+        var d = await fetch('/api/fleet').then(function(r){ return r.json(); });
+        if (d && d.ok) { renderEros(d); renderBackups(d); }
+    } catch (e) {}
+    finally { _fleetBusy = false; }
 }
 
 function fmtN(n) { n = +n || 0; return n >= 1000 ? n.toLocaleString() : String(n); }
@@ -1369,11 +1762,11 @@ function applyVitals(i) {
             ['h-uptime','h-gpu','h-cpu','h-kernel'].forEach(function(id){ var e=document.getElementById(id); if(e) e.classList.remove('skeleton'); });
             document.getElementById('h-uptime').textContent = shortUptime;
             document.getElementById('h-cpu').textContent = shortCpu;
-            document.getElementById('h-kernel').textContent = i.kernel || '—';
+            var _hk=document.getElementById('h-kernel'); if(_hk) _hk.textContent = i.kernel || '—';
             var ncPool = document.getElementById('nc-pool');
             if (pool && ncPool) ncPool.textContent = pool.used + ' / ' + pool.total;
             document.getElementById('h-gpu').textContent = (g.online && g.name) ? g.name.replace('NVIDIA GeForce ', '') : '\u2014';
-            document.getElementById('v-uptime').textContent = i.uptime || '\u2014';
+            var _vu=document.getElementById('v-uptime'); if(_vu) _vu.textContent = i.uptime || '\u2014';
             document.getElementById('v-host-tag').textContent = i.hostname || 'ARES';
 
             var _BR = document.documentElement.getAttribute('data-brand');
@@ -1436,8 +1829,10 @@ function fitScale(force) {
 }
 var _fitT;
 window.addEventListener('resize', function () { clearTimeout(_fitT); _fitT = setTimeout(function () { fitScale(true); }, 80); });
-window.addEventListener('load', function () { fitScale(true); });
-setTimeout(function () { fitScale(true); }, 400);   // after fonts settle
+function _revealHud(){ fitScale(true); var h=document.querySelector('.hud'); if(h) h.style.opacity='1'; cpuScope(); }
+window.addEventListener('load', _revealHud);
+setTimeout(_revealHud, 650);    // after async vitals/fleet data has landed
+setTimeout(_revealHud, 2000);   // safety: never leave the HUD hidden
 
 
 
@@ -1503,6 +1898,8 @@ setInterval(loadVitals, 3000);   // perf: 3s poll
 setInterval(pollOutreach, 60000);   // ZEUS outreach stats (slow)
 document.addEventListener('visibilitychange', function(){ if (!document.hidden) loadVitals(); });   // refetch on return
 setInterval(pollWin, 20000);     // win status on its own slow loop
+pollFleet();
+setInterval(pollFleet, 15000);   // EROS vitals + ARES/ZEUS backups (host-collected file)
 
 // === Instruments =========================================================
 // Everything below is driven by fields /api/system-info actually returns.
@@ -1670,22 +2067,13 @@ function _regChart(id, series, opts) {
     var cv = document.getElementById(id);
     if (cv) CHARTS.push(Object.assign({ cv: cv, series: series }, opts || {}));
 }
-function _easeKey(key) {
-    var tgt = HIST[key]; if (!tgt) return 0;
-    var d = _disp[key];
-    if (!d || d.length !== tgt.length) { _disp[key] = tgt.slice(); return 1; }
-    var mx = 0;
-    for (var i = 0; i < tgt.length; i++) {
-        var t = tgt[i];
-        if (t == null) { d[i] = null; continue; }
-        if (d[i] == null) { d[i] = t; mx = 1; continue; }
-        var diff = t - d[i]; d[i] += diff * 0.18;
-        var ad = diff < 0 ? -diff : diff; if (ad > mx) mx = ad;
-    }
-    return mx;
-}
 function _sizeCanvas(cv) {
-    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // Back the sparkline canvases at 1x, never retina 2x. These are 1-2px thin
+    // lines — 2x backing quadruples the per-frame GPU raster/upload cost for no
+    // visible gain, and Chrome's Metal rasterizer (Ganesh/Graphite) chokes on it
+    // on retina while Safari doesn't. ponytail: 1x is the fix; bump only if a
+    // specific chart looks soft. (Home-only lag; photos has no live canvas.)
+    var dpr = 1;
     var w = cv.clientWidth || 300, h = cv.clientHeight || 40;
     var bw = Math.round(w * dpr), bh = Math.round(h * dpr);
     if (cv.width !== bw) cv.width = bw;
@@ -1702,8 +2090,8 @@ function _strokeSeries(ctx, arr, w, h, lo, hi) {
     }
 }
 function _drawChart(c) {
-    var g = _sizeCanvas(c.cv), ctx = c.cv.getContext('2d');
-    ctx.setTransform(g.dpr, 0, 0, g.dpr, 0, 0);
+    var g = { w: c._w || c.cv.clientWidth || 300, h: c._h || c.cv.clientHeight || 40, dpr: 1 }, ctx = c.cv.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, g.w, g.h);
     var all = [], si;
     for (si = 0; si < c.series.length; si++) { var a = _disp[c.series[si].key]; if (a) all = all.concat(a); }
@@ -1725,23 +2113,52 @@ function _drawChart(c) {
     }
     return r;
 }
-var _rafId = 0;
-function _animateCharts() {
-    var moving = false, i, s;
-    for (i = 0; i < CHARTS.length; i++)
-        for (s = 0; s < CHARTS[i].series.length; s++)
-            if (_easeKey(CHARTS[i].series[s].key) > 0.05) moving = true;
-    for (i = 0; i < CHARTS.length; i++) {
-        var r = _drawChart(CHARTS[i]);
-        if (CHARTS[i].thermScale) {
+var _rafId = 0, _easeRAF = 0;
+// Charts glide toward the newest samples via a self-stopping rAF ease loop: it
+// runs only while _disp is converging on HIST (~0.4s after each data tick) then
+// idles — so it's NOT a sustained per-frame loop (that 4-canvas-at-retina loop is
+// what caused the old home lag). Backing stays 1x and the size is cached, so no
+// per-frame layout read. On data/resize, kickCharts (re)starts it.
+function _sizeAllCharts() {
+    for (var i = 0; i < CHARTS.length; i++) {
+        var c = CHARTS[i], w = c.cv.clientWidth || 300, h = c.cv.clientHeight || 40;
+        if (c.cv.width !== w) c.cv.width = w;
+        if (c.cv.height !== h) c.cv.height = h;
+        c._w = w; c._h = h;
+    }
+}
+function _easeCharts() {
+    var moving = false;
+    for (var i = 0; i < CHARTS.length; i++) {
+        for (var s = 0; s < CHARTS[i].series.length; s++) {
+            var k = CHARTS[i].series[s].key, tgt = HIST[k];
+            if (!tgt) continue;
+            var d = _disp[k];
+            if (!d || d.length !== tgt.length) { _disp[k] = tgt.slice(); continue; }  // length change: snap
+            for (var j = 0; j < tgt.length; j++) {
+                var tv = tgt[j];
+                if (tv == null) { d[j] = null; continue; }
+                if (d[j] == null) { d[j] = tv; continue; }
+                var diff = tv - d[j];
+                if (diff > 0.04 || diff < -0.04) { d[j] += diff * 0.16; moving = true; } else d[j] = tv;
+            }
+        }
+    }
+    for (var c = 0; c < CHARTS.length; c++) {
+        var r = _drawChart(CHARTS[c]);
+        if (CHARTS[c].thermScale) {
             var hi = document.getElementById('th-hi'), lo = document.getElementById('th-lo');
             if (hi) hi.textContent = Math.round(r[1]) + '°C';
             if (lo) lo.textContent = Math.round(r[0]) + '°C';
         }
     }
-    _rafId = (moving && !document.hidden) ? requestAnimationFrame(_animateCharts) : 0;
+    _easeRAF = moving ? requestAnimationFrame(_easeCharts) : 0;
 }
-function kickCharts() { if (!_rafId) _rafId = requestAnimationFrame(_animateCharts); }
+function kickCharts() {
+    _sizeAllCharts();
+    if (!_easeRAF) _easeRAF = requestAnimationFrame(_easeCharts);
+    _rafId = 0;
+}
 
 _regChart('cv-cpu', [{ key: 'cpu', stroke: COL.ares, fill: 'rgba(' + COL.rgb + ',.14)' }], { minSpan: 6 });
 _regChart('cv-mem', [{ key: 'mem', stroke: COL.bright, fill: 'rgba(' + COL.rgb + ',.13)' }], { minSpan: 6 });
