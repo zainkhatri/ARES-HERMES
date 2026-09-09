@@ -29,7 +29,15 @@ ALLOWED_COMMANDS = {
     "lspci", "lsusb", "nvidia-smi", "nvidia-settings",
     "qm", "pct", "pveversion", "pvesm", "pvesh",
     "tailscale", "tailscale0",
-    "bc", "awk", "sed", "cut", "tr", "xargs", "tee",
+    "bc", "cut", "tr",
+} - {
+    # Removed — these are arbitrary code-exec / write / exfil primitives that make a
+    # denylist "safe executor" fundamentally unsafe (e.g. `awk 'BEGIN{system("...")}'`,
+    # `python3 -c ...`, `find ... -exec`, `tar --checkpoint-action=exec=...`, `curl -o`,
+    # `tee`, `xargs cmd`). Read-only introspection only here; use the web terminal for these.
+    "find", "curl", "wget", "tar", "gzip", "gunzip", "zip", "unzip",
+    "python", "python3", "pip", "pip3", "apt", "dpkg", "systemctl",
+    "awk", "sed", "xargs", "tee",
 }
 
 # Hardcoded block patterns — these NEVER execute, no matter what
@@ -172,9 +180,16 @@ def execute_command(command_str: str) -> dict:
         }
 
     try:
+        # Execute as an ARGV list, NOT through a shell — a shell would honor pipes, `>`
+        # redirects, `;`/`&&` chaining, `$(...)`, backticks and newlines regardless of the
+        # denylist. shell=False makes those literal args to the (allowlisted, non-interpreter)
+        # base command, so there is no shell to abuse.
+        argv = shlex.split(command_str)
+        if not argv:
+            return {"stdout": "", "stderr": "Empty command.", "returncode": -1, "blocked": True}
         result = subprocess.run(
-            command_str,
-            shell=True,
+            argv,
+            shell=False,
             cwd=NAS_CWD,
             capture_output=True,
             text=True,
