@@ -904,6 +904,9 @@
     .pk-chips { display:flex; flex-wrap:wrap; gap:6px; }
     .pk-chip { font-size:11.5px; padding:4px 10px; border:1px solid rgba(var(--ares-rgb),.45); color:var(--ares);
                background:rgba(var(--ares-rgb),.07); white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .pk-chip.is-down { border-color:var(--red); color:var(--red); background:rgba(239,68,68,.09); }
+    .pk-svc-hd { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); margin:9px 0 5px; }
+    .pk-svc-sum { color:var(--ares); letter-spacing:.06em; margin-left:6px; }
     .pk-cells { display:flex; gap:9px; margin-top:2px; }
     .pk-cell { flex:1; border:1px solid var(--ember-dim); padding:7px 11px; background:rgba(var(--ares-rgb),.04); }
     .pk-cell b { display:block; font-size:19px; color:var(--text-1); font-variant-numeric:tabular-nums; line-height:1.1; }
@@ -962,9 +965,8 @@
     .pk-core-cap { font-size:11px; color:var(--text-3); text-align:center; padding-top:3px; }
     .pk-core-cap b { color:var(--text-2); font-variant-numeric:tabular-nums; }
     /* EROS: fill the panel instead of floating tiny content in the middle */
-    .peer-band #panel-eros .pk-gauges { flex-direction:column !important; justify-content:space-around !important; align-items:center; gap:0 !important; }
-    .peer-band #panel-eros .pk-gauge { width:120px !important; height:120px !important; }
-    .peer-band #panel-eros .pk-gauge .n { font-size:26px !important; }
+    .peer-band #panel-eros .pk-radar { flex:1.35 1 0; min-width:0; align-self:stretch; position:relative; }
+    .peer-band #panel-eros .pk-radar canvas { display:block; width:100%; height:100%; }
     .peer-band #panel-eros .pk-meters { justify-content:space-around !important; gap:0 !important; }
     .peer-band #panel-eros .pk-mt-top { font-size:13px; margin-bottom:7px; }
     .peer-band #panel-eros .pk-bar { height:8px; }
@@ -974,6 +976,34 @@
     .peer-band #panel-zeus .pk-ssd { padding:10px 14px; }
     .peer-band #panel-zeus .pk-ssd-ring, .peer-band #panel-zeus .pk-ssd-ring svg { width:52px; height:52px; }
     .peer-band #panel-zeus .pk-core canvas { min-height:170px; }
+    /* ZEUS wake-countdown vault (dashboard style, blue accent) */
+    .pk-vault { flex:1 1 0; display:flex; align-items:center; gap:26px; min-width:0; padding-left:8px; }
+    .pk-wake { position:relative; flex:none; width:132px; height:132px; }
+    .pk-wake svg { width:132px; height:132px; }
+    .pk-wake .wt { fill:none; stroke:rgba(var(--ares-rgb),.15); stroke-width:5; }
+    .pk-wake .wl { fill:none; stroke:var(--ares); stroke-width:5; stroke-linecap:round; transform:rotate(-90deg); transform-origin:center; filter:drop-shadow(0 0 4px rgba(var(--ares-rgb),.5)); transition:stroke-dashoffset 1s linear; }
+    .pk-wake-mid { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+    .pk-wake-t { font-size:23px; font-weight:700; color:var(--text-1); font-variant-numeric:tabular-nums; letter-spacing:.02em; }
+    .pk-wake-l { font-size:8px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-3); margin-top:4px; }
+    .pk-vstats { flex:1 1 auto; display:grid; grid-template-columns:1fr 1fr; gap:13px 22px; min-width:0; align-content:center; }
+    .pk-vstat-k { font-size:8.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); }
+    .pk-vstat-v { font-size:15px; color:var(--text-1); margin-top:3px; font-weight:600; font-variant-numeric:tabular-nums; display:flex; align-items:center; gap:8px; }
+    .pk-vstat-v .dot { width:8px; height:8px; border-radius:50%; flex:none; }
+    .pk-vstat-v .dot.ok{background:#22c55e;box-shadow:0 0 7px -1px #22c55e}.pk-vstat-v .dot.bad{background:#ef4444;box-shadow:0 0 7px -1px #ef4444}.pk-vstat-v .dot.run{background:#f59e0b;box-shadow:0 0 7px -1px #f59e0b}
+    .peer-band #panel-zeus .pk-ssds { justify-content:center !important; gap:12px; }
+    /* ZEUS knowledge-graph 3D view */
+    .peer-band #panel-zeus .pk-graph { flex:1 1 auto; min-height:0; position:relative; overflow:hidden; }
+    .peer-band #panel-zeus .pk-graph canvas { display:block; width:100%; height:100%; }
+    .kg-hud { position:absolute; inset:0; pointer-events:none; font-size:10px; letter-spacing:1px; z-index:2; }
+    .kg-hud .cn { position:absolute; color:#38bdf8; text-shadow:0 0 6px rgba(56,189,248,.5); line-height:1.5; }
+    .kg-hud .cn .k { color:#6f6f6f; font-size:8px; letter-spacing:2px; text-transform:uppercase; }
+    .kg-hud .cn b { color:#dff3ff; font-weight:700; }
+    .kg-hud .tl{top:8px;left:11px}.kg-hud .tr{top:8px;right:11px;text-align:right}
+    .kg-hud .bl{bottom:8px;left:11px}.kg-hud .br{bottom:8px;right:11px;text-align:right}
+    .kg-hud .lg{display:flex;gap:9px;flex-wrap:wrap;margin-top:3px}
+    .kg-hud .lg span{color:#9fb3c2}.kg-hud .lg i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:3px;vertical-align:middle}
+    .kg-tip{position:absolute;pointer-events:none;z-index:3;max-width:270px;padding:7px 9px;border:1px solid rgba(56,189,248,.4);border-radius:4px;background:rgba(5,10,16,.93);color:#cfe8ff;font-size:11px;line-height:1.42;display:none;box-shadow:0 0 14px rgba(56,189,248,.25);}
+    .kg-tip b{color:#7fd4ff;}.kg-tip .kk{color:#6f8a9c;font-size:9px;letter-spacing:1px;text-transform:uppercase;}
     @media (max-width:900px){ .peer-band { grid-template-columns:1fr; } }
     </style>
     <div class="peer-band">
@@ -995,13 +1025,17 @@
                         <div class="pk-fact"><div class="pk-fact-k">Cores</div><div class="pk-fact-v" id="eros-f-cores">—</div></div>
                     </div><span class="pk-meta" id="eros-meta">—</span></div>
                 <div class="mod-body pk-body">
-                    <div class="pk-gauges"><div class="pk-gauge"><svg viewBox="0 0 90 90" aria-hidden="true"><circle class="gt" cx="45" cy="45" r="38"></circle><circle class="gl" id="eros-cpu-arc" cx="45" cy="45" r="38" stroke-dasharray="238.76" stroke-dashoffset="238.76"></circle></svg><div class="mid"><div class="n"><span id="eros-cpu">—</span><small>%</small></div><div class="l" id="eros-cpu-lab">—</div></div></div><div class="pk-gauge"><svg viewBox="0 0 90 90" aria-hidden="true"><circle class="gt" cx="45" cy="45" r="38"></circle><circle class="gl" id="eros-gpu-arc" cx="45" cy="45" r="38" stroke-dasharray="238.76" stroke-dashoffset="238.76"></circle></svg><div class="mid"><div class="n"><span id="eros-gpu">—</span><small>%</small></div><div class="l" id="eros-gpu-lab">—</div></div></div></div>
+                    <div class="pk-radar" id="eros-radar"></div>
                     <div class="pk-meters">
                         <div><div class="pk-mt-top"><span class="k">Memory</span><span class="v" id="eros-mem">—</span></div><div class="pk-bar"><i id="eros-mem-bar"></i></div></div>
                         <div><div class="pk-mt-top"><span class="k">Disk /</span><span class="v" id="eros-disk">—</span></div><div class="pk-bar"><i id="eros-disk-bar"></i></div></div>
                         <div><div class="pk-mt-top"><span class="k">GPU VRAM</span><span class="v" id="eros-vram">—</span></div><div class="pk-bar"><i id="eros-vram-bar"></i></div></div>
                         <div><div class="pk-mt-top"><span class="k">Net · rx</span><span class="v" id="eros-net">—</span></div><div class="pk-bar"><i id="eros-net-bar"></i></div></div>
                     </div>
+                    <div class="pk-svc-hd">▸ Services <span class="pk-svc-sum" id="eros-svc-sum"></span></div>
+                    <div class="pk-chips" id="eros-svc"></div>
+                    <div class="pk-svc-hd">▸ Business <span class="pk-svc-sum" id="eros-mnt-sum"></span></div>
+                    <div class="pk-chips" id="eros-mnt"></div>
                     <div class="pk-chat">
                         <div class="pk-chat-hd">▸ Ollama <select id="eros-model" title="model"></select></div>
                         <div class="pk-chat-out" id="eros-chat-out"><span class="pk-chat-hint">ask a model running on the EROS GPU…</span></div>
@@ -1030,8 +1064,15 @@
                         <div class="pk-fact"><div class="pk-fact-k">Status</div><div class="pk-fact-v" id="zeus-f-status">—</div></div>
                     </div><span class="pk-meta" id="zeus-meta">—</span></div>
                 <div class="mod-body pk-body">
-                    <div class="pk-ssds" id="zeus-ssds"></div>
-                    <div class="pk-core"><canvas id="zeus-core"></canvas><div class="pk-core-cap" id="zeus-bkp"></div></div>
+                    <div class="pk-graph" id="zeus-graph">
+                        <div class="kg-hud">
+                            <div class="cn tl"><div class="k">Knowledge Graph</div><b id="zg-count">indexing…</b></div>
+                            <div class="cn tr"><div class="k">Next Wake</div><b id="zeus-wake-t">--:--:--</b></div>
+                            <div class="cn bl" id="zg-legend"></div>
+                            <div class="cn br"><div class="k">Backups A→Z / E→Z</div><b id="zg-bkp">—</b></div>
+                        </div>
+                        <div class="kg-tip" id="zg-tip"></div>
+                    </div>
                 </div>
             </section>
     </div>
@@ -1312,6 +1353,60 @@ function _setBar(id, pct) {
 function _txt(id, v){ var el=document.getElementById(id); if(el) el.textContent=v; }
 // EROS/ZEUS status feeds the crest cards (top-right of the wordmark).
 function _arc(id, pct){ var a=document.getElementById(id); if(a) a.style.strokeDashoffset=(238.76*(1-Math.max(0,Math.min(100,+pct||0))/100)).toFixed(1); }
+// EROS 3D crown radar — pillars rise from a tilted ground ring toward a 100% ceiling.
+// each spoke = one live metric; pillar height = value. Glowing vector, CRT-framed.
+function radar3d(el,rgb,opts){
+  var accent='rgb('+rgb+')';
+  var cv=document.createElement('canvas');cv.style.display='block';el.appendChild(cv);
+  var ctx=cv.getContext('2d'),W=0,H=0;
+  function resize(){var r=el.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1);W=r.width||420;H=r.height||300;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);ctx.lineJoin='round';ctx.lineCap='round';}
+  resize();window.addEventListener('resize',resize);
+  var tilt=(opts&&opts.tilt)||.92,spinSpd=(opts&&opts.spin)||.005,maxH=(opts&&opts.maxH)||1.2,Kf=(opts&&opts.k)||.32;
+  var spin=0,sweep=0,AX=[],cur=[],avg=[];
+  function update(axes){AX=axes;while(cur.length<axes.length){cur.push(0);avg.push(0);}}
+  function proj(x,y,z){var cw=Math.cos(spin),sw=Math.sin(spin),x1=x*cw-y*sw,y1=x*sw+y*cw;
+    var yp=y1*Math.cos(tilt)+z*Math.sin(tilt),depth=y1*Math.sin(tilt)-z*Math.cos(tilt),Kp=Math.min(W,H)*Kf;
+    return [W/2+Kp*x1, H*0.60-Kp*yp, depth];}
+  function seg(p,q,w,a){ctx.globalAlpha=a;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(q[0],q[1]);ctx.stroke();}
+  function ringPath(rad,h){var N=72;ctx.beginPath();for(var i=0;i<=N;i++){var a=i/N*6.2832,p=proj(Math.cos(a)*rad,Math.sin(a)*rad,h);i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);}}
+  (function loop(){requestAnimationFrame(loop);if(!el.isConnected)return;resize.dirty&&resize();spin+=spinSpd;sweep+=.02;
+    ctx.clearRect(0,0,W,H);ctx.strokeStyle=accent;ctx.fillStyle=accent;ctx.shadowColor=accent;
+    var K=AX.length,k,kk;
+    if(K){
+      for(k=0;k<K;k++){cur[k]+=((AX[k].val||0)-cur[k])*.18;avg[k]+=((AX[k].val||0)-avg[k])*.012;}
+      var ang=function(k){return k/K*6.2832-Math.PI/2;},gx=function(k){return Math.cos(ang(k));},gy=function(k){return Math.sin(ang(k));};
+      ctx.shadowBlur=0;
+      ctx.globalAlpha=.10;ctx.lineWidth=1;ringPath(.5,0);ctx.stroke();
+      ctx.globalAlpha=.18;ringPath(1,0);ctx.stroke();
+      ctx.globalAlpha=.22;ctx.setLineDash([5,5]);ringPath(1,maxH);ctx.stroke();ctx.setLineDash([]);
+      for(k=0;k<K;k++)seg(proj(0,0,0),proj(gx(k),gy(k),0),1,.10);
+      ctx.globalAlpha=.3;ctx.font="9px 'JetBrains Mono',monospace";ctx.textAlign='center';var cl=proj(0,-1,maxH);ctx.fillText('100%',cl[0],cl[1]-3);ctx.textAlign='start';
+      for(var i2=0;i2<7;i2++){var a2=sweep-i2*.09;seg(proj(0,0,0),proj(Math.cos(a2),Math.sin(a2),0),i2?1:2,.30*(1-i2/7));}
+      var quads=[];for(k=0;k<K;k++){var k2=(k+1)%K;quads.push({b1:proj(gx(k),gy(k),0),b2:proj(gx(k2),gy(k2),0),t1:proj(gx(k),gy(k),cur[k]*maxH),t2:proj(gx(k2),gy(k2),cur[k2]*maxH),d:(proj(gx(k),gy(k),0)[2]+proj(gx(k2),gy(k2),0)[2])/2});}
+      quads.sort(function(p,q){return q.d-p.d;});
+      ctx.shadowBlur=8;
+      quads.forEach(function(q){ctx.globalAlpha=.15;ctx.fillStyle='rgb('+rgb+')';ctx.beginPath();ctx.moveTo(q.b1[0],q.b1[1]);ctx.lineTo(q.b2[0],q.b2[1]);ctx.lineTo(q.t2[0],q.t2[1]);ctx.lineTo(q.t1[0],q.t1[1]);ctx.closePath();ctx.fill();});
+      for(k=0;k<K;k++){var al=AX[k].alert;ctx.strokeStyle=al?'#ff6a6a':accent;ctx.shadowColor=al?'#ff6a6a':accent;seg(proj(gx(k),gy(k),0),proj(gx(k),gy(k),cur[k]*maxH),al?2.6:1.6,.6);}
+      ctx.strokeStyle=accent;ctx.shadowColor=accent;
+      ctx.shadowBlur=3;ctx.globalAlpha=.38;ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.beginPath();
+      for(k=0;k<=K;k++){kk=k%K;var pa=proj(gx(kk),gy(kk),avg[kk]*maxH);k?ctx.lineTo(pa[0],pa[1]):ctx.moveTo(pa[0],pa[1]);}ctx.stroke();ctx.setLineDash([]);
+      ctx.shadowBlur=12;ctx.globalAlpha=1;ctx.lineWidth=2.6;ctx.beginPath();
+      for(k=0;k<=K;k++){kk=k%K;var pt=proj(gx(kk),gy(kk),cur[kk]*maxH);k?ctx.lineTo(pt[0],pt[1]):ctx.moveTo(pt[0],pt[1]);}ctx.stroke();
+      ctx.font="11px 'JetBrains Mono',monospace";ctx.textBaseline='alphabetic';
+      for(k=0;k<K;k++){var al2=AX[k].alert,t=proj(gx(k),gy(k),cur[k]*maxH);
+        ctx.shadowBlur=6;ctx.globalAlpha=1;ctx.fillStyle=al2?'#ff6a6a':accent;ctx.beginPath();ctx.arc(t[0],t[1],al2?3.4:2.3,0,6.29);ctx.fill();
+        var o=proj(gx(k)*1.14,gy(k)*1.14,cur[k]*maxH+.14);ctx.shadowBlur=4;
+        ctx.textAlign=o[0]<W/2-6?'end':o[0]>W/2+6?'start':'center';ctx.fillText(AX[k].disp,o[0],o[1]);ctx.textAlign='start';}
+    }
+    ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.fillStyle='rgba(0,0,0,.24)';for(var y=(Math.random()*3|0);y<H;y+=3)ctx.fillRect(0,y,W,1);
+    ctx.strokeStyle=accent;ctx.globalAlpha=.45;ctx.lineWidth=2;var m=9,s=15;ctx.beginPath();
+    ctx.moveTo(m,m+s);ctx.lineTo(m,m);ctx.lineTo(m+s,m);ctx.moveTo(W-m-s,m);ctx.lineTo(W-m,m);ctx.lineTo(W-m,m+s);
+    ctx.moveTo(m,H-m-s);ctx.lineTo(m,H-m);ctx.lineTo(m+s,H-m);ctx.moveTo(W-m-s,H-m);ctx.lineTo(W-m,H-m);ctx.lineTo(W-m,H-m-s);ctx.stroke();ctx.globalAlpha=1;
+  })();
+  return { update: update };
+}
+var erosRadar = null;
+function ensureErosRadar(){ if(!erosRadar){ var el=document.getElementById('eros-radar'); if(el) erosRadar=radar3d(el,'245,158,11',{tilt:.92,spin:.005,maxH:1.2,k:.34}); } return erosRadar; }
 function renderEros(d) {
     var e = d.eros || {}, g = e.gpu || {}, panel = document.getElementById('panel-eros'), meta = document.getElementById('eros-meta');
     if (panel) panel.style.display = '';
@@ -1321,6 +1416,8 @@ function renderEros(d) {
         _arc('eros-cpu-arc',0); _arc('eros-gpu-arc',0);
         ['eros-mem-bar','eros-disk-bar','eros-vram-bar','eros-net-bar'].forEach(function(i){ _setBar(i,0); });
         var ch=document.getElementById('eros-chips'); if(ch) ch.innerHTML='';
+        var sv=document.getElementById('eros-svc'); if(sv) sv.innerHTML=''; _txt('eros-svc-sum','');
+        var mn=document.getElementById('eros-mnt'); if(mn) mn.innerHTML=''; _txt('eros-mnt-sum','');
         return;
     }
     if (meta) meta.textContent = (d.stale ? 'stale · ' : '') + (e.uptime ? 'up ' + e.uptime : 'online') + (e.cores ? '  ·  ' + e.cores + ' cores' : '');
@@ -1336,10 +1433,50 @@ function renderEros(d) {
     _setBar('eros-vram-bar', g.mem_total ? (g.mem_used / g.mem_total * 100) : 0);
     _txt('eros-net', (e.net_rx_mbs != null ? e.net_rx_mbs : '—') + ' MB/s');
     _setBar('eros-net-bar', e.net_rx_mbs != null ? Math.min(100, e.net_rx_mbs / 125 * 100) : 0);
+    var _r = ensureErosRadar();
+    if (_r) {
+        var vt = g.mem_total ? g.mem_used / g.mem_total : 0,
+            tn = g.temp != null ? Math.max(0, Math.min(1, (g.temp - 30) / 60)) : 0,
+            ln = e.cores ? Math.max(0, Math.min(1, e.load / e.cores)) : 0,
+            mp = (e.mem_used_gb != null && e.mem_total_gb) ? e.mem_used_gb / e.mem_total_gb : 0;
+        _r.update([
+            { disp: 'CPU ' + (e.cpu_pct || 0) + '%', val: (e.cpu_pct || 0) / 100 },
+            { disp: 'GPU ' + (g.util || 0) + '%', val: (g.util || 0) / 100 },
+            { disp: 'VRAM ' + Math.round(vt * 100) + '%', val: vt },
+            { disp: 'TEMP ' + (g.temp != null ? g.temp : '?') + '°', val: tn },
+            { disp: 'NET ' + (e.net_rx_mbs || 0), val: Math.max(0, Math.min(1, (e.net_rx_mbs || 0) / 125)) },
+            { disp: 'DISK ' + (e.disk_pct || 0) + '%', val: (e.disk_pct || 0) / 100 },
+            { disp: 'MEM ' + Math.round(mp * 100) + '%', val: mp },
+            { disp: 'LOAD ' + (e.load != null ? e.load : 0), val: ln }
+        ]);
+    }
     // header facts
     _txt('eros-f-mem', (e.mem_used_gb != null ? e.mem_used_gb : '—') + ' / ' + (e.mem_total_gb != null ? e.mem_total_gb : '—') + ' GB');
     _txt('eros-f-up', e.uptime || '—');
     _txt('eros-f-cores', e.cores != null ? e.cores : '—');
+    // business/service containers (fai / fcsf / ibtakar / bdr / linkedout ...)
+    var svc = document.getElementById('eros-svc');
+    if (svc) {
+        var cs = e.containers || [], down = cs.filter(function(c){ return c.state !== 'running'; }).length;
+        svc.innerHTML = cs.map(function(c){
+            var isdown = c.state !== 'running';
+            var nm = c.name.replace(/^linkedout.*/, 'linkedout').replace(/-nexus$/, '');
+            return '<span class="pk-chip' + (isdown ? ' is-down' : '') + '" title="' + esc(c.name) + ' · ' + esc(c.state) + '">' + esc(nm) + '</span>';
+        }).join('');
+        _txt('eros-svc-sum', cs.length ? ((cs.length - down) + '/' + cs.length + ' up' + (down ? ' · ' + down + ' down' : '')) : '');
+    }
+    // business code tree — /mnt/eros sshfs mount on ARES (BUSINESS/AUTOMATION-IBT ventures)
+    var mnt = document.getElementById('eros-mnt');
+    if (mnt) {
+        var mo = e.mount || {}, fld = mo.folders || [];
+        if (!mo.mounted) {
+            mnt.innerHTML = '<span class="pk-chip is-down">unmounted</span>';
+            _txt('eros-mnt-sum', mo.path || '/mnt/eros');
+        } else {
+            mnt.innerHTML = fld.map(function(f){ return '<span class="pk-chip" title="' + esc((mo.path||'/mnt/eros') + '/BUSINESS/AUTOMATION-IBT/' + f) + '">' + esc(f) + '</span>'; }).join('');
+            _txt('eros-mnt-sum', (mo.path || '/mnt/eros') + ' · ' + fld.length);
+        }
+    }
     // populate the ollama model picker (chat models only)
     var sel = document.getElementById('eros-model');
     if (sel && sel.dataset.filled !== '1') {
@@ -1386,14 +1523,13 @@ function renderBackups(d) {
     _txt('zeus-f-status', b.zeus_reachable ? 'awake' : 'asleep');
     function ssdTile(x) {
         var h = String(x.health || '').toUpperCase(), cls = (h === 'PASSED' || h === 'OK') ? 'ok' : (h === 'FAILED' ? 'bad' : 'run');
-        var hasLife = (x.life != null), C = 113.1, off = hasLife ? (C * (1 - Math.max(0, Math.min(100, x.life)) / 100)).toFixed(1) : C;
-        var use = Math.max(0, Math.min(100, x.use || 0));
+        var use = Math.max(0, Math.min(100, x.use || 0)), C = 113.1, off = (C * (1 - use / 100)).toFixed(1);
+        var lifeTxt = (x.life != null) ? (' · ' + x.life + '% life') : '';
         return '<div class="pk-ssd"><div class="pk-ssd-ring"><svg viewBox="0 0 48 48"><circle class="rt" cx="24" cy="24" r="18"></circle>' +
-               '<circle class="rl" cx="24" cy="24" r="18" stroke-dasharray="113.1" stroke-dashoffset="' + off + '"' + (hasLife ? '' : ' style="opacity:.25"') + '></circle></svg>' +
-               '<div class="pk-ssd-life">' + (hasLife ? x.life + '<small>%</small>' : '<small style="font-size:9px">n/a</small>') + '</div></div>' +
+               '<circle class="rl" cx="24" cy="24" r="18" stroke-dasharray="113.1" stroke-dashoffset="' + off + '"></circle></svg>' +
+               '<div class="pk-ssd-life">' + use + '<small>%</small></div></div>' +
                '<div class="pk-ssd-info"><div class="pk-ssd-name">' + esc(_ssdName(x.name)) + '<span class="pk-ssd-h ' + cls + '">' + (h || '—') + '</span></div>' +
-               '<div class="pk-ssd-sub">' + (hasLife ? 'life left' : 'SMART ok') + (x.temp != null ? ' · ' + x.temp + '°C' : '') + ' · ' + use + '% full</div>' +
-               '<div class="pk-ssd-usebar"><i style="width:' + use + '%"></i></div></div></div>';
+               '<div class="pk-ssd-sub">capacity used' + (x.temp != null ? ' · ' + x.temp + '°C' : '') + lifeTxt + '</div></div></div>';
     }
     if (ss) {
         ss.innerHTML = disks.length
@@ -1403,10 +1539,104 @@ function renderBackups(d) {
     var bkp = document.getElementById('zeus-bkp');
     if (bkp) {
         function bage(o){ return (o && o.epoch) ? _fmtAgo(o.epoch) : '—'; }
-        bkp.innerHTML = 'horcrux pull <b>' + bage(b.ares_to_zeus) + '</b> · ' + (b.zeus_reachable ? 'awake' : 'asleep') + ' · next wake <b>~4:00 AM</b>';
+        function bdot(o){ var s = (o && o.state) || ''; return (s === 'OK') ? 'ok' : (s === 'FAIL' || s === 'UNKNOWN') ? 'bad' : 'run'; }
+        function bst(o){ return (o && o.state) || '—'; }
+        bkp.innerHTML =
+            '<div><div class="pk-vstat-k">Last pull</div><div class="pk-vstat-v">' + bage(b.ares_to_zeus) + '</div></div>' +
+            '<div><div class="pk-vstat-k">Reachability</div><div class="pk-vstat-v"><span class="dot ' + (b.zeus_reachable ? 'ok' : 'run') + '"></span>' + (b.zeus_reachable ? 'awake' : 'asleep') + '</div></div>' +
+            '<div><div class="pk-vstat-k">ARES → ZEUS</div><div class="pk-vstat-v"><span class="dot ' + bdot(b.ares_to_zeus) + '"></span>' + bst(b.ares_to_zeus) + '</div></div>' +
+            '<div><div class="pk-vstat-k">EROS → ZEUS</div><div class="pk-vstat-v"><span class="dot ' + bdot(b.zeus_to_ares) + '"></span>' + bst(b.zeus_to_ares) + '</div></div>';
     }
-    zeusCore();
+    zeusWake();
 }
+// ZEUS wake countdown — live ring + HH:MM:SS to the next 4am horcrux pull
+function zeusWake(){
+    var el = document.getElementById('zeus-wake-t'), arc = document.getElementById('zeus-wake-arc');
+    if (!el) return;
+    var now = new Date(), w = new Date(now); w.setHours(4, 0, 0, 0); if (w <= now) w.setDate(w.getDate() + 1);
+    var rem = Math.max(0, Math.floor((w - now) / 1000));
+    var hh = Math.floor(rem / 3600), mm = Math.floor(rem % 3600 / 60), ss = rem % 60, z = function(n){ return (n < 10 ? '0' : '') + n; };
+    el.textContent = z(hh) + ':' + z(mm) + ':' + z(ss);
+    if (arc) arc.style.strokeDashoffset = (314.16 * (rem / 86400)).toFixed(1);
+}
+setInterval(zeusWake, 1000);
+// ZEUS 3D knowledge graph — force-directed, fed by /api/kg (MNEMOSYNE). Hover a node for its understanding.
+(function kgraphLive(){
+  var el = document.getElementById('zeus-graph'); if (!el) return;
+  var cv = document.createElement('canvas'); cv.style.position='absolute'; cv.style.inset='0'; el.insertBefore(cv, el.firstChild);
+  var ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1);
+  var N = [], L = [], byId = {}, spin = 0, hover = null, mx = -1, my = -1;
+  var zoom = 1, userYaw = 0, pitch = .42, panX = 0, panY = 0, drag = false, lx = 0, ly = 0;
+  var COL = {project:'245,158,11', folder:'56,189,248', 'file-cluster':'34,211,238', vault:'255,90,90',
+             box:'220,240,255', host:'220,240,255', dataset:'129,140,248', service:'74,222,128', database:'129,140,248', vm:'250,204,21', disk:'34,211,238'};
+  function col(k){ return COL[k] || '160,190,210'; }
+  function labelled(n){ return n.kind==='project' || n.kind==='box' || n.kind==='dataset' || n===hover; }
+  function load(){
+    fetch('/api/kg?limit=150').then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok || !d.nodes || !d.nodes.length){ document.getElementById('zg-count').textContent = 'graph empty — run kg reindex'; return; }
+      var prev = {}; N.forEach(function(n){ prev[n.id] = n; });
+      N = d.nodes.map(function(nd){ var p = prev[nd.id] || {};
+        return { id:nd.id, kind:nd.kind, name:nd.name, u:nd.understanding, depth:nd.depth,
+          x:(p.x!=null?p.x:(Math.random()-.5)*6), y:(p.y!=null?p.y:(Math.random()-.5)*6),
+          z:(p.z!=null?p.z:(Math.random()-.5)*6), vx:0, vy:0, vz:0 }; });
+      byId = {}; N.forEach(function(n){ byId[n.id] = n; });
+      L = d.edges.filter(function(e){ return byId[e.src] && byId[e.dst]; }).map(function(e){ return { a:byId[e.src], b:byId[e.dst] }; });
+      document.getElementById('zg-count').textContent = d.shown + '/' + d.total_nodes + ' nodes · ' + d.total_edges + ' edges';
+      var kinds = {}; N.forEach(function(n){ kinds[n.kind] = (kinds[n.kind]||0)+1; });
+      document.getElementById('zg-legend').innerHTML = '<div class="k">Legend</div><div class="lg">' +
+        Object.keys(kinds).map(function(k){ return '<span><i style="background:rgb(' + col(k) + ')"></i>' + k + '</span>'; }).join('') + '</div>';
+    }).catch(function(){ document.getElementById('zg-count').textContent = 'graph offline'; });
+  }
+  function step(){
+    var i, j;
+    for (i=0;i<N.length;i++){ N[i].fx=0; N[i].fy=0; N[i].fz=0; }
+    for (i=0;i<N.length;i++) for (j=i+1;j<N.length;j++){ var a=N[i], b=N[j];
+      var dx=a.x-b.x, dy=a.y-b.y, dz=a.z-b.z, d2=dx*dx+dy*dy+dz*dz+.5, dd=Math.sqrt(d2), f=1.5/d2;
+      dx/=dd; dy/=dd; dz/=dd; a.fx+=dx*f; a.fy+=dy*f; a.fz+=dz*f; b.fx-=dx*f; b.fy-=dy*f; b.fz-=dz*f; }
+    for (var k=0;k<L.length;k++){ var e=L[k], dx=e.b.x-e.a.x, dy=e.b.y-e.a.y, dz=e.b.z-e.a.z, dd=Math.sqrt(dx*dx+dy*dy+dz*dz)+.001, f=.05*(dd-1.5)/dd;
+      e.a.fx+=dx*f; e.a.fy+=dy*f; e.a.fz+=dz*f; e.b.fx-=dx*f; e.b.fy-=dy*f; e.b.fz-=dz*f; }
+    for (i=0;i<N.length;i++){ var n=N[i]; n.fx+=-n.x*.01; n.fy+=-n.y*.01; n.fz+=-n.z*.01;
+      n.vx=(n.vx+n.fx*.1)*.85; n.vy=(n.vy+n.fy*.1)*.85; n.vz=(n.vz+n.fz*.1)*.85; n.x+=n.vx; n.y+=n.vy; n.z+=n.vz; }
+  }
+  function proj(n, W, H){ var yaw=spin+userYaw, c=Math.cos(yaw), s=Math.sin(yaw), x1=n.x*c-n.z*s, z1=n.x*s+n.z*c;
+    var y1=n.y*Math.cos(pitch)-z1*Math.sin(pitch), z2=n.y*Math.sin(pitch)+z1*Math.cos(pitch), K2=9, ooz=1/(K2+z2), Kp=Math.min(W,H)*0.9*zoom;
+    return [W/2+panX+Kp*ooz*x1, H*0.52+panY-Kp*ooz*y1, ooz]; }
+  function frame(){
+    if (!document.getElementById('zeus-graph')) return;
+    requestAnimationFrame(frame);
+    var d=_cvSize(cv, dpr), W=d[0]/dpr, H=d[1]/dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,W,H); spin += .0025; if (N.length) step();
+    ctx.shadowColor = 'rgba(90,190,255,.7)';
+    for (var k=0;k<L.length;k++){ var pa=proj(L[k].a,W,H), pb=proj(L[k].b,W,H);
+      var oz=(pa[2]+pb[2])/2, ea=Math.max(.10, Math.min(.65,(oz-0.05)*7));
+      ctx.strokeStyle='rgba(125,205,255,'+ea+')'; ctx.lineWidth=Math.max(.7, oz*13*zoom); ctx.shadowBlur=oz*7;
+      ctx.beginPath(); ctx.moveTo(pa[0],pa[1]); ctx.lineTo(pb[0],pb[1]); ctx.stroke(); }
+    ctx.shadowBlur = 0;
+    var order = N.map(function(n){ return { n:n, p:proj(n,W,H) }; }).sort(function(a,b){ return a.p[2]-b.p[2]; });
+    hover = null; var best = 260;
+    order.forEach(function(o){ if (mx>=0){ var dxp=o.p[0]-mx, dyp=o.p[1]-my, dm=dxp*dxp+dyp*dyp; if (dm<best){ best=dm; hover=o.n; } } });
+    order.forEach(function(o){ var n=o.n, p=o.p, c=col(n.kind);
+      var r=(n===hover?4.6:(n.kind==='project'?3.4:2.2))*(p[2]*10);
+      ctx.globalAlpha=1; ctx.fillStyle='rgb('+c+')'; ctx.shadowColor='rgb('+c+')'; ctx.shadowBlur=n===hover?15:(n.kind==='project'?9:5);
+      ctx.beginPath(); ctx.arc(p[0],p[1],Math.max(1.3,r),0,6.29); ctx.fill(); ctx.shadowBlur=0;
+      if (labelled(n)){ ctx.globalAlpha=n===hover?1:.7; ctx.fillStyle='rgb('+c+')'; ctx.font=(n===hover?'bold 11px':'9px')+" 'JetBrains Mono',ui-monospace,monospace"; ctx.textAlign='center'; ctx.fillText(n.name, p[0], p[1]-8); ctx.textAlign='start'; } });
+    ctx.globalAlpha=1;
+    var tip=document.getElementById('zg-tip');
+    if (hover){ var pp=proj(hover,W,H); tip.style.display='block'; tip.style.left=Math.min(W-278,pp[0]+12)+'px'; tip.style.top=Math.max(4,pp[1]+12)+'px';
+      tip.innerHTML='<div class="kk">'+esc(hover.kind)+'</div><b>'+esc(hover.name)+'</b><br>'+esc(hover.u||'—'); }
+    else tip.style.display='none';
+  }
+  cv.style.cursor = 'grab';
+  cv.addEventListener('mousemove', function(e){ var r=cv.getBoundingClientRect();
+    if (drag){ userYaw += (e.clientX-lx)*0.008; pitch = Math.max(-0.25, Math.min(1.45, pitch+(e.clientY-ly)*0.006)); lx=e.clientX; ly=e.clientY; mx=-1; return; }
+    mx=e.clientX-r.left; my=e.clientY-r.top; });
+  cv.addEventListener('mouseleave', function(){ mx=-1; my=-1; });
+  cv.addEventListener('mousedown', function(e){ drag=true; lx=e.clientX; ly=e.clientY; cv.style.cursor='grabbing'; });
+  window.addEventListener('mouseup', function(){ if (drag){ drag=false; cv.style.cursor='grab'; } });
+  cv.addEventListener('wheel', function(e){ e.preventDefault(); zoom *= (e.deltaY<0 ? 1.12 : 0.89); zoom=Math.max(.25, Math.min(6, zoom)); }, {passive:false});
+  cv.addEventListener('dblclick', function(){ zoom=1; userYaw=0; pitch=.42; panX=0; panY=0; });
+  load(); setInterval(load, 60000); requestAnimationFrame(frame);
+})();
 // ── cool visuals ──────────────────────────────────────────────────────────
 function _cvSize(cv, dpr){ var r = cv.getBoundingClientRect(); var w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr)); if (cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; } return [cv.width, cv.height]; }
 // ARES CPU load oscilloscope — waveform whose amplitude tracks live SYS_LOAD
@@ -2080,16 +2310,18 @@ function _sizeCanvas(cv) {
     if (cv.height !== bh) cv.height = bh;
     return { w: w, h: h, dpr: dpr };
 }
-function _strokeSeries(ctx, arr, w, h, lo, hi) {
-    var span = (hi - lo) || 1, step = w / (arr.length - 1), started = false;
+function _strokeSeries(ctx, arr, w, h, lo, hi, xoff) {
+    var span = (hi - lo) || 1, step = w / (arr.length - 1), started = false, ly = 0;
     for (var i = 0; i < arr.length; i++) {
         var v = arr[i]; if (v == null) { started = false; continue; }
         var cv = Math.max(lo, Math.min(hi, v));
-        var x = i * step, y = h - ((cv - lo) / span) * (h - 3) - 1.5;
+        var x = (i - xoff) * step, y = h - ((cv - lo) / span) * (h - 3) - 1.5;
         if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+        ly = y;
     }
+    if (started) ctx.lineTo(w, ly);   // extend to right edge so the scroll has no gap
 }
-function _drawChart(c) {
+function _drawChart(c, frac) {
     var g = { w: c._w || c.cv.clientWidth || 300, h: c._h || c.cv.clientHeight || 40, dpr: 1 }, ctx = c.cv.getContext('2d');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, g.w, g.h);
@@ -2104,21 +2336,20 @@ function _drawChart(c) {
         var ser = c.series[si], arr2 = _disp[ser.key];
         if (!arr2 || arr2.length < 2) continue;
         if (ser.fill) {
-            ctx.beginPath(); _strokeSeries(ctx, arr2, g.w, g.h, r[0], r[1]);
+            ctx.beginPath(); _strokeSeries(ctx, arr2, g.w, g.h, r[0], r[1], frac);
             ctx.lineTo(g.w, g.h); ctx.lineTo(0, g.h); ctx.closePath();
             ctx.fillStyle = ser.fill; ctx.fill();
         }
-        ctx.beginPath(); _strokeSeries(ctx, arr2, g.w, g.h, r[0], r[1]);
+        ctx.beginPath(); _strokeSeries(ctx, arr2, g.w, g.h, r[0], r[1], frac);
         ctx.strokeStyle = ser.stroke; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke();
     }
     return r;
 }
-var _rafId = 0, _easeRAF = 0;
-// Charts glide toward the newest samples via a self-stopping rAF ease loop: it
-// runs only while _disp is converging on HIST (~0.4s after each data tick) then
-// idles — so it's NOT a sustained per-frame loop (that 4-canvas-at-retina loop is
-// what caused the old home lag). Backing stays 1x and the size is cached, so no
-// per-frame layout read. On data/resize, kickCharts (re)starts it.
+var _rafId = 0, _chartsOn = 0, _lastKick = 0, _interval = 3000;
+// Charts SCROLL continuously (60fps) like the CPU scope: each frame the line
+// slides left by the fraction of the sample interval elapsed. When a new sample
+// lands, HIST shifts by exactly one and frac resets to 0 — so the hand-off is
+// seamless. Backing is 1x + size cached, so per-frame cost stays low.
 function _sizeAllCharts() {
     for (var i = 0; i < CHARTS.length; i++) {
         var c = CHARTS[i], w = c.cv.clientWidth || 300, h = c.cv.clientHeight || 40;
@@ -2127,36 +2358,29 @@ function _sizeAllCharts() {
         c._w = w; c._h = h;
     }
 }
-function _easeCharts() {
-    var moving = false;
-    for (var i = 0; i < CHARTS.length; i++) {
-        for (var s = 0; s < CHARTS[i].series.length; s++) {
-            var k = CHARTS[i].series[s].key, tgt = HIST[k];
-            if (!tgt) continue;
-            var d = _disp[k];
-            if (!d || d.length !== tgt.length) { _disp[k] = tgt.slice(); continue; }  // length change: snap
-            for (var j = 0; j < tgt.length; j++) {
-                var tv = tgt[j];
-                if (tv == null) { d[j] = null; continue; }
-                if (d[j] == null) { d[j] = tv; continue; }
-                var diff = tv - d[j];
-                if (diff > 0.04 || diff < -0.04) { d[j] += diff * 0.16; moving = true; } else d[j] = tv;
-            }
-        }
-    }
+function _chartLoop() {
+    var frac = _lastKick ? Math.min(1, (performance.now() - _lastKick) / _interval) : 0;
     for (var c = 0; c < CHARTS.length; c++) {
-        var r = _drawChart(CHARTS[c]);
+        var r = _drawChart(CHARTS[c], frac);
         if (CHARTS[c].thermScale) {
             var hi = document.getElementById('th-hi'), lo = document.getElementById('th-lo');
             if (hi) hi.textContent = Math.round(r[1]) + '°C';
             if (lo) lo.textContent = Math.round(r[0]) + '°C';
         }
     }
-    _easeRAF = moving ? requestAnimationFrame(_easeCharts) : 0;
+    if (_chartsOn) requestAnimationFrame(_chartLoop);
 }
 function kickCharts() {
     _sizeAllCharts();
-    if (!_easeRAF) _easeRAF = requestAnimationFrame(_easeCharts);
+    var now = performance.now();
+    if (_lastKick) { var dt = now - _lastKick; if (dt > 500 && dt < 8000) _interval = dt; }
+    _lastKick = now;
+    for (var i = 0; i < CHARTS.length; i++)
+        for (var s = 0; s < CHARTS[i].series.length; s++) {
+            var k = CHARTS[i].series[s].key;
+            if (HIST[k]) _disp[k] = HIST[k].slice();   // snap; the scroll provides the motion
+        }
+    if (!_chartsOn) { _chartsOn = 1; requestAnimationFrame(_chartLoop); }
     _rafId = 0;
 }
 
