@@ -1,0 +1,14 @@
+[Unit]
+Description=ARES source watcher — restarts ares.service on .py change
+After=ares.service
+Wants=ares.service
+
+[Service]
+Type=simple
+WorkingDirectory=/mnt/data/PROJECTS/ARES-DASHBOARD
+ExecStart=/usr/bin/python3 /mnt/data/PROJECTS/ARES-DASHBOARD/system/watcher.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
