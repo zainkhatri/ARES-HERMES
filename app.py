@@ -597,6 +597,12 @@ def zeus_view():
     return render_template("zeus.html", boot=get_system_info())
 
 
+@app.route("/eros")
+@require_auth
+def eros_view():
+    return render_template("eros.html", boot=get_system_info())
+
+
 @app.route("/healthz")
 def healthz():
     """Unauthenticated liveness + drift probe (no secrets). Reports brand, the

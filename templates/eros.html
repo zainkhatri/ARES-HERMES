@@ -1,0 +1,31 @@
+<!DOCTYPE html><html lang="en" data-brand="EROS"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EROS · Compute Engine</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overscroll-behavior-x:none;background:#070608;color:#e8e0ee;
+            font-family:'JetBrains Mono',ui-monospace,monospace;overflow:hidden;
+            display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px}
+  .wm{font-weight:800;font-size:clamp(48px,11vw,150px);letter-spacing:8px;line-height:1;
+      background:linear-gradient(110deg,#f5d0e6,#c8b6ff,#a7f0e0,#ffe6b0,#f5d0e6);
+      background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+      filter:drop-shadow(0 0 26px rgba(200,182,255,.45));animation:pearl 9s linear infinite}
+  @keyframes pearl{to{background-position:300% 0}}
+  .sub{color:#9a8fb0;font-size:12px;letter-spacing:4px;text-transform:uppercase}
+  .soon{color:#c8b6ff;font-size:13px;letter-spacing:3px;border:1px solid rgba(200,182,255,.3);
+        border-radius:5px;padding:8px 16px;background:rgba(200,182,255,.06)}
+  .hint{color:#6b6478;font-size:10px;letter-spacing:1px;position:fixed;bottom:16px}
+  .boxsw{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:2px;
+         border:1px solid rgba(200,182,255,.28);border-radius:6px;overflow:hidden;background:rgba(10,8,14,.7);backdrop-filter:blur(4px)}
+  .boxsw .bs{padding:6px 16px;font-size:12px;font-weight:700;letter-spacing:2px;color:#7a7290;text-decoration:none}
+  .boxsw .bs.bs-ares:hover{color:#ff6a6a}.boxsw .bs.bs-zeus:hover{color:#38bdf8}
+  .boxsw .bs.is-on{color:#070608;background:linear-gradient(110deg,#f5d0e6,#c8b6ff,#a7f0e0);}
+</style></head><body>
+{% include "_switcher.html" %}
+<div class="wm">EROS</div>
+<div class="sub">Compute Engine</div>
+<div class="soon">FULL VIEW · COMING SOON</div>
+<div class="hint">two-finger swipe ← → to change box · or use the switcher</div>
+<script src="/static/box-nav.js"></script>
+</body></html>

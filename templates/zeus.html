@@ -5,7 +5,7 @@
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
   :root{ --zeus:#38bdf8; --zeus-rgb:56,189,248; }
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{height:100%;background:#05070a;color:#dff3ff;font-family:'JetBrains Mono',ui-monospace,monospace;overflow:hidden}
+  html,body{height:100%;background:#05070a;color:#dff3ff;font-family:'JetBrains Mono',ui-monospace,monospace;overflow:hidden;overscroll-behavior-x:none}
   #zeus-graph{position:fixed;inset:0}
   #zeus-graph canvas{position:absolute;inset:0;display:block;cursor:grab}
   .boxsw{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:2px;
@@ -64,4 +64,5 @@
 </div>
 <div class="kg-tip" id="zg-tip"></div>
 <script src="/static/zeus-graph.js"></script>
+<script src="/static/box-nav.js"></script>
 </body></html>
