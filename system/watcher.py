@@ -9,7 +9,10 @@ import os
 import time
 import subprocess
 
-WATCH_DIR = '/srv/mergerfs/PROMETHEUS/ARES'
+# Derive the repo dir from this file — the old hardcoded '/srv/mergerfs/PROMETHEUS/ARES' is the
+# ZEUS/HERMES path and does NOT exist on ARES (/mnt/...), so the watcher monitored 0 files and
+# auto-restart silently never fired (every edit needed a manual restart). Env override kept.
+WATCH_DIR = os.getenv("ARES_WATCH_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WATCH_EXTS = {'.py'}
 SERVICE = 'ares'
 POLL_INTERVAL = 2  # seconds
@@ -18,9 +21,11 @@ RESTART_COOLDOWN = 6  # seconds after restart before re-polling
 
 def get_mtimes():
     mtimes = {}
-    skip_dirs = {'__pycache__', '.venv', '.sessions', 'static', 'node_modules'}
+    skip_dirs = {'__pycache__', '.venv', '.sessions', 'static', 'node_modules', 'site-packages'}
     for root, dirs, files in os.walk(WATCH_DIR):
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in skip_dirs]
+        # Skip hidden dirs, known non-source dirs, AND any virtualenv (`.venv`, `clip-gpu-venv`, …) —
+        # a venv holds thousands of .py and would turn the 2s poll into a stat storm.
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in skip_dirs and 'venv' not in d.lower()]
         for fname in files:
             if any(fname.endswith(ext) for ext in WATCH_EXTS):
                 path = os.path.join(root, fname)

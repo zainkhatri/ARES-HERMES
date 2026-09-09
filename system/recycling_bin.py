@@ -19,11 +19,22 @@ def _meta_path(trash_name: str) -> Path:
     return TRASH_DIR / f"{trash_name}.meta.json"
 
 
+_TRASH_DENY_PREFIXES = ("/etc", "/usr", "/bin", "/sbin", "/lib", "/lib64", "/boot",
+                        "/var", "/root", "/proc", "/sys", "/dev", "/run")
+
 def trash_file(file_path: str) -> dict:
-    """Move a file/directory to the recycling bin with metadata."""
+    """Move a FILE to the recycling bin with metadata."""
     src = Path(file_path).resolve()
     if not src.exists():
         return {"success": False, "error": f"Path does not exist: {file_path}"}
+    # This path can come from the LLM tool (`/api/chat` → trash_file) with model-supplied input.
+    # Refuse to move a whole DIRECTORY (one call could relocate the entire photo library) and refuse
+    # system paths — the legit callers (trash a photo) always pass an individual file under the pool.
+    if src.is_dir():
+        return {"success": False, "error": "refusing to trash a directory"}
+    sp = str(src)
+    if sp == "/" or any(sp == p or sp.startswith(p + "/") for p in _TRASH_DENY_PREFIXES):
+        return {"success": False, "error": "refusing to trash a system path"}
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     trash_name = f"{timestamp}_{src.name}"

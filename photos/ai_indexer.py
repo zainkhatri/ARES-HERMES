@@ -42,7 +42,33 @@ FACE_CROPS_DIR = PROJECT_ROOT / "static" / "faces"
 THUMB_DIR = PROJECT_ROOT / "static" / "thumbs"
 SCREENSHOT_HASHES_FILE = AI_DIR / "screenshot_hashes.json"
 
+# Honor the GPU-loan flag before ANY torch/insightface CUDA context is created. When the RTX 3080
+# is loaned to VM 200/300 (Proxmox hookscript writes .gpu-on-loan), the nightly scan runs as a
+# SEPARATE process from app.py and previously grabbed the GPU anyway — VRAM contention with the
+# gaming VM, violating CLAUDE.md's "never touch GPU while the flag exists". CUDA_VISIBLE_DEVICES=""
+# forces CPUExecutionProvider (already in the providers list), which degrades cleanly.
+if (PROJECT_ROOT / ".gpu-on-loan").exists():
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
 SAVE_EVERY = 200
+
+
+def _atomic_save_npy(path, arr):
+    """Write .npy via temp + os.replace. A bare np.save left a truncated file if the process was
+    killed mid-write (OOM / reboot), and every subsequent np.load then crashed — the likely root
+    cause of the 'face scan silently fails' issue. Atomic replace makes a partial write impossible."""
+    tmp = str(path) + ".tmp.npy"          # ends in .npy → np.save writes exactly this, no append
+    np.save(tmp, arr)
+    os.replace(tmp, str(path))
+
+
+def _load_npy_safe(path):
+    """np.load that returns None on a corrupt/truncated file instead of crashing the scan."""
+    try:
+        return np.load(path)
+    except Exception as e:
+        print(f"[ai_indexer] corrupt/unreadable {path} ({e}) — rebuilding from scratch", file=sys.stderr)
+        return None
 
 
 def thumb_hash(item):
@@ -215,7 +241,7 @@ def scan_faces(photos, rescan=False):
             with open(FACE_INDEX_FILE) as f:
                 existing = json.load(f)
         if FACE_EMB_FILE.exists():
-            existing_face_embs = list(np.load(FACE_EMB_FILE))
+            existing_face_embs = list(_load_npy_safe(FACE_EMB_FILE) or [])
 
     todo = [p for p in photos if thumb_hash(p) and thumb_hash(p) not in existing]
     if not todo:
@@ -293,13 +319,13 @@ def scan_faces(photos, rescan=False):
             with open(FACE_INDEX_FILE, "w") as f:
                 json.dump(face_data, f)
             if all_embs:
-                np.save(FACE_EMB_FILE, np.array(all_embs, dtype=np.float32))
+                _atomic_save_npy(FACE_EMB_FILE, np.array(all_embs, dtype=np.float32))
 
     AI_DIR.mkdir(parents=True, exist_ok=True)
     with open(FACE_INDEX_FILE, "w") as f:
         json.dump(face_data, f)
     if all_embs:
-        np.save(FACE_EMB_FILE, np.array(all_embs, dtype=np.float32))
+        _atomic_save_npy(FACE_EMB_FILE, np.array(all_embs, dtype=np.float32))
 
     elapsed = time.time() - t0
     print(f"\n[faces] Done: {total_faces} faces in {elapsed / 60:.1f}m")
@@ -738,7 +764,7 @@ def scan_video_faces(videos):
         with open(FACE_INDEX_FILE) as f:
             existing = json.load(f)
     if FACE_EMB_FILE.exists():
-        all_embs = list(np.load(FACE_EMB_FILE))
+        all_embs = list(_load_npy_safe(FACE_EMB_FILE) or [])
 
     todo = [v for v in videos if thumb_hash(v) and thumb_hash(v) not in existing]
     if not todo:
@@ -869,13 +895,13 @@ def scan_video_faces(videos):
             with open(FACE_INDEX_FILE, "w") as f:
                 json.dump(face_data, f)
             if all_embs:
-                np.save(FACE_EMB_FILE, np.array(all_embs, dtype=np.float32))
+                _atomic_save_npy(FACE_EMB_FILE, np.array(all_embs, dtype=np.float32))
 
     AI_DIR.mkdir(parents=True, exist_ok=True)
     with open(FACE_INDEX_FILE, "w") as f:
         json.dump(face_data, f)
     if all_embs:
-        np.save(FACE_EMB_FILE, np.array(all_embs, dtype=np.float32))
+        _atomic_save_npy(FACE_EMB_FILE, np.array(all_embs, dtype=np.float32))
 
     elapsed = time.time() - t0
     print(f"\n[video-faces] Done: {total_new_faces} faces in "

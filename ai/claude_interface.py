@@ -131,7 +131,7 @@ def chat_stream(message: str, conversation_history: list, api_key: str,
 
     conversation_history.append({"role": "user", "content": user_content})
 
-    while True:
+    for _ in range(8):   # bound the tool loop — unbounded API cost/loops otherwise (Ollama caps at 6)
         collected_text = ""
 
         try:
@@ -181,5 +181,8 @@ def chat_stream(message: str, conversation_history: list, api_key: str,
 
         # Feed tool results back so the model can continue
         conversation_history.append({"role": "user", "content": tool_results})
+    else:
+        # Loop exhausted without a natural stop — cap it rather than run forever.
+        yield {"type": "text", "content": "\n⚠️ Reached the tool-call limit — stopping here."}
 
     yield {"type": "done"}
