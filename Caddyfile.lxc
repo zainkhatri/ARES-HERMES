@@ -1,0 +1,52 @@
+:80 {
+	root * /usr/share/caddy
+	file_server
+}
+
+:8080 {
+	encode zstd gzip
+
+	@thumbs path /static/thumbs* /static/thumbs_hq* /static/thumbs_preview* /static/face_avatars* /static/faces*
+	handle @thumbs {
+		forward_auth 127.0.0.1:8090 {
+			uri /_authz
+		}
+		root * /mnt/data/PROJECTS/ARES-DASHBOARD
+		file_server
+		header Cache-Control "public, max-age=604800, immutable"
+		header Access-Control-Allow-Origin *
+	}
+
+	@vcache path /static/video_cache/*
+	handle @vcache {
+		forward_auth 127.0.0.1:8090 {
+			uri /_authz
+		}
+		root * /mnt/data/PROJECTS/ARES-DASHBOARD
+		file_server
+		header Cache-Control "public, max-age=86400"
+		header Accept-Ranges bytes
+		header Access-Control-Allow-Origin *
+	}
+
+	@hls path /static/hls/*
+	handle @hls {
+		forward_auth 127.0.0.1:8090 {
+			uri /_authz
+		}
+		root * /mnt/data/PROJECTS/ARES-DASHBOARD
+		file_server
+		header Cache-Control "public, max-age=3600"
+		header Accept-Ranges bytes
+		header Access-Control-Allow-Origin *
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8090 {
+			transport http {
+				read_timeout 600s
+				write_timeout 600s
+			}
+		}
+	}
+}
