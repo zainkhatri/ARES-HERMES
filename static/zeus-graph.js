@@ -131,3 +131,28 @@
   window.KG = window.KG || {};
   window.KG.select = open;   // graph click → open detail
 })();
+(function(){
+  function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+  // expand: pull children and merge into the live graph
+  window.KG = window.KG || {};
+  window.KG.expand = function(id){
+    fetch('/api/kg/children?id='+encodeURIComponent(id)).then(function(r){ return r.json(); }).then(function(d){
+      if (d.ok && window.KG.mergeChildren) window.KG.mergeChildren(d);
+    });
+  };
+  // search: query -> dropdown -> focus+select
+  var q=document.getElementById('zg-q'), box=document.getElementById('zg-results'), t=null;
+  function run(){
+    var v=q.value.trim(); if (!v){ box.style.display='none'; box.innerHTML=''; return; }
+    fetch('/api/kg/search?q='+encodeURIComponent(v)).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok || !d.results.length){ box.innerHTML='<div style="color:#6f8a9c">no matches</div>'; box.style.display='block'; return; }
+      box.innerHTML=d.results.map(function(x){ return '<div data-id="'+esc(x.id)+'"><span class="rk">'+esc(x.kind)+'</span> '+esc(x.name)+'</div>'; }).join('');
+      box.style.display='block';
+      Array.prototype.forEach.call(box.querySelectorAll('div[data-id]'), function(el){ el.onclick=function(){
+        var id=el.getAttribute('data-id'); box.style.display='none'; q.value=el.textContent.trim();
+        if (window.KG.focus) window.KG.focus(id); if (window.KG.select) window.KG.select(id); }; });
+    });
+  }
+  q.addEventListener('input', function(){ clearTimeout(t); t=setTimeout(run, 200); });
+  q.addEventListener('keydown', function(e){ if (e.key==='Escape'){ box.style.display='none'; q.blur(); } });
+})();
