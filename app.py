@@ -23,11 +23,12 @@ from system.system_info import get_system_info
 from ai import llm_interface
 from ai import claude_interface
 from ai.llm_interface import get_usage_stats
-from system.recycling_bin import trash_file, list_trash, restore as restore_trash
+from system.recycling_bin import trash_file, list_trash, restore as restore_trash, TRASH_DIR as _TRASH_DIR
+from photos import trash_review as _trash_review
 from system import files_api
 from system import files_index
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=None)   # built-in /static served private photo tiers with NO auth — replaced by static_files() below
 _flask_secret = os.environ.get("FLASK_SECRET", "")
 assert _flask_secret and "change-in-prod" not in _flask_secret and "replace-me" not in _flask_secret, \
     "FLASK_SECRET must be set to a real random value (see .env)"
@@ -131,6 +132,16 @@ GPU_LOAN_FLAG = os.path.join(_APP_DIR, ".gpu-on-loan")
 if os.path.exists(GPU_LOAN_FLAG):
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
     print("[gpu] .gpu-on-loan present — CPU-only mode (RTX 3080 lent to a VM)")
+
+
+def _gpu_on_loan():
+    """True while the RTX 3080 is lent to a VM (gaming). The borrowing VM gets
+    strict priority: DEFER all CPU video transcode/HLS work until the GPU
+    returns — CPU x264 encodes on the host cores starve the VM's KVM emulator/
+    IO threads and cause input stutter. Live file check (not the startup-time
+    snapshot) so work auto-resumes the moment the flag clears, no restart
+    needed. The Proxmox hookscript writes/removes the flag around VM start/stop."""
+    return os.path.exists(GPU_LOAN_FLAG)
 
 _THUMB_DIR = os.path.join(_APP_DIR, "static", "thumbs")
 _THUMB_HQ_DIR = os.path.join(_APP_DIR, "static", "thumbs_hq")
@@ -412,6 +423,24 @@ def require_auth(f):
             return jsonify({"error": "Not authenticated"}), 401
         return redirect(url_for("login_page"))
     return decorated
+
+
+# Flask's built-in /static route served the private photo tiers (thumbs/faces/hls/…) with NO
+# auth, bypassing the Caddy forward_auth gate — any tailnet peer or the LXC could pull the whole
+# gallery incl. 2048px previews and face crops. static_folder=None disables it; this replacement
+# GATES the private photo dirs behind session/bearer while keeping the app-shell (js/css/vendor/
+# favicons/manifest) public so the login page still renders pre-auth. (On the web path Caddy
+# already serves thumbs directly behind forward_auth — this closes the direct-to-Flask hole.)
+_STATIC_DIR = os.path.join(_APP_DIR, "static")
+_PRIVATE_STATIC = ("thumbs", "thumbs_hq", "thumbs_max", "thumbs_preview",
+                   "faces", "face_avatars", "hls", "video_cache")
+
+@app.route("/static/<path:filename>")
+def static_files(filename):
+    top = filename.split("/", 1)[0]
+    if top in _PRIVATE_STATIC and not (session.get("authenticated") or check_bearer_token()):
+        return ("", 401)
+    return send_from_directory(_STATIC_DIR, filename)   # send_from_directory blocks ../ traversal
 
 
 @app.route("/login", methods=["GET"])
@@ -751,10 +780,77 @@ def final_page():
 def adam_page():
     return render_template("adam.html")
 
+@app.route("/kriti")
+@require_auth
+def kriti_page():
+    return render_template("kriti.html")
+
 @app.route("/script")
 @require_auth
 def script_page():
     return render_template("script.html")
+
+@app.route("/se-course")
+@require_auth
+def se_course_page():
+    return render_template("se_course.html")
+
+@app.route("/api/se-course/eval", methods=["POST"])
+@require_auth
+def se_course_eval():
+    data = request.get_json(force=True) or {}
+    scenario = (data.get("scenario") or "").strip()
+    prompt   = (data.get("prompt")   or "").strip()
+    model_ans= (data.get("model")    or "").strip()
+    user_ans = (data.get("answer")   or "").strip()
+    if not user_ans:
+        return jsonify({"feedback": "Write something first."}), 400
+    SIGMA_FACTS = (
+        "SIGMA COMPUTING — VERIFIED PRODUCT FACTS (use these as ground truth, never contradict them):\n"
+        "- Sigma is a cloud-native BI tool that runs entirely on top of Snowflake (or other CDWs). It does NOT store, cache, or copy user data.\n"
+        "- Every Sigma action generates a SQL query that runs live against the customer's Snowflake warehouse. Sigma is a query layer, not a data layer.\n"
+        "- Snowflake Query History (Activity > Query History in Snowflake UI) shows every SQL query Sigma sends — including generated SQL, execution time, compute used, request ID. This is the audit trail the data team uses.\n"
+        "- Sigma also has a built-in 'View Query' button on individual workbook elements that shows the SQL for that specific element.\n"
+        "- Input Tables: three types — Empty, CSV, Linked. Linked input tables write back to Snowflake with a SIGDS_ prefix. They cannot be queried directly — Sigma creates a warehouse view on top. The write shows up in Snowflake Query History as a DML statement.\n"
+        "- Sigma connects to Snowflake via OAuth (most common), key-pair auth, or basic auth (deprecated). OAuth means Sigma inherits the user's Snowflake role and permissions — no shadow permission model in Sigma.\n"
+        "- Sigma Assistant (AI): uses Snowflake Cortex Analyst. Takes natural language questions, generates SQL against the customer's Snowflake data, returns a chart or table. Has an 'Analysis Breakdown' showing which data source it used and why. SQL button proves it ran against real data.\n"
+        "- Sigma is NOT read-only — it supports write-back via Input Tables. But it does not modify existing data in place; it writes to new tables with SIGDS_ prefix.\n"
+        "- Workbooks: the main Sigma object. Contains pages. Five element types: Data (tables, charts, pivot), Input (input tables), Control (filters, date pickers), UI (text, images), Layout.\n"
+        "- Sigma does NOT create derived tables or cache query results. Sigma does NOT extract data or store it outside the warehouse.\n"
+        "- Permissions are managed in Snowflake, not Sigma. Whatever role the user has in Snowflake is what they can access in Sigma.\n"
+    )
+    sys_p = (
+        "You are a fair SE coach evaluating a trainee's answer to a Sigma Computing sales engineering scenario.\n\n"
+        + SIGMA_FACTS + "\n"
+        "Your job: evaluate the trainee's answer against the MODEL ANSWER. The model answer is the source of truth for what matters — do not dock points for concepts not in the model answer, even if you think they're relevant.\n\n"
+        "Score based on whether they hit the KEY CONCEPTS in the model answer — not polish, not phrasing. "
+        "If they said the same thing in different words, that counts. Only dock for concepts genuinely absent or factually wrong per the Sigma facts above.\n\n"
+        "Use plain text only — no markdown, no bold, no asterisks. Use plain dashes only if listing items.\n"
+        "Format exactly:\n"
+        "SCORE: X/10\n"
+        "WHAT YOU GOT RIGHT: [concepts they nailed]\n"
+        "WHAT YOU MISSED: [real gaps only. If nothing, say 'Nothing major.']\n"
+        "VERDICT: [one honest sentence]\n"
+        "10/10 ANSWER: [perfect version in their voice — what they'd say out loud in the panel]\n\n"
+        "Scoring: 9-10 = nailed it. 7-8 = solid, minor gaps. 5-6 = core idea but missing something important. Below 5 = wrong direction."
+    )
+    user_p = (
+        f"SCENARIO: {scenario}\n"
+        f"QUESTION: {prompt}\n"
+        f"MODEL ANSWER (reference only, never quote directly): {model_ans}\n"
+        f"TRAINEE ANSWER: {user_ans}\n\n"
+        "Before scoring, list every concept from the MODEL ANSWER. "
+        "Then check each one: did the TRAINEE ANSWER mention it, even in different words? "
+        "Only mark something as MISSED if it is genuinely absent from the trainee answer — not if they said it differently. "
+        "Do not dock points for something the trainee said. Read carefully."
+    )
+    import requests as _rq
+    try:
+        r = _rq.post("http://192.168.20.51:7690", json={"prompt": sys_p + "\n\n" + user_p}, timeout=60)
+        feedback = r.json().get("text") or "No response."
+    except Exception as e:
+        feedback = _ollama_complete(sys_p, user_p)
+    return jsonify({"feedback": feedback})
 
 @app.route("/tech")
 @require_auth
@@ -765,6 +861,11 @@ def tech_page():
 @require_auth
 def kayla_page():
     return render_template("kayla.html")
+
+@app.route("/josh")
+@require_auth
+def josh_page():
+    return render_template("josh.html")
 
 
 @app.route("/terminal")
@@ -2494,6 +2595,60 @@ def hermes_alerts():
     return jsonify({"level": level[0], "reasons": reasons, "age_s": int(age), "data": d})
 
 
+@app.route("/api/eros/ask", methods=["POST"])
+@require_auth
+def eros_ask():
+    """Interactive prompt to an Ollama model on EROS (via the host :11434 proxy).
+    Streams tokens back as SSE. Model is chosen client-side from the live model list."""
+    import requests as _rq
+    d = request.json or {}
+    model = (d.get("model") or "llama3.2:3b").strip()
+    prompt = (d.get("prompt") or "").strip()
+    if not prompt:
+        return jsonify({"error": "empty prompt"}), 400
+    host = os.getenv("OLLAMA_HOST") or "http://192.168.20.51:11434"
+    def gen():
+        try:
+            with _rq.post(host + "/api/generate", stream=True, timeout=180,
+                          json={"model": model, "prompt": prompt, "stream": True,
+                                "options": {"num_predict": 400}}) as r:
+                for line in r.iter_lines():
+                    if not line:
+                        continue
+                    try:
+                        o = json.loads(line)
+                    except Exception:
+                        continue
+                    if o.get("response"):
+                        yield "data: " + json.dumps({"t": o["response"]}) + "\n\n"
+                    if o.get("done"):
+                        yield "data: " + json.dumps({"done": True}) + "\n\n"
+        except Exception as e:
+            yield "data: " + json.dumps({"err": str(e)}) + "\n\n"
+    return Response(stream_with_context(gen()), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.route("/api/fleet")
+@require_auth
+def api_fleet():
+    """Cross-machine roll-up (EROS vitals + ARES/ZEUS backup health), written by
+    the ares-fleet.timer collector on the PVE host every 60s. The LXC can't route
+    to the peer IPs, so the host probes and drops a file here (same pattern as
+    /api/alerts and /api/outreach). age_sec lets the UI grey out on a dead
+    collector instead of showing ancient data as live."""
+    path = os.path.join(_APP_DIR, "ai_data", "fleet.json")
+    try:
+        with open(path) as f:
+            d = json.load(f)
+    except Exception:
+        return jsonify({"ok": False, "age_sec": None})
+    d["age_sec"] = int(time.time() - d.get("ts", 0))
+    d["stale"] = d["age_sec"] > 300
+    d["ok"] = True
+    return jsonify(d)
+
+
 @app.route("/api/system-info")
 @require_auth
 def system_info():
@@ -3521,6 +3676,17 @@ def trash_photo():
         _photo_cache["data"] = None
         _month_cache["data"] = None
         _month_json_cache["data"] = None
+        # carry the live thumb so the Recycle Bin grid is instant (best-effort)
+        try:
+            import shutil
+            tn = result.get("trash_name")
+            live_thumb = os.path.join(_THUMB_DIR, name)  # name == "<hash>.jpg"
+            if tn and os.path.exists(live_thumb):
+                dst_dir = os.path.join(str(_TRASH_DIR), "_thumbs")
+                os.makedirs(dst_dir, exist_ok=True)
+                shutil.copy2(live_thumb, os.path.join(dst_dir, tn + ".jpg"))
+        except Exception:
+            pass  # non-fatal — the thumb route regenerates on demand
     return jsonify(result)
 
 
@@ -4402,6 +4568,15 @@ def vault_lock():
     session.pop("vault_unlocked_at", None)
     session.pop("vault_last_active", None)
     _vault_clear_session_key()          # drop the in-memory encryption key
+    # Purge cached vault video transcodes on lock (defense-in-depth; they're vault-key-encrypted
+    # at rest anyway, but nothing derived from vault content should linger past an explicit lock).
+    try:
+        import glob as _glob
+        for _f in _glob.glob(os.path.join(_VAULT_VIDEO_DIR, "*.h264.enc")):
+            try: os.remove(_f)
+            except OSError: pass
+    except Exception:
+        pass
     session.modified = True
     return jsonify({"success": True})
 
@@ -4865,7 +5040,11 @@ def vault_add():
     failed = []
 
     for tk in keys:
-        assert isinstance(tk, str) and len(tk) <= 64 and tk.replace("-","").isalnum(), "bad key"
+        # Validate with an explicit check, not assert (asserts are stripped under `python -O`,
+        # which would let a bad key flow into path building; and a bad key should skip, not 500).
+        if not (isinstance(tk, str) and len(tk) <= 64 and tk.replace("-", "").isalnum()):
+            failed.append(tk)
+            continue
         with _vault_state_lock:
             if tk in _vault_state["items"]:
                 continue
@@ -4933,7 +5112,9 @@ def vault_remove():
     failed = []
 
     for tk in keys:
-        assert isinstance(tk, str) and len(tk) <= 64 and tk.replace("-","").isalnum(), "bad key"
+        if not (isinstance(tk, str) and len(tk) <= 64 and tk.replace("-", "").isalnum()):
+            failed.append(tk)
+            continue
         with _vault_state_lock:
             if tk not in _vault_state["items"]:
                 continue
@@ -5209,6 +5390,47 @@ def vault_video():
     return resp
 
 
+def _vault_video_h264(key, thumb_key, plain_original, src_ext):
+    """H264/mp4 bytes for a vault video. Transcodes on first request (reusing the hardened
+    _transcode_to_h264 — rotation baked, stream-validated, libx264 fallback) so vault videos
+    play regardless of source codec, exactly like the regular gallery. Privacy:
+      • plaintext (the decrypted original + the H264 output) lives ONLY in RAM (/dev/shm),
+        never on persistent disk, and is deleted immediately;
+      • the transcode is cached ENCRYPTED with the vault key (vault_video_cache/<key>.h264.enc),
+        so nothing decrypted ever persists. Returns None if the source can't be transcoded
+        (caller then falls back to streaming the raw original)."""
+    cache = os.path.join(_VAULT_VIDEO_DIR, thumb_key + ".h264.enc")
+    if os.path.isfile(cache):
+        try:
+            with open(cache, "rb") as fh:
+                return _vault_decrypt(key, fh.read())
+        except Exception:
+            try: os.remove(cache)
+            except OSError: pass
+    shm = "/dev/shm" if os.path.isdir("/dev/shm") else _VAULT_VIDEO_DIR
+    src = os.path.join(shm, f"vt-{thumb_key}-src.{(src_ext or 'mov')}")
+    out = os.path.join(shm, f"vt-{thumb_key}-out.mp4")
+    try:
+        with open(src, "wb") as fh: fh.write(plain_original)
+        if not _transcode_to_h264(src, out) or not os.path.isfile(out):
+            return None
+        with open(out, "rb") as fh: h264 = fh.read()
+        try:
+            os.makedirs(_VAULT_VIDEO_DIR, exist_ok=True)
+            tmpc = cache + ".part"
+            with open(tmpc, "wb") as fh: fh.write(_vault_encrypt(key, h264))
+            os.replace(tmpc, cache)
+        except Exception:
+            pass
+        return h264
+    except Exception:
+        return None
+    finally:
+        for p in (src, out, out + ".part"):
+            try: os.remove(p)
+            except OSError: pass
+
+
 @app.route("/api/vault/stream/<thumb_key>")
 @require_auth
 def vault_stream(thumb_key):
@@ -5242,11 +5464,19 @@ def vault_stream(thumb_key):
     except Exception:
         abort(403)
     ext = (entry.get("path") or "").rsplit(".", 1)[-1].lower()
+    dl_name = os.path.basename(entry.get("path") or thumb_key)
     mime = _VIDEO_MIMES.get(ext, "video/mp4")
+    # Transcode to H264 so codecs AVPlayer can't decode (HEVC variants, VP9, etc.) still play —
+    # cached encrypted, plaintext only ever in RAM. Fall back to the raw original if it can't.
+    if ext in _VIDEO_MIMES:
+        h264 = _vault_video_h264(key, thumb_key, plain, ext)
+        if h264 is not None:
+            plain = h264
+            mime = "video/mp4"
+            dl_name = os.path.splitext(dl_name)[0] + ".mp4"
     import io as _io
     resp = send_file(_io.BytesIO(plain), mimetype=mime, as_attachment=False,
-                     conditional=True,
-                     download_name=os.path.basename(entry.get("path") or thumb_key))
+                     conditional=True, download_name=dl_name)
     resp.headers["Accept-Ranges"] = "bytes"
     resp.headers["Content-Length"] = len(plain)
     return resp
@@ -5432,6 +5662,85 @@ def api_photos_all_months():
         "Cache-Control": "public, max-age=120",
         "ETag": etag,
     })
+
+
+@app.route("/api/photos/trash/list")
+@require_auth
+def api_photos_trash_list():
+    return jsonify(_trash_review.list_photo_trash(str(_TRASH_DIR)))
+
+
+@app.route("/api/photos/trash/thumb/<path:trash_name>")
+@require_auth
+def api_photos_trash_thumb(trash_name):
+    tdir = str(_TRASH_DIR)
+    thumb = _trash_review.trash_thumb_path(tdir, trash_name)
+    src = _trash_review.original_file_path(tdir, trash_name)
+    root = os.path.realpath(tdir)
+    if not (os.path.realpath(src).startswith(root + os.sep)
+            and os.path.realpath(thumb).startswith(root + os.sep)):
+        return "not found", 404  # path traversal via ".." in trash_name
+    if not os.path.exists(thumb):
+        if not os.path.exists(src):
+            return "not found", 404
+        os.makedirs(os.path.dirname(thumb), exist_ok=True)
+        try:
+            from PIL import Image
+            im = Image.open(src); im.thumbnail((475, 475))
+            im.convert("RGB").save(thumb, "JPEG", quality=80)
+        except Exception:
+            return "thumb failed", 415  # e.g. video without a still — frontend shows a placeholder
+    return send_file(thumb, mimetype="image/jpeg")
+
+@app.route("/api/photos/trash/restore", methods=["POST"])
+@require_auth
+def api_photos_trash_restore():
+    tn = (request.json or {}).get("trash_name", "")
+    res = restore_trash(tn)
+    if res.get("success"):
+        t = _trash_review.trash_thumb_path(str(_TRASH_DIR), tn)
+        if os.path.exists(t):
+            os.remove(t)
+        _photo_cache["data"] = None; _month_cache["data"] = None
+    return jsonify(res)
+
+@app.route("/api/photos/trash/purge", methods=["POST"])
+@require_auth
+def api_photos_trash_purge():
+    tn = (request.json or {}).get("trash_name", "")
+    return jsonify(_trash_review.purge_item(str(_TRASH_DIR), tn))
+
+@app.route("/api/photos/trash/empty", methods=["POST"])
+@require_auth
+def api_photos_trash_empty():
+    return jsonify(_trash_review.empty_bin(str(_TRASH_DIR)))
+
+
+_blurhash_cache = {"raw": None, "gz": None, "mtime": 0}
+
+@app.route("/api/photos/blurhashes")
+@require_auth
+def api_photos_blurhashes():
+    """{thumb_hash: blurhash} map for progressive blurred placeholders. Fetched lazily by the
+    clients AFTER first paint (not part of the critical all-months path), so it never slows the
+    grid. Static file generated by gen_blurhashes.py; served gzipped + ETag/304."""
+    import gzip as _gzip
+    path = os.path.join(_APP_DIR, "blurhashes.json")
+    try:
+        mtime = int(os.path.getmtime(path))
+    except OSError:
+        return jsonify({})
+    etag = f'"bh-{mtime}"'
+    if request.if_none_match.contains(f"bh-{mtime}"):
+        return Response(status=304, headers={"ETag": etag, "Cache-Control": "public, max-age=300"})
+    if _blurhash_cache["mtime"] != mtime:
+        raw = open(path, "rb").read()
+        _blurhash_cache.update(raw=raw, gz=_gzip.compress(raw, compresslevel=6), mtime=mtime)
+    if "gzip" in request.headers.get("Accept-Encoding", ""):
+        return Response(_blurhash_cache["gz"], mimetype="application/json", headers={
+            "Content-Encoding": "gzip", "Cache-Control": "public, max-age=300", "ETag": etag})
+    return Response(_blurhash_cache["raw"], mimetype="application/json", headers={
+        "Cache-Control": "public, max-age=300", "ETag": etag})
 
 
 @app.route("/api/photos")
@@ -5968,16 +6277,45 @@ def _video_cache_key(src_path):
         return hashlib.sha1(os.path.abspath(src_path).encode()).hexdigest()[:24]
 
 
+def _video_rotation_flag(path):
+    """Degrees of rotation metadata (display matrix / rotate tag), 0 if none.
+    iPhone videos record landscape pixels + a rotation flag. The full-GPU pipeline
+    (-hwaccel_output_format cuda) can't run ffmpeg's autorotate (rotation filters are
+    CPU-only), so it bakes landscape pixels + a flag — and HLS then plays them sideways.
+    A file that STILL has a flag after transcode is an old broken cache to re-bake."""
+    import subprocess
+    try:
+        r = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream_side_data=rotation:stream_tags=rotate",
+             "-of", "default=nw=1:nk=1", path],
+            capture_output=True, timeout=8)
+        for tok in (r.stdout or b"").decode().split():
+            try:
+                if int(float(tok)) % 360 != 0:
+                    return int(float(tok))
+            except ValueError:
+                pass
+    except Exception:
+        pass
+    return 0
+
+
 def _transcode_to_h264(src_path, dest_path):
     """Run ffmpeg with NVENC. Synchronous. Returns True on success."""
     import subprocess
+    if _gpu_on_loan():
+        return False  # GPU lent to a VM — never CPU-transcode while gaming; prewarm recovers after.
     if not _nvenc_available():
         return False
     tmp = dest_path + ".part"
 
-    def _cmd(gpu_decode):
-        """ffmpeg argv. gpu_decode=True keeps decode+scale on the 3080 too."""
-        if gpu_decode and _nvenc_available() == "nvenc":
+    def _cmd(gpu_decode, encoder=None):
+        """ffmpeg argv. gpu_decode=True keeps decode+scale on the 3080 too.
+        encoder='libx264' forces a pure-CPU encode (no NVENC session) — the fallback when
+        the GPU encoder is saturated (concurrent transcodes exhaust NVENC sessions → the
+        nvenc attempts fail fast; libx264 always succeeds on a valid source, just slower)."""
+        if gpu_decode and encoder is None and _nvenc_available() == "nvenc":
             return [
                 "ffmpeg", "-y", "-loglevel", "error",
                 # Full-GPU pipeline: NVDEC decode -> scale_cuda -> NVENC.
@@ -5996,50 +6334,69 @@ def _transcode_to_h264(src_path, dest_path):
                 "-f", "mp4",
                 tmp,
             ]
+        enc = encoder or ("h264_nvenc" if _nvenc_available() == "nvenc" else "libx264")
+        is_nvenc = (enc == "h264_nvenc")
         return [
             "ffmpeg", "-y", "-loglevel", "error",
             "-i", src_path,
             "-map", "0:v:0?", "-map", "0:a:0?",
-            "-c:v", "h264_nvenc" if _nvenc_available() == "nvenc" else "libx264",
-            "-preset", "p4" if _nvenc_available() == "nvenc" else "veryfast",
-            *(["-rc", "vbr", "-cq", "26"] if _nvenc_available() == "nvenc" else ["-crf", "26"]),
+            "-c:v", enc,
+            "-preset", "p4" if is_nvenc else "veryfast",
+            *(["-rc", "vbr", "-cq", "26"] if is_nvenc else ["-crf", "26"]),
             "-pix_fmt", "yuv420p",
             # Cap longest dimension at 1920 while preserving aspect; even-pixel.
             "-vf", "scale='if(gt(iw,ih),min(1920,iw),-2)':\'if(gt(iw,ih),-2,min(1920,ih))\',format=yuv420p",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-max_muxing_queue_size", "1024",
-            *(["-threads", "4"] if _nvenc_available() != "nvenc" else []),
+            *(["-threads", "4"] if not is_nvenc else []),
             "-f", "mp4",
             tmp,
         ]
 
-    try:
-        proc = subprocess.run(_cmd(gpu_decode=True), capture_output=True, timeout=600)
-        if proc.returncode != 0:
-            # Exotic source NVDEC can't handle — fall back to CPU decode.
-            print(f"[video] GPU decode failed for {src_path}; retrying with CPU decode")
-            proc = subprocess.run(_cmd(gpu_decode=False), capture_output=True, timeout=600)
-        if proc.returncode != 0:
-            print(f"[video] transcode failed for {src_path}: {(proc.stderr or b'').decode()[-500:]}")
-            try: os.remove(tmp)
-            except OSError: pass
-            return False
-        # Sanity check: a real transcoded video is always >50KB. ffmpeg
-        # sometimes returns 0 on essentially-empty output (corrupt source,
-        # bad codec). Refuse to commit garbage to the cache.
+    # Rotated sources MUST use CPU decode: the full-GPU path can't autorotate, so it would
+    # bake landscape pixels + a flag that HLS drops -> sideways video. CPU decode autorotates
+    # into the pixels (no flag), so playback is correct regardless of container.
+    rotated = _video_rotation_flag(src_path) != 0
+    MIN_VALID_BYTES = 50 * 1024
+
+    def _output_valid():
+        # ffmpeg sometimes exits 0 while writing a tiny/streamless file (odd HEVC, data
+        # streams, moov-in-free-atom). Accept ONLY a real >50KB mp4 with a decodable video
+        # stream — otherwise the attempt is a failure regardless of returncode.
         try:
-            sz = os.path.getsize(tmp)
+            if os.path.getsize(tmp) < MIN_VALID_BYTES:
+                return False
         except OSError:
-            sz = 0
-        MIN_VALID_BYTES = 50 * 1024
-        if sz < MIN_VALID_BYTES:
-            print(f"[video] transcode produced suspiciously small file ({sz}B) for {src_path}; discarding")
+            return False
+        vp = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=codec_name", "-of", "csv=p=0", tmp],
+            capture_output=True, timeout=15)
+        return vp.returncode == 0 and bool((vp.stdout or b"").strip())
+
+    # Attempts, in order of speed: full-GPU (non-rotated only) → CPU-decode+NVENC → pure CPU
+    # libx264. Each is validated for a real output; a rc=0-but-garbage result (the 262-byte
+    # empty file some rotated HEVCs produced) falls through to the next, so libx264 — which
+    # always works on a valid source — is the guaranteed backstop.
+    attempts = [
+        {"gpu_decode": not rotated},
+        {"gpu_decode": False},
+        {"gpu_decode": False, "encoder": "libx264"},
+    ]
+    try:
+        for i, kw in enumerate(attempts):
+            proc = subprocess.run(_cmd(**kw), capture_output=True, timeout=900)
+            if proc.returncode == 0 and _output_valid():
+                os.replace(tmp, dest_path)
+                return True
             try: os.remove(tmp)
             except OSError: pass
-            return False
-        os.replace(tmp, dest_path)
-        return True
+            if i < len(attempts) - 1:
+                print(f"[video] attempt {i+1} ({kw}) failed for {src_path}; trying next")
+        print(f"[video] all transcode attempts failed for {src_path}: "
+              f"{(proc.stderr or b'').decode()[-400:]}")
+        return False
     except subprocess.TimeoutExpired:
         try: os.remove(tmp)
         except OSError: pass
@@ -6101,6 +6458,9 @@ def _video_prewarm_pass(pass_idx):
     """One full pass over the photo index. Idempotent — _ensure_video_cached
     skips already-cached and already-web-friendly videos so a re-run only
     does work for newly-added or newly-modified videos."""
+    if _gpu_on_loan():
+        print(f"[video-prewarm] pass={pass_idx} skipped — GPU on loan to a VM (deferring CPU transcode)")
+        return {"done": 0, "skipped": 0, "failed": 0}
     items = load_photo_index()
     assert isinstance(items, list), "photo index must be list"
     videos = [i for i in items if i.get("type") == "video"]
@@ -6119,6 +6479,13 @@ def _video_prewarm_pass(pass_idx):
                     cached = os.path.join(_VIDEO_CACHE_DIR, key + ".mp4")
                     hls_dir = os.path.join(_HLS_CACHE_DIR, key)
                     if os.path.exists(cached) and not os.path.exists(os.path.join(hls_dir, "index.m3u8")):
+                        # HLS (re)generation needed — gate the rotation probe here so it runs
+                        # once per video during regen, not on every 5-min pass. Re-bake caches
+                        # left rotated by the pre-fix GPU path (see serve_hls_playlist).
+                        if _video_rotation_flag(cached) != 0:
+                            try: os.remove(cached)
+                            except OSError: pass
+                            _transcode_to_h264(rp, cached)
                         _generate_hls(cached, hls_dir)
         except Exception as e:
             print(f"[video-prewarm] error on {item.get('path','?')}: {e}")
@@ -6334,9 +6701,10 @@ def serve_web_video():
     #    sources that Chrome can't decode natively). No Range/seek on this
     #    first response, but the cached follow-up will be fully seekable.
     _kick_background_transcode(rp, cached, key)
-    if _nvenc_available() is not None:
+    if _nvenc_available() is not None and not _gpu_on_loan():
         return _stream_progressive_transcode(rp)
-    # Fallback if libx264 is somehow missing: serve raw original.
+    # GPU on loan (VM has priority) or libx264 missing: serve raw original —
+    # no CPU x264 encode competing with the VM's cores.
     mime = "video/mp4" if ext in ("mp4", "mov", "m4v") else _VIDEO_MIMES.get(ext, "video/mp4")
     resp = send_file(rp, mimetype=mime, as_attachment=False,
                      conditional=True, download_name=os.path.basename(rp))
@@ -6357,6 +6725,8 @@ def _generate_hls(cached_mp4, hls_dir):
     m3u8 = os.path.join(hls_dir, "index.m3u8")
     if os.path.exists(m3u8):
         return True
+    if _gpu_on_loan():
+        return False  # GPU lent to a VM — defer HLS segmentation (CPU ffmpeg) until it returns.
     key = os.path.basename(hls_dir)
     with _hls_gen_locks_mutex:
         lock = _hls_gen_locks.setdefault(key, threading.Lock())
@@ -6373,7 +6743,13 @@ def _generate_hls(cached_mp4, hls_dir):
                 "-hls_time", "4",
                 "-hls_playlist_type", "vod",
                 "-hls_flags", "independent_segments",
-                "-hls_segment_filename", os.path.join(tmp, "seg%04d.ts"),
+                # fMP4 (not MPEG-TS) segments: TS has no track header, so it DROPS the
+                # rotation display matrix — the NVENC transcode encodes landscape pixels +
+                # a rotate flag, and TS silently loses the flag, so portrait videos played
+                # sideways. fMP4 keeps the matrix in the init segment. Still stream-copy.
+                "-hls_segment_type", "fmp4",
+                "-hls_fmp4_init_filename", "init.mp4",
+                "-hls_segment_filename", os.path.join(tmp, "seg%04d.m4s"),
                 os.path.join(tmp, "index.m3u8"),
             ]
             r = subprocess.run(cmd, capture_output=True, timeout=120)
@@ -6419,6 +6795,14 @@ def serve_hls_playlist():
     cached_mp4 = os.path.join(_VIDEO_CACHE_DIR, key + ".mp4")
 
     if not os.path.exists(os.path.join(hls_dir, "index.m3u8")):
+        # Self-heal old caches transcoded before the rotation fix: a cached MP4 that still
+        # carries a rotation flag was baked wrong (landscape pixels + flag) — drop it so it
+        # re-transcodes via the CPU path with orientation baked into the pixels.
+        if os.path.exists(cached_mp4) and _video_rotation_flag(cached_mp4) != 0:
+            import shutil
+            try: os.remove(cached_mp4)
+            except OSError: pass
+            shutil.rmtree(hls_dir, ignore_errors=True)
         if not os.path.exists(cached_mp4):
             ok = _transcode_to_h264(rp, cached_mp4)
             if not ok:
@@ -6905,6 +7289,11 @@ def rotate_photo():
 
     results = {"rotated": 0, "errors": []}
     for photo_hash in hashes:
+        # Thumb keys are hex hash_path() outputs. Reject anything else so a crafted "hash"
+        # like "../../foo" can't open+overwrite an arbitrary .jpg outside the thumb dirs.
+        if not isinstance(photo_hash, str) or not re.fullmatch(r"[0-9a-f]{8,64}", photo_hash):
+            results["errors"].append(f"{photo_hash}: invalid hash")
+            continue
         ok = False
         for tdir in [_THUMB_DIR, _THUMB_HQ_DIR]:
             tp = os.path.join(tdir, photo_hash + ".jpg")
@@ -8491,6 +8880,59 @@ def api_face_photos(cluster_id):
     return jsonify(results)
 
 
+@app.route("/api/photos/<photo_hash>/faces")
+@require_auth
+def api_photo_faces(photo_hash):
+    """Which faces the system detected in one photo and who it identifies each as.
+    Returns [{bbox, det_score, name, distance, confident}]. name is the cluster that
+    owns the face's emb_idx (confident); otherwise the nearest exemplar guess."""
+    assert photo_hash and "/" not in photo_hash, "bad hash"
+    import numpy as np
+    fi_path = os.path.join(_AI_DIR, "face_index.json")
+    fe_path = os.path.join(_AI_DIR, "face_embeddings.npy")
+    clusters = _ai.get("face_clusters") or {}
+    try:
+        with open(fi_path) as f:
+            faces = json.load(f).get(photo_hash, [])
+    except (OSError, ValueError):
+        faces = []
+    if not faces:
+        return jsonify([])
+
+    # emb_idx -> confident owner name (from each cluster's clustered faces)
+    owner = {}
+    exemplars, ex_names = [], []
+    for c in clusters.values():
+        nm = c.get("name")
+        for i in c.get("emb_indices", []):
+            if nm:
+                owner[i] = nm
+        for ex in c.get("exemplars", []):
+            exemplars.append(ex)
+            ex_names.append(nm or "?")
+    ex_arr = np.asarray(exemplars, dtype=np.float32) if exemplars else None
+    embs = np.load(fe_path, mmap_mode="r") if os.path.exists(fe_path) else None
+
+    ASSIGN_THRESH = 1.05  # matches expand_named_clusters
+    out = []
+    for fc in faces:
+        ei = fc.get("emb_idx")
+        row = {"bbox": fc.get("bbox"), "det_score": round(fc.get("det_score", 0), 3),
+               "name": None, "distance": None, "confident": False}
+        if isinstance(ei, int) and ei in owner:
+            row["name"] = owner[ei]
+            row["confident"] = True
+        elif isinstance(ei, int) and ex_arr is not None and embs is not None and ei < len(embs):
+            d = np.linalg.norm(ex_arr - np.asarray(embs[ei], dtype=np.float32), axis=1)
+            j = int(np.argmin(d))
+            row["distance"] = round(float(d[j]), 3)
+            if d[j] < ASSIGN_THRESH:
+                row["name"] = ex_names[j]
+        out.append(row)
+    out.sort(key=lambda r: -(r["det_score"] or 0))
+    return jsonify(out)
+
+
 @app.route("/api/photos/face/<cluster_id>/name", methods=["POST"])
 @require_auth
 def api_name_face(cluster_id):
@@ -9477,6 +9919,12 @@ def _get_dupes_components(force_rebuild=False):
 @require_auth
 def dupes_review_page():
     return render_template("dupes_review.html")
+
+
+@app.route("/photos/recycle")
+@require_auth
+def photos_recycle_page():
+    return render_template("recycle_bin.html")
 
 
 @app.route("/api/photos/dupes/count")
