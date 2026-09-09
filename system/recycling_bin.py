@@ -64,6 +64,11 @@ def list_trash() -> list[dict]:
 def restore(trash_name: str) -> dict:
     """Restore an item from the recycling bin to its original location."""
     item_path = TRASH_DIR / trash_name
+    # trash_name is client-supplied — it must resolve inside TRASH_DIR (no ../ escape).
+    try:
+        item_path.resolve().relative_to(Path(TRASH_DIR).resolve())
+    except ValueError:
+        return {"success": False, "error": "invalid name"}
     meta_file = _meta_path(trash_name)
 
     if not item_path.exists():
