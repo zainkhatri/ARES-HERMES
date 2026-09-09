@@ -1,0 +1,67 @@
+<!DOCTYPE html><html lang="en" data-brand="ZEUS"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZEUS · Knowledge Graph</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
+  :root{ --zeus:#38bdf8; --zeus-rgb:56,189,248; }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:#05070a;color:#dff3ff;font-family:'JetBrains Mono',ui-monospace,monospace;overflow:hidden}
+  #zeus-graph{position:fixed;inset:0}
+  #zeus-graph canvas{position:absolute;inset:0;display:block;cursor:grab}
+  .boxsw{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:2px;
+         border:1px solid rgba(var(--zeus-rgb),.3);border-radius:6px;overflow:hidden;background:rgba(5,10,16,.7);backdrop-filter:blur(4px)}
+  .boxsw .bs{padding:6px 16px;font-size:12px;font-weight:700;letter-spacing:2px;color:#6f8a9c;text-decoration:none}
+  .boxsw .bs.bs-ares:hover{color:#ff6a6a}.boxsw .bs.bs-eros{opacity:.4;cursor:not-allowed}
+  .boxsw .bs.is-on{color:#05070a;background:var(--zeus);text-shadow:none}
+  .kg-hud{position:fixed;inset:0;pointer-events:none;z-index:5;font-size:11px;letter-spacing:.5px}
+  .kg-hud .cn{position:absolute;color:var(--zeus);text-shadow:0 0 7px rgba(var(--zeus-rgb),.5);line-height:1.55;
+              background:rgba(5,10,16,.55);border:1px solid rgba(var(--zeus-rgb),.22);border-radius:5px;padding:9px 12px;backdrop-filter:blur(3px)}
+  .kg-hud .cn .k{color:#6f8a9c;font-size:8px;letter-spacing:2px;text-transform:uppercase}
+  .kg-hud .cn b{color:#eaf6ff}
+  .kg-hud .tl{top:52px;left:14px}.kg-hud .tr{top:52px;right:14px;text-align:right}
+  .kg-hud .bl{bottom:14px;left:14px}.kg-hud .br{bottom:14px;right:14px;text-align:right}
+  .kg-hud .wm{font-weight:800;font-size:20px;letter-spacing:3px;color:var(--zeus);filter:drop-shadow(0 0 10px rgba(var(--zeus-rgb),.6))}
+  .kg-hud .lg{display:flex;gap:9px;flex-wrap:wrap;margin-top:3px;max-width:280px}
+  .kg-hud .lg span{color:#9fb3c2;font-size:10px}.kg-hud .lg i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:3px;vertical-align:middle}
+  #zg-search{position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:8;width:min(420px,60vw)}
+  #zg-search input{width:100%;background:rgba(5,10,16,.8);border:1px solid rgba(var(--zeus-rgb),.35);border-radius:5px;
+                   color:#eaf6ff;padding:8px 12px;font-family:inherit;font-size:12px;backdrop-filter:blur(4px)}
+  #zg-results{margin-top:3px;background:rgba(5,10,16,.95);border:1px solid rgba(var(--zeus-rgb),.3);border-radius:5px;overflow:hidden;display:none}
+  #zg-results div{padding:6px 12px;font-size:11px;cursor:pointer;border-bottom:1px solid rgba(var(--zeus-rgb),.08)}
+  #zg-results div:hover{background:rgba(var(--zeus-rgb),.14)}
+  #zg-results .rk{color:#6f8a9c;font-size:9px;text-transform:uppercase;letter-spacing:1px}
+  #zg-detail{position:fixed;top:0;right:0;height:100%;width:340px;z-index:9;background:rgba(6,11,17,.94);
+             border-left:1px solid rgba(var(--zeus-rgb),.35);backdrop-filter:blur(6px);transform:translateX(100%);
+             transition:transform .22s ease;padding:20px 18px;overflow:auto}
+  #zg-detail.open{transform:translateX(0)}
+  #zg-detail .dk{color:#6f8a9c;font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-top:14px}
+  #zg-detail .dn{font-size:19px;font-weight:800;color:#eaf6ff;margin-top:2px;word-break:break-word}
+  #zg-detail .du{color:#bcd7e6;font-size:12px;line-height:1.5;margin-top:6px}
+  #zg-detail .dp{color:#7f93a2;font-size:10px;word-break:break-all;margin-top:4px}
+  #zg-detail .nb{color:var(--zeus);font-size:12px;cursor:pointer;padding:3px 0;display:block}
+  #zg-detail .nb:hover{text-decoration:underline}
+  #zg-detail .close{position:absolute;top:10px;right:12px;color:#6f8a9c;cursor:pointer;font-size:16px}
+  #zg-detail button{margin-top:12px;margin-right:6px;background:rgba(var(--zeus-rgb),.16);border:1px solid rgba(var(--zeus-rgb),.4);
+                    color:var(--zeus);border-radius:4px;padding:6px 10px;font-family:inherit;font-size:11px;cursor:pointer}
+  .kg-tip{position:fixed;pointer-events:none;z-index:7;max-width:280px;padding:7px 9px;border:1px solid rgba(var(--zeus-rgb),.4);
+          border-radius:4px;background:rgba(5,10,16,.94);color:#cfe8ff;font-size:11px;line-height:1.4;display:none;box-shadow:0 0 14px rgba(var(--zeus-rgb),.25)}
+  .kg-tip b{color:#7fd4ff}.kg-tip .kk{color:#6f8a9c;font-size:9px;text-transform:uppercase;letter-spacing:1px}
+</style></head><body>
+{% include "_switcher.html" %}
+<div id="zeus-graph"></div>
+<div id="zg-search"><input id="zg-q" placeholder="search the graph…" autocomplete="off"><div id="zg-results"></div></div>
+<div class="kg-hud">
+  <div class="cn tl"><div class="wm">ZEUS</div><div class="k">Knowledge Graph</div><b id="zg-count">loading…</b></div>
+  <div class="cn tr"><div class="k">Backups A→Z / E→Z</div><b id="zg-bkp">—</b><div class="k">Next Wake</div><b id="zg-wake">--:--:--</b></div>
+  <div class="cn bl"><div class="k">Array · SSD Health</div><b id="zg-ssd">—</b></div>
+  <div class="cn br"><div class="k">Legend</div><div class="lg" id="zg-legend"></div><div class="k" style="margin-top:5px">scroll zoom · drag rotate · shift-drag pan · click node</div></div>
+</div>
+<div id="zg-detail"><span class="close" id="zg-close">✕</span>
+  <div class="dk">Node</div><div class="dn" id="zd-name">—</div><div class="dp" id="zd-path"></div>
+  <div class="dk">Understanding</div><div class="du" id="zd-u"></div>
+  <button id="zd-expand">Expand children</button><button id="zd-copy">Copy path</button>
+  <div class="dk">Neighbors</div><div id="zd-nbrs"></div>
+</div>
+<div class="kg-tip" id="zg-tip"></div>
+<script src="/static/zeus-graph.js"></script>
+</body></html>

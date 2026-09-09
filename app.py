@@ -591,6 +591,12 @@ def home():
     return render_template("home.html", boot=get_system_info())
 
 
+@app.route("/zeus")
+@require_auth
+def zeus_view():
+    return render_template("zeus.html", boot=get_system_info())
+
+
 @app.route("/healthz")
 def healthz():
     """Unauthenticated liveness + drift probe (no secrets). Reports brand, the
