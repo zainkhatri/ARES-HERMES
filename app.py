@@ -2649,6 +2649,69 @@ def api_fleet():
     return jsonify(d)
 
 
+@app.route("/api/kg")
+@require_auth
+def api_kg():
+    """Homelab knowledge graph overview for the ZEUS view (read-only)."""
+    from system import kg_query
+    db = kg_query.db_path()
+    if not db:
+        return jsonify({"ok": False, "err": "graph not found"}), 404
+    try:
+        limit = max(10, min(400, int(request.args.get("limit", 150))))
+    except ValueError:
+        limit = 150
+    d = kg_query.overview(db, limit, request.args.get("box"), request.args.get("root"))
+    d["ok"] = True
+    return jsonify(d)
+
+
+@app.route("/api/kg/search")
+@require_auth
+def api_kg_search():
+    from system import kg_query
+    db = kg_query.db_path()
+    if not db:
+        return jsonify({"ok": False, "results": []}), 404
+    try:
+        limit = max(1, min(50, int(request.args.get("limit", 15))))
+    except ValueError:
+        limit = 15
+    r = kg_query.search(db, request.args.get("q", ""), limit)
+    r["ok"] = True
+    return jsonify(r)
+
+
+@app.route("/api/kg/node")
+@require_auth
+def api_kg_node():
+    from system import kg_query
+    db = kg_query.db_path()
+    if not db:
+        return jsonify({"ok": False}), 404
+    n = kg_query.node(db, request.args.get("id", ""))
+    if not n:
+        return jsonify({"ok": False}), 404
+    n["ok"] = True
+    return jsonify(n)
+
+
+@app.route("/api/kg/children")
+@require_auth
+def api_kg_children():
+    from system import kg_query
+    db = kg_query.db_path()
+    if not db:
+        return jsonify({"ok": False, "nodes": [], "edges": []}), 404
+    try:
+        limit = max(1, min(500, int(request.args.get("limit", 200))))
+    except ValueError:
+        limit = 200
+    c = kg_query.children(db, request.args.get("id", ""), limit)
+    c["ok"] = True
+    return jsonify(c)
+
+
 @app.route("/api/system-info")
 @require_auth
 def system_info():
