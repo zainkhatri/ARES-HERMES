@@ -101,3 +101,33 @@
   };
   reload(); setInterval(reload, 60000); requestAnimationFrame(frame);
 })();
+
+(function(){
+  function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+  var panel=document.getElementById('zg-detail');
+  var COL={project:'245,158,11',folder:'56,189,248','file-cluster':'34,211,238',vault:'255,90,90',box:'220,240,255',dataset:'129,140,248',service:'74,222,128',vm:'250,204,21',disk:'34,211,238'};
+  var curPath='';
+  function open(id){
+    if (window.KG && window.KG._setSel) window.KG._setSel(id);
+    fetch('/api/kg/node?id='+encodeURIComponent(id)).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      document.getElementById('zd-name').textContent=d.node.name;
+      document.getElementById('zd-path').textContent=d.node.path; curPath=d.node.path;
+      document.getElementById('zd-u').textContent=d.node.understanding||'—';
+      var nb=document.getElementById('zd-nbrs'); var rows=[];
+      d['in'].forEach(function(e){ rows.push(row(e,'▲ parent')); });
+      d.out.forEach(function(e){ rows.push(row(e,'▼ child')); });
+      nb.innerHTML=rows.join('')||'<span style="color:#6f8a9c;font-size:11px">no neighbors</span>';
+      Array.prototype.forEach.call(nb.querySelectorAll('.nb'), function(x){ x.onclick=function(){ open(x.getAttribute('data-id')); }; });
+      var ex=document.getElementById('zd-expand'); ex.onclick=function(){ if (window.KG) window.KG.expand(id); };
+      panel.classList.add('open');
+    });
+  }
+  function row(e,tag){ var c=COL[e.kind]||'160,190,210';
+    return '<span class="nb" data-id="'+esc(e.id)+'" style="color:rgb('+c+')" title="'+esc(tag)+'">'+esc(e.name)+' <span style="color:#6f8a9c;font-size:9px">'+esc(tag)+'</span></span>'; }
+  document.getElementById('zg-close').onclick=function(){ panel.classList.remove('open'); if (window.KG) window.KG._setSel(null); };
+  document.getElementById('zd-copy').onclick=function(){ if (navigator.clipboard) navigator.clipboard.writeText(curPath); };
+  var _sel=(window.KG&&window.KG.select);
+  window.KG = window.KG || {};
+  window.KG.select = open;   // graph click → open detail
+})();
