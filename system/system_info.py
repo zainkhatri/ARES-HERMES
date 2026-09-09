@@ -494,7 +494,8 @@ def _compute_folder_sizes():
         subdirs = [d for d in os.listdir(POOL_ROOT)
                     if os.path.isdir(os.path.join(POOL_ROOT, d))
                     and not d.startswith(".") and d != "lost+found"
-                    and "BACKUP" not in d.upper()]
+                    and "BACKUP" not in d.upper()
+                    and "SIDEKICK" not in d.upper()]  # HERMES-SIDEKICK etc = backup mirrors, ZEUS owns backups now
     except OSError:
         return _folder_cache.get("data") or []
 
