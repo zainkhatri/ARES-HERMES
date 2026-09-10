@@ -97,9 +97,9 @@ window.KGGraph = function (el, opts) {
       if (n.kind==='project'||n.kind==='box'||n.kind==='dataset'||hot){ ctx.globalAlpha=hot?1:.72; ctx.fillStyle='rgb('+c+')';
         ctx.font=(hot?'bold 12px':'9px')+" 'JetBrains Mono',ui-monospace,monospace"; ctx.textAlign='center'; ctx.fillText(n.name,p[0],p[1]-9); ctx.textAlign='start'; ctx.globalAlpha=1; } }
     var tip=document.getElementById('zg-tip');
-    if (hover && !drag){ var pp=proj(hover,W,H); tip.style.display='block'; tip.style.left=Math.min(window.innerWidth-290,pp[0]+12)+'px'; tip.style.top=(pp[1]+12)+'px';
+    if (tip){ if (hover && !drag){ var pp=proj(hover,W,H); tip.style.display='block'; tip.style.left=Math.min(window.innerWidth-290,pp[0]+12)+'px'; tip.style.top=(pp[1]+12)+'px';
       tip.innerHTML='<div class="kk">'+esc(hover.kind)+'</div><b>'+esc(hover.name)+'</b><br>'+esc(hover.u||'—'); }
-    else tip.style.display='none';
+    else tip.style.display='none'; }
   }
   function nodeAt(cx,cy){ var d=size(),W=d[0]/dpr,H=d[1]/dpr,best=300,found=null;
     N.forEach(function(n){ var p=proj(n,W,H),dx=p[0]-cx,dy=p[1]-cy,dm=dx*dx+dy*dy; if (dm<best){ best=dm; found=n; } }); return found; }
