@@ -2500,11 +2500,11 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
   var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUpperCase();
   var KGBOX = BRAND === 'ZEUS' ? null : BRAND;  // ponytail: null = union graph for ZEUS
   var ACCENT = BRAND === 'ZEUS' ? '56,189,248' : BRAND === 'EROS' ? '245,158,11' : '239,68,68';
-  var card = window.KGGraph(document.getElementById('ares-kg'), { box: KGBOX, accent: ACCENT });
+  var card = window.KGGraph(document.getElementById('ares-kg'), { box: KGBOX, accent: ACCENT, limit: 420 });
   var full = null, ov = document.getElementById('ares-kg-full');
   document.getElementById('ares-kg-expand').onclick = function () {
     ov.style.display = 'block';
-    if (!full) full = window.KGGraph(document.getElementById('ares-kg-full-g'), { box: KGBOX, accent: ACCENT, limit: 150 });
+    if (!full) full = window.KGGraph(document.getElementById('ares-kg-full-g'), { box: KGBOX, accent: ACCENT, limit: 900 });
     else full.reload();
   };
   function close() { ov.style.display = 'none'; }
