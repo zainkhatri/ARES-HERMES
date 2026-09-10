@@ -140,8 +140,8 @@
 
         .mod-head { display:flex; align-items:center; justify-content:space-between; gap:10px;
                     padding:9px 12px; border-bottom:1px solid rgba(var(--ares-rgb),.14); }
-        .mod-title { font-size:13px; letter-spacing:.16em; color:var(--text-2); text-transform:uppercase; }
-        .mod-meta  { font-size:12px; letter-spacing:.1em; color:var(--text-3); }
+        .mod-title { font-size:13.5px; letter-spacing:.14em; color:var(--text-2); text-transform:uppercase; }
+        .mod-meta  { font-size:12.5px; letter-spacing:.08em; color:var(--text-3); }
         /* Pixel-art title glyphs (see pixelGlyphs() JS) — themed to the box accent,
            crisp-scaled like the ASCII wordmark. Purely decorative. */
         .tico { display:inline-block; height:13px; width:auto; margin-right:8px; vertical-align:-2px;
@@ -183,7 +183,7 @@
 
         /* ---- main grid --------------------------------------------------- */
         .hud-grid { flex:1; display:grid; grid-template-columns:326px minmax(0,1fr) 326px; gap:14px;
-                    align-items:start; align-content:center; }
+                    align-items:stretch; align-content:stretch; }
         .hud-grid > * { min-width:0; }
                 /* left column fills to the footer: Operations panel + nav cards grow */
         .hud-grid > .col { align-self:stretch; }
@@ -205,6 +205,17 @@
         #panel-ops .op-body { justify-content:center; }
         .col { display:flex; flex-direction:column; gap:14px; min-width:0; }
         .hud-grid > .col:last-child > .mod:last-child { flex:1 1 0; }
+        /* ARES right column: panel-diskio/panel-net are display:none, so :last-child
+           lands on a hidden panel. Grow Thermals and Telemetry via IDs so they fill
+           the column height instead of leaving a black gap at the bottom. */
+        #panel-thermals { flex:1 1 0; display:flex; flex-direction:column; }
+        #panel-thermals > .mod-body { flex:1 1 auto; display:flex; flex-direction:column; }
+        #panel-thermals .thermal { flex:1; height:auto !important; min-height:40px; }
+        #panel-telemetry { flex:1 1 0; }
+        #panel-telemetry > .mod-body { flex:1 1 auto; display:flex; flex-direction:column; }
+        #panel-telemetry .sparks { flex:1; justify-content:space-around; }
+        #panel-telemetry .spark-row { flex:1; align-items:center; }
+        #panel-telemetry .spark { height:100%; min-height:22px; }
         /* Centre column centres its group vertically instead of pinning the
            tiles to the floor of the viewport. */
         .col-mid { align-self:stretch; justify-content:flex-start; gap:16px; }
@@ -248,7 +259,7 @@
 
         /* ---- operation modules ------------------------------------------- */
         .ops { display:flex; flex-direction:column; gap:10px; }
-        .op { position:relative; display:flex; align-items:center; gap:14px; padding:12px 14px 12px 17px; text-decoration:none;
+        .op { position:relative; display:flex; align-items:center; gap:12px; padding:9px 12px 9px 15px; text-decoration:none;
               border:1px solid var(--ember-dim); background:var(--bg-1); color:var(--text-1); overflow:hidden;
               transition:border-color var(--dur) var(--ease-out), background var(--dur) var(--ease-out); }
         .op::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px;
@@ -259,8 +270,8 @@
                   font-size:10px; font-weight:700; letter-spacing:.06em; color:var(--ares);
                   border:1px solid rgba(var(--ares-rgb),.32); }
         .op-body { flex:1; min-width:0; display:block; }
-        .op-lab { display:block; font-size:8.5px; letter-spacing:.18em; color:var(--text-3); text-transform:uppercase; }
-        .op-name { display:block; font-size:16px; font-weight:600; letter-spacing:.02em; margin-top:2px; }
+        .op-lab { display:block; font-size:9.5px; letter-spacing:.16em; color:var(--text-3); text-transform:uppercase; }
+        .op-name { display:block; font-size:17px; font-weight:600; letter-spacing:.02em; margin-top:2px; }
         .op-arrow { color:var(--text-3); transition:color var(--dur), transform var(--dur); }
         .op:hover .op-name { color:var(--ares); }
         .op:hover .op-arrow { color:var(--ares); transform:translateX(3px); }
@@ -315,15 +326,15 @@
         .v-tile:hover { border-color:var(--ares); }
         .v-tile-key { display:flex; align-items:center; justify-content:space-between; gap:8px;
                       font-size:9px; letter-spacing:.16em; color:var(--text-2); text-transform:uppercase; }
-        .v-tile-tag { color:var(--text-3); font-size:10.5px; letter-spacing:.1em;
+        .v-tile-tag { color:var(--text-3); font-size:11px; letter-spacing:.1em;
                       overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:56%; }
-        .v-tile-num { font-size:27px; font-weight:700; color:var(--text-1); line-height:1.1; margin-top:5px; }
-        .v-tile-num .unit { font-size:12px; color:var(--ares); margin-left:3px; letter-spacing:.04em; }
-        .v-tile-bar { height:3px; margin-top:9px; background:rgba(var(--ares-rgb),.13); overflow:hidden; }
+        .v-tile-num { font-size:30px; font-weight:700; color:var(--text-1); line-height:1.1; margin-top:4px; }
+        .v-tile-num .unit { font-size:13px; color:var(--ares); margin-left:3px; letter-spacing:.04em; }
+        .v-tile-bar { height:3px; margin-top:7px; background:rgba(var(--ares-rgb),.13); overflow:hidden; }
         .v-tile-fill { height:100%; background:var(--accent-color,var(--ares));
                        transition:none;  /* perf: snap (was width 450ms — animated layout every tick) */ }
-        .v-tile-meta { display:flex; justify-content:space-between; gap:8px; margin-top:7px;
-                       font-size:9px; letter-spacing:.06em; color:var(--text-2); }
+        .v-tile-meta { display:flex; justify-content:space-between; gap:8px; margin-top:6px;
+                       font-size:10px; letter-spacing:.06em; color:var(--text-2); }
         .v-tile-meta .lo { color:var(--text-3); }
         .v-tile.warn { border-color:rgba(245,158,11,.5); }
         .v-tile.crit { border-color:var(--red); box-shadow:inset 0 0 22px rgba(239,68,68,.18); }  /* perf: static (was an animated box-shadow) */
@@ -685,10 +696,10 @@
                 <div class="fbreak-head"><span>Where it lives</span><span id="fbreak-total">—</span></div>
                 <div id="fbreak-list"><div class="arr-empty">measuring…</div></div>
             </section>
-            <section class="mod c-tl c-br" id="ares-kg-card" style="flex:0 0 auto">
+            <section class="mod c-tl c-br" id="ares-kg-card" style="flex:1 1 0;min-height:0;display:flex;flex-direction:column">
               <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
                 <span class="mod-meta" id="ares-kg-expand" style="cursor:pointer" title="expand">⤢</span></div>
-              <div class="mod-body" style="position:relative;height:160px;padding:0">
+              <div class="mod-body" style="position:relative;flex:1 1 auto;min-height:180px;padding:0">
                 <div id="ares-kg" style="position:absolute;inset:0"></div></div>
             </section>
         </div>
@@ -745,7 +756,7 @@
                 </div>
             </section>
 
-            <section class="mod c-tr c-br">
+            <section class="mod c-tr c-br" id="panel-thermals">
                 <div class="mod-head">
                     <span class="mod-title">Thermals</span>
                     <span class="mod-meta">
@@ -759,7 +770,7 @@
                 </div>
             </section>
 
-            <section class="mod c-bl c-br">
+            <section class="mod c-bl c-br" id="panel-telemetry">
                 <div class="mod-head">
                     <span class="mod-title">Telemetry</span>
                     <span class="mod-meta"><span id="tel-window">—</span> observed</span>
