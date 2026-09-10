@@ -790,6 +790,13 @@
                     <div class="io-load"><span class="io-load-bar"><i id="load-bar"></i></span><span class="io-load-v" id="load-val">—</span></div>
                 </div>
             </section>
+
+            <section class="mod c-tl c-br" id="ares-kg-card">
+              <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
+                <span class="mod-meta" id="ares-kg-expand" style="cursor:pointer" title="expand">⤢</span></div>
+              <div class="mod-body" style="position:relative;min-height:180px;padding:0">
+                <div id="ares-kg" style="position:absolute;inset:0"></div></div>
+            </section>
         </div>
     </div>
 
@@ -2456,6 +2463,28 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
 
 </script>
 <style>html,body{overscroll-behavior-x:none}</style>
+
+<div id="ares-kg-full" style="display:none;position:fixed;inset:0;z-index:9500;background:#0a0606">
+  <span id="ares-kg-full-close" style="position:fixed;top:12px;right:16px;z-index:9600;color:#ff6a6a;cursor:pointer;font-size:20px">✕</span>
+  <div id="ares-kg-full-g" style="position:absolute;inset:0"></div>
+</div>
+
+<script src="/static/zeus-graph.js"></script>
+<script>
+(function () {
+  if (!window.KGGraph) return;
+  var card = window.KGGraph(document.getElementById('ares-kg'), { box: 'ARES', accent: '239,68,68' });
+  var full = null, ov = document.getElementById('ares-kg-full');
+  document.getElementById('ares-kg-expand').onclick = function () {
+    ov.style.display = 'block';
+    if (!full) full = window.KGGraph(document.getElementById('ares-kg-full-g'), { box: 'ARES', accent: '239,68,68', limit: 150 });
+    else full.reload();
+  };
+  function close() { ov.style.display = 'none'; }
+  document.getElementById('ares-kg-full-close').onclick = close;
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+})();
+</script>
 <script src="/static/box-nav.js"></script>
 </body>
 </html>
