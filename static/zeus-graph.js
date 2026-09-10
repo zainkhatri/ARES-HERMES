@@ -212,8 +212,10 @@ window.KGGraph = function (el, opts) {
     zoom = 1; panX = 0; panY = 0;
     var minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9;
     for (var i=0;i<N.length;i++){ var p=proj(N[i],W,H); if(p[0]<minx)minx=p[0]; if(p[0]>maxx)maxx=p[0]; if(p[1]<miny)miny=p[1]; if(p[1]>maxy)maxy=p[1]; }
-    var z = Math.min(W*0.94/Math.max(1,maxx-minx), H*0.90/Math.max(1,maxy-miny));
-    z = Math.max(0.02, Math.min(3, z));
+    // card (teaser) overfills its box so the graph is big; fullscreen fits-all so nothing clips
+    var fw = TRAVERSABLE ? 0.94 : 1.22, fh = TRAVERSABLE ? 0.92 : 1.18;
+    var z = Math.min(W*fw/Math.max(1,maxx-minx), H*fh/Math.max(1,maxy-miny));
+    z = Math.max(0.02, Math.min(6, z));
     var cx=(minx+maxx)/2, cy=(miny+maxy)/2;
     zoom=z; panX=-(cx-W/2)*z; panY=-(cy-H/2)*z;
     camTarget = null;
