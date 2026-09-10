@@ -319,6 +319,16 @@ html, body {
             </section>
         </div>
 
+        <!-- knowledge graph -->
+        <div class="card-kg" style="grid-column:1/span 3;grid-row:3">
+            <section class="mod c-tl c-br" id="eros-kg-card">
+              <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
+                <span class="mod-meta" id="eros-kg-expand" style="cursor:pointer" title="expand">⤢</span></div>
+              <div class="mod-body" style="position:relative;min-height:160px;padding:0">
+                <div id="eros-kg" style="position:absolute;inset:0"></div></div>
+            </section>
+        </div>
+
         <!-- ollama chat -->
         <div class="card-ollama">
             <section class="mod c-bl c-br">
@@ -618,5 +628,25 @@ setTimeout(fitScale, 120);
 </script>
 
 <script src="/static/box-nav.js"></script>
+<script src="/static/zeus-graph.js"></script>
+<div id="eros-kg-full" style="display:none;position:fixed;inset:0;z-index:9500;background:#070608">
+  <span id="eros-kg-full-close" style="position:fixed;top:12px;right:16px;z-index:9600;color:#f59e0b;cursor:pointer;font-size:20px">✕</span>
+  <div id="eros-kg-full-g" style="position:absolute;inset:0"></div>
+</div>
+<script>
+(function () {
+  if (!window.KGGraph) return;
+  var card = window.KGGraph(document.getElementById('eros-kg'), { box: 'EROS', accent: '245,158,11' });
+  var full = null, ov = document.getElementById('eros-kg-full');
+  document.getElementById('eros-kg-expand').onclick = function () {
+    ov.style.display = 'block';
+    if (!full) full = window.KGGraph(document.getElementById('eros-kg-full-g'), { box: 'EROS', accent: '245,158,11', limit: 150 });
+    else full.reload();
+  };
+  function close() { ov.style.display = 'none'; }
+  document.getElementById('eros-kg-full-close').onclick = close;
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+})();
+</script>
 </body>
 </html>
