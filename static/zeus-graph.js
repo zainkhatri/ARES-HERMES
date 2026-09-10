@@ -28,7 +28,7 @@ window.KGGraph = function (el, opts) {
     var kinds={}; N.forEach(function(n){ kinds[n.kind]=(kinds[n.kind]||0)+1; });
     var lg=document.getElementById('zg-legend'); if (lg) lg.innerHTML = Object.keys(kinds).map(function(k){ return '<span><i style="background:rgb('+col(k)+')"></i>'+k+'</span>'; }).join('');
     var cc=document.getElementById('zg-count'); if (cc) cc.textContent = d.shown+'/'+d.total_nodes+' nodes · '+d.total_edges+' edges';
-    settle(170); alpha = 0; fitView(); fitted = true;     // pre-settle + fit synchronously, then freeze
+    settle(N.length>250?95:170); alpha = 0; fitView(); fitted = true;   // pre-settle + fit synchronously, then freeze (fewer iters for big graphs)
   }
   function reload(){
     var url = '/api/kg?limit=' + LIMIT + (BOX ? '&box=' + encodeURIComponent(BOX) : '');
@@ -58,11 +58,11 @@ window.KGGraph = function (el, opts) {
       e.a.fx+=dx*f;e.a.fy+=dy*f;e.a.fz+=dz*f; e.b.fx-=dx*f;e.b.fy-=dy*f;e.b.fz-=dz*f; }
     for (i=0;i<N.length;i++){ var n=N[i]; n.fx+=-n.x*.02; n.fy+=-n.y*.02; n.fz+=-n.z*.02;
       n.vx=(n.vx+n.fx*.1)*.85; n.vy=(n.vy+n.fy*.1)*.85; n.vz=(n.vz+n.fz*.1)*.85; n.x+=n.vx; n.y+=n.vy; n.z+=n.vz;
-      var rr=Math.sqrt(n.x*n.x+n.y*n.y+n.z*n.z); if (rr>7){ var sc=7/rr; n.x*=sc; n.y*=sc; n.z*=sc; } }  // cap spread — no fly-aways
+      var rr=Math.sqrt(n.x*n.x+n.y*n.y+n.z*n.z); if (rr>11){ var sc=11/rr; n.x*=sc; n.y*=sc; n.z*=sc; } }  // cap spread — bigger sphere so deep trees breathe
   }
   function settle(iters){ for (var s=0;s<iters;s++) step(); }   // run the sim to rest synchronously
   function proj(n,W,H){ var yaw=spin+userYaw,c=Math.cos(yaw),s=Math.sin(yaw),x1=n.x*c-n.z*s,z1=n.x*s+n.z*c;
-    var y1=n.y*Math.cos(pitch)-z1*Math.sin(pitch),z2=n.y*Math.sin(pitch)+z1*Math.cos(pitch),K2=9,ooz=1/(K2+z2),Kp=Math.min(W,H)*0.9*zoom;
+    var y1=n.y*Math.cos(pitch)-z1*Math.sin(pitch),z2=n.y*Math.sin(pitch)+z1*Math.cos(pitch),K2=15,ooz=1/(K2+z2),Kp=Math.min(W,H)*0.9*zoom;
     return [W/2+panX+Kp*ooz*x1, H/2+panY-Kp*ooz*y1, ooz]; }
   // zoom+pan so the entire graph fits the viewport (the "big picture")
   function fitView(){
@@ -88,13 +88,16 @@ window.KGGraph = function (el, opts) {
     hover=null; var best=280;
     if (mx>=0) order.forEach(function(o){ var dxp=o.p[0]-mx,dyp=o.p[1]-my,dm=dxp*dxp+dyp*dyp; if (dm<best){ best=dm; hover=o.n; } });
     for (var oi=0; oi<order.length; oi++){ var o=order[oi], n=o.n, p=o.p, c=col(n.kind), sel=(n.id===selId), hot=(n===hover||sel);
-      var r=(hot?4.8:(n.kind==='project'?3.2:2.0))*(p[2]*10);
+      var ds=n.depth||5, bk=n.kind;                         // depth-tiered size: big folders -> small folders -> files
+      var base = bk==='file-cluster' ? 1.35 : bk==='vault' ? 2.3 : (bk==='box'||bk==='host') ? 5.4
+               : bk==='project' ? 3.0 : ds<=3 ? 5.0 : ds===4 ? 4.2 : ds===5 ? 3.1 : ds===6 ? 2.3 : 1.7;
+      var r=Math.min(26,(hot?base*1.5:base)*(p[2]*10));     // cap so a near-camera node can't balloon
       if (hot){ ctx.shadowColor='rgb('+c+')'; ctx.shadowBlur=14; }     // glow only on the 1-2 hot nodes
       ctx.globalAlpha=1; ctx.fillStyle='rgb('+c+')';
       ctx.beginPath(); ctx.arc(p[0],p[1],Math.max(1.2,r),0,6.29); ctx.fill();
       if (hot) ctx.shadowBlur=0;
       if (sel){ ctx.strokeStyle='rgba('+c+',.85)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(p[0],p[1],Math.max(1.2,r)+4,0,6.29); ctx.stroke(); }
-      if (n.kind==='project'||n.kind==='box'||n.kind==='dataset'||hot){ ctx.globalAlpha=hot?1:.72; ctx.fillStyle='rgb('+c+')';
+      if (n.kind==='project'||n.kind==='box'||n.kind==='dataset'||(n.depth||9)<=4||hot){ ctx.globalAlpha=hot?1:.72; ctx.fillStyle='rgb('+c+')';
         ctx.font=(hot?'bold 12px':'9px')+" 'JetBrains Mono',ui-monospace,monospace"; ctx.textAlign='center'; ctx.fillText(n.name,p[0],p[1]-9); ctx.textAlign='start'; ctx.globalAlpha=1; } }
     var tip=document.getElementById('zg-tip');
     if (tip){ if (hover && !drag){ var pp=proj(hover,W,H); tip.style.display='block'; tip.style.left=Math.min(window.innerWidth-290,pp[0]+12)+'px'; tip.style.top=(pp[1]+12)+'px';
