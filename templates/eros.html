@@ -60,7 +60,10 @@ html, body {
 .mod-body  { padding:12px; }
 
 /* ── switcher bar ── */
-.boxsw { position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:100; display:flex; gap:2px;
+.boxclock { position:fixed; top:9px; right:16px; z-index:101; text-align:right; line-height:1.05; pointer-events:none; }
+.boxclock .t { display:block; font-size:21px; font-weight:800; color:#f6ede9; letter-spacing:2px; font-variant-numeric:tabular-nums; text-shadow:0 0 11px rgba(245,158,11,.5); }
+.boxclock .d { display:block; font-size:9px; letter-spacing:3px; color:#8d6639; margin-top:2px; }
+.boxsw { position:fixed; top:10px; left:16px; z-index:100; display:flex; gap:2px;
          border:1px solid rgba(245,158,11,.28); border-radius:6px; overflow:hidden;
          background:rgba(10,8,2,.7); backdrop-filter:blur(4px); }
 .boxsw .bs { padding:6px 16px; font-size:12px; font-weight:700; letter-spacing:2px; color:#7a7260; text-decoration:none; }
@@ -196,6 +199,7 @@ html, body {
 </head>
 <body>
 {% include "_switcher.html" %}
+<div class="boxclock" id="box-clock"></div>
 
 <div class="hud" id="eros-hud">
 

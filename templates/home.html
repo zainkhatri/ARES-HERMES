@@ -516,6 +516,17 @@
 </head>
 <body>
 <div id="page-fx"></div>   <!-- box-switch wipe: fades out on load, fades in on switch -->
+{% include "_switcher.html" %}
+<div class="boxclock" id="box-clock"></div>
+<style>
+.boxsw{position:fixed;top:10px;left:14px;z-index:9000;display:flex;gap:2px;border:1px solid rgba(var(--ares-rgb),.32);border-radius:6px;overflow:hidden;background:rgba(12,7,7,.72);backdrop-filter:blur(4px)}
+.boxsw .bs{padding:6px 15px;font-size:12px;font-weight:700;letter-spacing:2px;color:#8a7270;text-decoration:none}
+.boxsw .bs.bs-zeus:hover{color:#38bdf8}.boxsw .bs.bs-eros:hover{color:#f59e0b}.boxsw .bs.bs-ares:hover{color:var(--ares)}
+.boxsw .bs.is-on{color:#0a0606;background:var(--ares)}
+.boxclock{position:fixed;top:9px;right:16px;z-index:9000;text-align:right;line-height:1.05;pointer-events:none;font-family:'JetBrains Mono',monospace}
+.boxclock .t{display:block;font-size:21px;font-weight:800;color:var(--text-1);letter-spacing:2px;font-variant-numeric:tabular-nums;text-shadow:0 0 11px rgba(var(--ares-rgb),.5)}
+.boxclock .d{display:block;font-size:9px;letter-spacing:3px;color:var(--text-3);margin-top:2px}
+</style>
 
 
 
@@ -816,7 +827,7 @@
 
     /* ── LAYOUT: ARES HUD is compact up top (content height); EROS + ZEUS fill
        the whole leftover space as a big bottom band, with their real content. ── */
-    .hud-grid { flex:0 0 auto; }
+    .hud-grid { flex:1 1 auto; }
     .peer-band { flex:1 1 auto; min-height:0; display:grid; grid-template-columns:1.15fr 1fr; gap:14px; }
     .peer-band > .mod { display:flex; flex-direction:column; min-height:0; }
     .peer-band > .mod > .mod-body { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
@@ -1006,47 +1017,6 @@
     .kg-tip b{color:#7fd4ff;}.kg-tip .kk{color:#6f8a9c;font-size:9px;letter-spacing:1px;text-transform:uppercase;}
     @media (max-width:900px){ .peer-band { grid-template-columns:1fr; } }
     </style>
-    <div class="peer-band">
-<section class="mod c-tr c-br peer-panel" id="panel-eros">
-                <div class="mod-head pk-hd"><span class="pk-wm"><pre class="a">███████╗██████╗ 
-██╔════╝██╔══██╗
-█████╗  ██████╔╝
-██╔══╝  ██╔══██╗
-███████╗██║  ██║
-╚══════╝╚═╝  ╚═╝</pre><pre class="b"> ██████╗ ███████╗
-██╔═══██╗██╔════╝
-██║   ██║███████╗
-██║   ██║╚════██║
-╚██████╔╝███████║
- ╚═════╝ ╚══════╝</pre></span><div class="pk-facts">
-                        <div class="pk-fact"><div class="pk-fact-k">Processor</div><div class="pk-fact-v">Ryzen 7 5700X</div></div>
-                        <div class="pk-fact"><div class="pk-fact-k">Memory</div><div class="pk-fact-v" id="eros-f-mem">—</div></div>
-                        <div class="pk-fact"><div class="pk-fact-k">Uptime</div><div class="pk-fact-v" id="eros-f-up">—</div></div>
-                        <div class="pk-fact"><div class="pk-fact-k">Cores</div><div class="pk-fact-v" id="eros-f-cores">—</div></div>
-                    </div><span class="pk-meta" id="eros-meta">—</span></div>
-                <div class="mod-body pk-body">
-                    <div class="pk-radar" id="eros-radar"></div>
-                    <div class="pk-meters">
-                        <div><div class="pk-mt-top"><span class="k">Memory</span><span class="v" id="eros-mem">—</span></div><div class="pk-bar"><i id="eros-mem-bar"></i></div></div>
-                        <div><div class="pk-mt-top"><span class="k">Disk /</span><span class="v" id="eros-disk">—</span></div><div class="pk-bar"><i id="eros-disk-bar"></i></div></div>
-                        <div><div class="pk-mt-top"><span class="k">GPU VRAM</span><span class="v" id="eros-vram">—</span></div><div class="pk-bar"><i id="eros-vram-bar"></i></div></div>
-                        <div><div class="pk-mt-top"><span class="k">Net · rx</span><span class="v" id="eros-net">—</span></div><div class="pk-bar"><i id="eros-net-bar"></i></div></div>
-                    </div>
-                    <div class="pk-svc-hd">▸ Services <span class="pk-svc-sum" id="eros-svc-sum"></span></div>
-                    <div class="pk-chips" id="eros-svc"></div>
-                    <div class="pk-svc-hd">▸ Business <span class="pk-svc-sum" id="eros-mnt-sum"></span></div>
-                    <div class="pk-chips" id="eros-mnt"></div>
-                    <div class="pk-chat">
-                        <div class="pk-chat-hd">▸ Ollama <select id="eros-model" title="model"></select></div>
-                        <div class="pk-chat-out" id="eros-chat-out"><span class="pk-chat-hint">ask a model running on the EROS GPU…</span></div>
-                        <form class="pk-chat-in" id="eros-chat-form" autocomplete="off">
-                            <input id="eros-prompt" placeholder="prompt…" autocomplete="off">
-                            <button type="submit" id="eros-send" title="send">▶</button>
-                        </form>
-                    </div>
-                </div>
-            </section>
-    </div>
 </div>
 
 <script>
