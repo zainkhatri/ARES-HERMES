@@ -600,7 +600,41 @@ def zeus_view():
 @app.route("/eros")
 @require_auth
 def eros_view():
-    return render_template("eros.html", boot=get_system_info())
+    # Build EROS boot dict from fleet.json so data-brand="EROS" resolves and the
+    # system panel shows EROS identity. Falls back gracefully if fleet.json is stale.
+    import json as _json
+    _fleet_path = os.path.join(os.path.dirname(__file__), "ai_data", "fleet.json")
+    try:
+        with open(_fleet_path) as _f:
+            _eros = _json.load(_f).get("eros", {})
+    except Exception:
+        _eros = {}
+    _mem_used = _eros.get("mem_used_gb", 0)
+    _mem_total = _eros.get("mem_total_gb", 15.5)
+    _mem_pct = round(_mem_used / _mem_total * 100, 1) if _mem_total else 0
+    _cores = _eros.get("cores", 16)
+    _eros_boot = {
+        "hostname": "EROS",
+        "cpu": f"{_eros.get('cpu_model', 'AMD Ryzen 7 5700X')} ({_cores} threads)",
+        "cpu_percent": _eros.get("cpu_pct", 0),
+        "cpu_temp": _eros.get("gpu", {}).get("temp", 0),  # ponytail: no CPU temp in fleet; GPU temp is closest proxy
+        "memory_total": f"{_mem_total} GB",
+        "memory_used": f"{_mem_used} GB",
+        "memory_percent": _mem_pct,
+        "uptime": _eros.get("uptime", "unknown"),
+        "os": "Proxmox VE / Debian",
+        "kernel": "",
+        "architecture": "x86_64",
+        "python": "",
+        "disks": [],
+        "folders": [],
+        "mordor": {"online": False},
+        "gpu": {"online": False},
+        "crons": [],
+        "io": {},
+        "caps": {},
+    }
+    return render_template("home.html", boot=_eros_boot)
 
 
 @app.route("/healthz")

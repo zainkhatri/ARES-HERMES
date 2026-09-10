@@ -31,6 +31,14 @@
             --text-1:#e9f2fb; --text-2:#90aecb; --text-3:#5a7690; --text-4:#374a5e;
             --amber:#a855f7; --panel-rgb:10,18,32;   /* secondary hue = purple → blue→purple theme */
         }
+        /* EROS: amber palette — mirrors eros.html :root exactly. */
+        html[data-brand="EROS"] {
+            --bg-0:#070608; --bg-1:#0d0a04; --bg-2:#160e06; --bg-3:#1e1409;
+            --ares:#f59e0b; --ares-rgb:245,158,11; --ares-bright:#fbbf24; --ember:#b37a08;
+            --ember-dim:rgba(245,158,11,.22); --grid:rgba(245,158,11,.045); --panel-rgb:14,10,4;
+            --text-1:#f6ede9; --text-2:#c9a080; --text-3:#8d6639; --text-4:#5a3f22;
+            --amber:#f59e0b;
+        }
         /* ZEUS density: it carries more panels than ARES, so tighten the gaps a
            touch to fit shorter MacBook viewports without scroll (no transform:scale). */
         html[data-brand="ZEUS"] .hud { gap:10px; padding-top:calc(10px + var(--sat)); padding-bottom:calc(10px + var(--sab)); }
@@ -636,15 +644,20 @@
         <div class="col col-mid">
             <div class="mark">{% if boot and (boot.hostname or '')|upper == 'ZEUS' %}<pre class="m-ar">███████╗███████╗
 ╚══███╔╝██╔════╝
-  ███╔╝ █████╗  
- ███╔╝  ██╔══╝  
+  ███╔╝ █████╗
+ ███╔╝  ██╔══╝
 ███████╗███████╗
 ╚══════╝╚══════╝</pre><pre class="m-es">██╗   ██╗███████╗
 ██║   ██║██╔════╝
 ██║   ██║███████╗
 ██║   ██║╚════██║
 ╚██████╔╝███████║
- ╚═════╝ ╚══════╝</pre>{% else %}<pre class="m-ar"> █████╗ ██████╗ 
+ ╚═════╝ ╚══════╝</pre>{% elif boot and (boot.hostname or '')|upper == 'EROS' %}<pre class="m-ar">███████╗██████╗  ██████╗ ███████╗
+██╔════╝██╔══██╗██╔═══██╗██╔════╝
+█████╗  ██████╔╝██║   ██║███████╗
+██╔══╝  ██╔══██╗██║   ██║╚════██║
+███████╗██║  ██║╚██████╔╝███████║
+╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝</pre>{% else %}<pre class="m-ar"> █████╗ ██████╗
 ██╔══██╗██╔══██╗
 ███████║██████╔╝
 ██╔══██║██╔══██╗
@@ -671,6 +684,12 @@
             <section class="fbreak">
                 <div class="fbreak-head"><span>Where it lives</span><span id="fbreak-total">—</span></div>
                 <div id="fbreak-list"><div class="arr-empty">measuring…</div></div>
+            </section>
+            <section class="mod c-tl c-br" id="ares-kg-card">
+              <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
+                <span class="mod-meta" id="ares-kg-expand" style="cursor:pointer" title="expand">⤢</span></div>
+              <div class="mod-body" style="position:relative;min-height:180px;padding:0">
+                <div id="ares-kg" style="position:absolute;inset:0"></div></div>
             </section>
         </div>
 
@@ -791,12 +810,6 @@
                 </div>
             </section>
 
-            <section class="mod c-tl c-br" id="ares-kg-card">
-              <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
-                <span class="mod-meta" id="ares-kg-expand" style="cursor:pointer" title="expand">⤢</span></div>
-              <div class="mod-body" style="position:relative;min-height:180px;padding:0">
-                <div id="ares-kg" style="position:absolute;inset:0"></div></div>
-            </section>
         </div>
     </div>
 
