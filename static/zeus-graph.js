@@ -4,7 +4,7 @@ window.KGGraph = function (el, opts) {
   var BOX = (opts.box == null ? null : opts.box);
   var ACCENT = opts.accent || '125,205,255';
   var LIMIT = opts.limit || 90;
-  var onNodeCb = null, rafId = null, alive = true;
+  var onNodeCb = null, rafId = null, alive = true, api = null, pollId = null;
   var cv = document.createElement('canvas'); el.appendChild(cv);
   var ctx = cv.getContext('2d'), dpr = 1;                 // 1 = far fewer pixels to clear/draw each frame
   var N = [], L = [], byId = {}, spin = 0, hover = null, mx = -1, my = -1, selId = null;
@@ -113,10 +113,10 @@ window.KGGraph = function (el, opts) {
   cv.addEventListener('contextmenu', function(e){ e.preventDefault(); });
   cv.addEventListener('wheel', function(e){ e.preventDefault(); zoom*=(e.deltaY<0?1.12:0.89); zoom=Math.max(.06,Math.min(8,zoom)); }, {passive:false});
   cv.addEventListener('dblclick', function(e){ var r=cv.getBoundingClientRect(),n=nodeAt(e.clientX-r.left,e.clientY-r.top);
-    if (n && window.KG && window.KG.expand){ window.KG.expand(n.id); } else { userYaw=0; pitch=.42; fitView(); } });
+    if (n && api && api.expand){ api.expand(n.id); } else { userYaw=0; pitch=.42; fitView(); } });
   cv.addEventListener('click', function(e){ var r=cv.getBoundingClientRect(),n=nodeAt(e.clientX-r.left,e.clientY-r.top);
     if (n){ if (onNodeCb) onNodeCb(n.id); } });
-  var api = {
+  api = {
     reload: reload, fitView: fitView, mergeChildren: mergeChildren,
     select: function (id) { selId = id; },
     _setSel: function (id) { selId = id; },   // ponytail: kept for detail-panel IIFE compat
@@ -125,9 +125,9 @@ window.KGGraph = function (el, opts) {
     byId: function (id) { return byId[id]; },
     _byId: function (id) { return byId[id]; }, // ponytail: kept for any legacy callers
     onNode: function (cb) { onNodeCb = cb; },
-    destroy: function () { alive = false; if (rafId) cancelAnimationFrame(rafId); if (el.contains(cv)) el.removeChild(cv); }
+    destroy: function () { alive = false; if (rafId) cancelAnimationFrame(rafId); if (pollId) clearInterval(pollId); if (el.contains(cv)) el.removeChild(cv); }
   };
-  reload(); setInterval(reload, 60000); rafId = requestAnimationFrame(frame);
+  reload(); pollId = setInterval(reload, 60000); rafId = requestAnimationFrame(frame);
   return api;
 };
 // backward-compat auto-init for the ZEUS full-screen view
