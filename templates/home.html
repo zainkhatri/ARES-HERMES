@@ -39,6 +39,17 @@
             --text-1:#f6ede9; --text-2:#c9a080; --text-3:#8d6639; --text-4:#5a3f22;
             --amber:#f59e0b;
         }
+        /* EROS/ZEUS: hide ARES-specific panels that have no data. CSS fires before JS. */
+        html[data-brand="EROS"] #panel-gpu,
+        html[data-brand="EROS"] #panel-jobs,
+        html[data-brand="EROS"] #panel-ops .op-photos,
+        html[data-brand="EROS"] #tel-gpu-row,
+        html[data-brand="EROS"] #th-gpu-key,
+        html[data-brand="ZEUS"]  #panel-gpu,
+        html[data-brand="ZEUS"]  #panel-jobs,
+        html[data-brand="ZEUS"]  #panel-ops,
+        html[data-brand="ZEUS"]  #tel-gpu-row,
+        html[data-brand="ZEUS"]  #th-gpu-key { display:none !important; }
         /* ZEUS density: it carries more panels than ARES, so tighten the gaps a
            touch to fit shorter MacBook viewports without scroll (no transform:scale). */
         html[data-brand="ZEUS"] .hud { gap:10px; padding-top:calc(10px + var(--sat)); padding-bottom:calc(10px + var(--sab)); }
@@ -541,16 +552,29 @@
 .boxsw{position:fixed;top:10px;left:14px;z-index:9000;display:flex;gap:2px;border:1px solid rgba(var(--ares-rgb),.32);border-radius:6px;overflow:hidden;background:rgba(12,7,7,.72);backdrop-filter:blur(4px)}
 .boxsw .bs{padding:6px 15px;font-size:12px;font-weight:700;letter-spacing:2px;color:#8a7270;text-decoration:none}
 .boxsw .bs.bs-zeus:hover{color:#38bdf8}.boxsw .bs.bs-eros:hover{color:#f59e0b}.boxsw .bs.bs-ares:hover{color:var(--ares)}
-.boxsw .bs.is-on{color:#0a0606;background:var(--ares)}
+.boxsw .bs.is-on{color:var(--bg-0);background:var(--ares)}
 .boxclock{position:fixed;top:9px;right:16px;z-index:9000;text-align:right;line-height:1.05;pointer-events:none;font-family:'JetBrains Mono',monospace}
 .boxclock .t{display:block;font-size:21px;font-weight:800;color:var(--text-1);letter-spacing:2px;font-variant-numeric:tabular-nums;text-shadow:0 0 11px rgba(var(--ares-rgb),.5)}
 .boxclock .d{display:block;font-size:9px;letter-spacing:3px;color:var(--text-3);margin-top:2px}
+/* fleet freshness badge on non-ARES boxes */
+.fleet-fresh{position:fixed;bottom:10px;right:14px;z-index:9000;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--text-3);pointer-events:none}
+.fleet-fresh.stale{color:#ef4444}
 </style>
 
 
 
+{% if (boot.hostname or '')|upper != 'ARES' %}
+<div class="fleet-fresh" id="fleet-fresh-badge"></div>
+{% endif %}
 <script id="ares-boot" type="application/json">{{ boot|default(none)|tojson }}</script>
-<script>try{window.__BOOT=JSON.parse(document.getElementById('ares-boot').textContent);}catch(e){window.__BOOT=null;}</script>
+<script>
+try{window.__BOOT=JSON.parse(document.getElementById('ares-boot').textContent);}catch(e){window.__BOOT=null;}
+// Server-injected fleet data for non-ARES brands (EROS/ZEUS). Null on ARES.
+window.__FLEET_EROS = {{ (fleet_eros|default(none))|tojson }};
+window.__FLEET_TS   = {{ (fleet_ts|default(0))|tojson }};
+// BRAND is the authoritative box identity for this page — hoisted so all gating below can use it.
+var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUpperCase();
+</script>
 
 <div class="hud">
 
@@ -596,9 +620,28 @@
             <section class="mod c-bl c-tr" id="panel-ops">
                 <div class="mod-head">
                     <span class="mod-title">Operation modules</span>
-                    <span class="mod-meta">05 active</span>
+                    <span class="mod-meta" id="ops-meta">{% if (boot.hostname or '')|upper == 'EROS' %}services{% else %}05 active{% endif %}</span>
                 </div>
                 <div class="mod-body">
+{% if (boot.hostname or '')|upper == 'EROS' %}
+                    <!-- EROS: Services (container list from fleet data) only -->
+                    <div class="peer-ops" id="eros-ops-svc-wrap" style="flex:1;display:flex;flex-direction:column;gap:5px;overflow-y:auto;padding:6px 12px">
+                        <div style="font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--text-3);margin-bottom:4px">Services <span id="eros-ops-svc-sum" style="color:var(--ares);letter-spacing:.06em;margin-left:6px">{% if fleet_eros %}{{ fleet_eros.containers|selectattr('state','eq','running')|list|length }}/{{ fleet_eros.containers|length }} up{% else %}—{% endif %}</span></div>
+                        <div id="eros-ops-svc-list">
+{% if fleet_eros and fleet_eros.containers %}
+{% for c in fleet_eros.containers %}
+                        <div class="op" style="cursor:default;flex:0 0 auto">
+                            <span class="op-num" style="font-size:10px">{{ '%03d'|format(loop.index) }}</span>
+                            <span class="op-body"><span class="op-lab">{{ 'running' if c.state == 'running' else c.state }}</span><span class="op-name" style="font-size:12px">{{ c.name.replace('linkedout-linkedout-1','linkedout').replace('-nexus','') }}</span></span>
+                            <span class="op-dot {% if c.state == 'running' %}ok{% else %}bad{% endif %}"></span>
+                        </div>
+{% endfor %}
+{% else %}
+                        <div class="arr-empty">loading…</div>
+{% endif %}
+                        </div>
+                    </div>
+{% else %}
                     <nav class="ops">
                         <a href="/photos" class="op op-photos">
                             <span class="op-num">001</span>
@@ -626,6 +669,7 @@
                             <svg class="op-arrow" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
                         </a>
                     </nav>
+{% endif %}
                 </div>
             </section>
 
@@ -1657,9 +1701,25 @@ async function pollFleet() {
     _fleetBusy = true;
     try {
         var d = await fetch('/api/fleet').then(function(r){ return r.json(); });
-        if (d && d.ok) { renderEros(d); renderBackups(d); }
+        if (d && d.ok) {
+            renderEros(d); renderBackups(d);
+            if (BRAND !== 'ARES' && d.ts) { window.__FLEET_TS = d.ts; updateFleetFreshness(); }
+        }
     } catch (e) {}
     finally { _fleetBusy = false; }
+}
+// Fleet freshness badge for non-ARES boxes — shows how old the fleet.json data is.
+function updateFleetFreshness() {
+    var el = document.getElementById('fleet-fresh-badge');
+    if (!el) return;
+    var ts = window.__FLEET_TS;
+    if (!ts) { el.textContent = ''; return; }
+    var age = Math.floor(Date.now() / 1000) - ts;
+    var stale = age > 900;  // >15 min = stale
+    var txt = age < 60 ? 'fleet <1m ago' : age < 3600 ? 'fleet ' + Math.floor(age / 60) + 'm ago' : 'fleet ' + Math.floor(age / 3600) + 'h ago';
+    if (stale) txt += ' · STALE';
+    el.textContent = txt;
+    el.className = 'fleet-fresh' + (stale ? ' stale' : '');
 }
 
 function fmtN(n) { n = +n || 0; return n >= 1000 ? n.toLocaleString() : String(n); }
@@ -1765,16 +1825,20 @@ function applyCaps(caps) {
     if (_capsApplied) return;             // DOM show/hide is static per box — do it once
     _capsApplied = true;
     var show = function(sel, on) { var ns = document.querySelectorAll(sel); for (var k = 0; k < ns.length; k++) ns[k].style.display = on ? '' : 'none'; };
-    show('#panel-gpu', caps.gpu !== 0);
-    show('#tel-gpu-row', caps.gpu !== 0);
-    show('#th-gpu-key', caps.gpu !== 0);
+    var isEros = BRAND === 'EROS';
+    // GPU panel: ARES-only (EROS GPU lives in the peer-band panel, not panel-gpu)
+    show('#panel-gpu', !isEros && caps.gpu !== 0);
+    show('#tel-gpu-row', !isEros && caps.gpu !== 0);
+    show('#th-gpu-key', !isEros && caps.gpu !== 0);
     show('#panel-net', caps.docker === 1);        // ZEUS: network throughput
     show('#panel-diskio', caps.docker === 1);     // ZEUS: disk I/O + load
+{% if (boot.hostname or '')|upper == 'ARES' %}
     show('.op-photos', caps.photos !== 0);
     show('.op-journals', caps.journals !== 0);
+{% endif %}
     show('#panel-containers', false);             // Services panel removed on ZEUS
-    show('#panel-jobs', caps.docker !== 1);       // Scheduled jobs: ARES only (removed on ZEUS)
-    show('#panel-ops', caps.docker !== 1);        // ARES: operation modules
+    show('#panel-jobs', !isEros && caps.docker !== 1);  // Scheduled jobs: ARES only
+    show('#panel-ops', isEros || caps.docker !== 1);    // Show on ARES + EROS; hide on ZEUS
     show('#panel-outreach', caps.docker === 1);   // ZEUS: outreach stats
     show('#panel-attention', caps.docker === 1);  // ZEUS: needs-attention rollup
     show('#panel-weekly', caps.docker === 1);     // ZEUS: weekly trend
@@ -1974,6 +2038,8 @@ function applyVitals(i) {
             var _BR = document.documentElement.getAttribute('data-brand');
             var TC = (_BR === 'ZEUS')
                 ? {temp:'#38bdf8', cpu:'#6366f1', mem:'#a855f7', gpu:'#818cf8', pool:'#7c3aed'}
+                : (_BR === 'EROS')
+                ? {temp:'#f59e0b', cpu:'#f59e0b', mem:'#fb923c', gpu:'#fbbf24', pool:'#d97706'}
                 : {temp:'#fb923c', cpu:'#ef4444', mem:'#f43f5e', gpu:'#eab308', pool:'#ea580c'};
             var tiles = [];
             if (i.cpu_temp != null) {
@@ -1981,27 +2047,27 @@ function applyVitals(i) {
             }
             tiles.push({k:'cpu', key:'CPU', tag:'load', num:i.cpu_percent, unit:'%', meta:'<span class="lo">idle</span><span>peak</span>', pct:i.cpu_percent, color:TC.cpu});
             tiles.push({k:'mem', key:'MEM', tag:'usage', num:i.memory_percent, unit:'%', meta:'<span>' + i.memory_used + '</span><span class="lo">/ ' + i.memory_total + '</span>', pct:i.memory_percent, color:TC.mem});
-            // ZEUS has no GPU and its pool lives in the array map \u2014 skip both tiles
-            // (fewer tiles also helps ZEUS fit on one screen).
-            if (_BR !== 'ZEUS') {
-                if (g.online) {
-                    tiles.push({k:'gpu', key:'GPU', tag:(g.name ? g.name.replace('NVIDIA GeForce ','') : 'GPU'), num:g.temp_c, unit:'\u00b0C ' + g.util_pct + '%', meta:'<span>' + g.power_w.toFixed(0) + 'W</span><span class="lo">VRAM ' + (g.vram_used_mib/1024).toFixed(1) + '/' + (g.vram_total_mib/1024).toFixed(0) + 'G</span>', pct:(g.vram_total_mib ? Math.min(100,(g.vram_used_mib/g.vram_total_mib)*100) : g.util_pct), color:TC.gpu});
-                } else {
-                    tiles.push({k:'gpu', key:'GPU', tag:'RTX 3080', num:'\u2014', unit:'', meta:'<span class="lo">in VM 200</span><span></span>', pct:0, color:'#2d3a4e'});
-                }
-                if (pool) {
-                    tiles.push({k:'pool', key:'POOL', tag:DRIVE_TAG['PROMETHEUS'], num:pool.percent, unit:'%', meta:'<span>' + pool.used + '</span><span class="lo">/ ' + pool.total + '</span>', pct:pool.percent, color:TC.pool});
-                }
+{% if (boot.hostname or '')|upper == 'ARES' %}
+            // ARES only: GPU relay tile + POOL tile. EROS/ZEUS handled via fleet peer-band.
+            if (g.online) {
+                tiles.push({k:'gpu', key:'GPU', tag:(g.name ? g.name.replace('NVIDIA GeForce ','') : 'GPU'), num:g.temp_c, unit:'\u00b0C ' + g.util_pct + '%', meta:'<span>' + g.power_w.toFixed(0) + 'W</span><span class="lo">VRAM ' + (g.vram_used_mib/1024).toFixed(1) + '/' + (g.vram_total_mib/1024).toFixed(0) + 'G</span>', pct:(g.vram_total_mib ? Math.min(100,(g.vram_used_mib/g.vram_total_mib)*100) : g.util_pct), color:TC.gpu});
+            } else {
+                tiles.push({k:'gpu', key:'GPU', tag:'RTX 3080', num:'\u2014', unit:'', meta:'<span class="lo">in VM 200</span><span></span>', pct:0, color:'#2d3a4e'});
             }
-            renderVitals(tiles, winTile());
+            if (pool) {
+                tiles.push({k:'pool', key:'POOL', tag:DRIVE_TAG['PROMETHEUS'], num:pool.percent, unit:'%', meta:'<span>' + pool.used + '</span><span class="lo">/ ' + pool.total + '</span>', pct:pool.percent, color:TC.pool});
+            }
+{% endif %}
+            renderVitals(tiles, (_BR === 'ARES') ? winTile() : '');   // WIN tile: ARES only
 
             renderArray(i.disks || []);
             renderFolders(i.folders || []);
-            // ZEUS: Scheduled jobs + Services panels removed — skip their renders
-            // (renderCrons/renderContainers force the panel visible from data).
-            if (_BR !== 'ZEUS') {
+            // ZEUS/EROS: skip scheduled-jobs panel (no collector). EROS services in peer-band.
+            if (_BR !== 'ZEUS' && _BR !== 'EROS') {
                 renderCrons(i.crons || []);
                 if (i.caps && i.caps.docker) renderContainers(i.containers || []);
+            } else {
+                renderCrons([]);   // hides panel-jobs on EROS/ZEUS
             }
             var fb = document.getElementById('foot-brand'); if (fb) fb.textContent = i.hostname || 'ARES';
             requestAnimationFrame(function () { fitScale(); });   // cheap: refits only if content overflowed
@@ -2094,12 +2160,21 @@ function pollWin() {
 // naturally — flex fills the viewport; it scrolls only if content truly exceeds it.
 // No server-inlined snapshot -> fetch now. When present, the first render is
 // deferred to the end of this script (below), after HIST/_trace are initialized.
-if (!window.__BOOT) loadVitals();
-pollWin();
-setInterval(loadVitals, 3000);   // perf: 3s poll
-setInterval(pollOutreach, 60000);   // ZEUS outreach stats (slow)
-document.addEventListener('visibilitychange', function(){ if (!document.hidden) loadVitals(); });   // refetch on return
-setInterval(pollWin, 20000);     // win status on its own slow loop
+// ponytail: ARES-scoped endpoints (/api/system-info, /api/vm/*) must not run on EROS/ZEUS
+// or they overwrite fleet data with ARES numbers.
+if (BRAND === 'ARES') {
+    if (!window.__BOOT) loadVitals();
+    pollWin();
+    setInterval(loadVitals, 3000);
+    document.addEventListener('visibilitychange', function(){ if (!document.hidden) loadVitals(); });
+    setInterval(pollWin, 20000);
+} else {
+    // Non-ARES: apply caps from server-injected boot (ZEUS has docker:1; EROS has {}).
+    // Fires before HIST initializes — safe because applyCaps only touches DOM show/hide.
+    var _bootCaps = (window.__BOOT && window.__BOOT.caps) ? window.__BOOT.caps : {};
+    applyCaps(_bootCaps);
+}
+setInterval(pollOutreach, 60000);   // ZEUS outreach stats (no-op unless docker cap)
 pollFleet();
 setInterval(pollFleet, 15000);   // EROS vitals + ARES/ZEUS backups (host-collected file)
 
@@ -2457,10 +2532,20 @@ function updateInstruments(i, g, pool) {
     saveGraphState();          // persist so a reload shows the last-known trend
 }
 
-// First frame from the server-inlined snapshot — runs here, after every `var`
-// (HIST/_trace/TRACE_MAX) is initialized, so the first paint shows real numbers
-// with no skeleton -> pop-in flash.
-if (window.__BOOT) { try { applyVitals(window.__BOOT); } catch(e) { console.error(e); } window.__BOOT = null; }
+// First frame from the server-inlined snapshot — runs here, AFTER HIST/_trace are init'd.
+if (window.__BOOT && BRAND === 'ARES') {
+    try { applyVitals(window.__BOOT); } catch(e) { console.error(e); }
+    window.__BOOT = null;
+} else if (window.__BOOT && BRAND !== 'ARES') {
+    // Non-ARES: apply identity vitals (hostname/cpu/mem from server boot dict).
+    try { applyVitals(window.__BOOT); } catch(e) { console.error(e); }
+    window.__BOOT = null;
+    // Seed EROS peer-band (radar + gauges) from server-injected fleet object.
+    if (BRAND === 'EROS' && window.__FLEET_EROS) {
+        try { renderEros({ eros: window.__FLEET_EROS, ts: window.__FLEET_TS }); } catch(e) { console.error(e); }
+        updateFleetFreshness();
+    }
+}
 pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
 
 // Box-switch wipe: clear the entrance overlay once faded; on tapping the OTHER
@@ -2488,8 +2573,8 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
 </script>
 <style>html,body{overscroll-behavior-x:none}</style>
 
-<div id="ares-kg-full" style="display:none;position:fixed;inset:0;z-index:9500;background:#0a0606">
-  <span id="ares-kg-full-close" style="position:fixed;top:12px;right:16px;z-index:9600;color:#ff6a6a;cursor:pointer;font-size:20px">✕</span>
+<div id="ares-kg-full" style="display:none;position:fixed;inset:0;z-index:9500;background:var(--bg-0)">
+  <span id="ares-kg-full-close" style="position:fixed;top:12px;right:16px;z-index:9600;color:var(--ares);cursor:pointer;font-size:20px">✕</span>
   <div id="ares-kg-full-g" style="position:absolute;inset:0"></div>
 </div>
 
