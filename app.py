@@ -594,7 +594,39 @@ def home():
 @app.route("/zeus")
 @require_auth
 def zeus_view():
-    return render_template("zeus.html", boot=get_system_info())
+    import json as _json
+    _fleet_path = os.path.join(os.path.dirname(__file__), "ai_data", "fleet.json")
+    try:
+        with open(_fleet_path) as _f:
+            _zeus = _json.load(_f).get("zeus", {})
+    except Exception:
+        _zeus = {}
+    _mem_used = _zeus.get("mem_used_gb", 0)
+    _mem_total = _zeus.get("mem_total_gb", 32)
+    _mem_pct = round(_mem_used / _mem_total * 100, 1) if _mem_total else 0
+    _cores = _zeus.get("cores", 8)
+    _zeus_boot = {
+        "hostname": "ZEUS",
+        "cpu": f"{_zeus.get('cpu_model', 'Intel Core i7')} ({_cores} threads)",
+        "cpu_percent": _zeus.get("cpu_pct", 0),
+        "cpu_temp": 0,
+        "memory_total": f"{_mem_total} GB",
+        "memory_used": f"{_mem_used} GB",
+        "memory_percent": _mem_pct,
+        "uptime": _zeus.get("uptime", "unknown"),
+        "os": "Debian 12",
+        "kernel": "",
+        "architecture": "x86_64",
+        "python": "",
+        "disks": [],
+        "folders": [],
+        "mordor": {"online": False},
+        "gpu": {"online": False},
+        "crons": [],
+        "io": {},
+        "caps": {},
+    }
+    return render_template("home.html", boot=_zeus_boot)
 
 
 @app.route("/eros")
