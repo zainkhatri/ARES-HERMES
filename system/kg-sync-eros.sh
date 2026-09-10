@@ -27,6 +27,6 @@ $SSH "$ERO" "export HOME=/root; rm -f $REMOTE/eros_kg.db; \
 rsync -a -e "$SSH" "$ERO:$REMOTE/eros_kg.db" /tmp/eros_kg.db || { echo "kg-sync-eros: rsync pull failed"; exit 1; }
 
 # 4. merge into the central graph + link the boxes
-KG_DB="$CENTRAL" PYTHONPATH="$MNEMO" python3 -m mnemosyne.cli merge /tmp/eros_kg.db --box EROS
-KG_DB="$CENTRAL" PYTHONPATH="$MNEMO" python3 -m mnemosyne.cli link-boxes
+KG_DB="$CENTRAL" PYTHONPATH="$MNEMO" python3 -m mnemosyne.cli merge /tmp/eros_kg.db --box EROS || { echo "kg-sync-eros: merge failed"; exit 1; }
+KG_DB="$CENTRAL" PYTHONPATH="$MNEMO" python3 -m mnemosyne.cli link-boxes || { echo "kg-sync-eros: link-boxes failed"; exit 1; }
 echo "kg-sync-eros: done"
