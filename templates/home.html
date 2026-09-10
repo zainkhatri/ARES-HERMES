@@ -685,10 +685,10 @@
                 <div class="fbreak-head"><span>Where it lives</span><span id="fbreak-total">—</span></div>
                 <div id="fbreak-list"><div class="arr-empty">measuring…</div></div>
             </section>
-            <section class="mod c-tl c-br" id="ares-kg-card">
+            <section class="mod c-tl c-br" id="ares-kg-card" style="flex:0 0 auto">
               <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
                 <span class="mod-meta" id="ares-kg-expand" style="cursor:pointer" title="expand">⤢</span></div>
-              <div class="mod-body" style="position:relative;min-height:180px;padding:0">
+              <div class="mod-body" style="position:relative;height:160px;padding:0">
                 <div id="ares-kg" style="position:absolute;inset:0"></div></div>
             </section>
         </div>
@@ -2486,11 +2486,14 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
 <script>
 (function () {
   if (!window.KGGraph) return;
-  var card = window.KGGraph(document.getElementById('ares-kg'), { box: 'ARES', accent: '239,68,68' });
+  var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUpperCase();
+  var KGBOX = BRAND === 'ZEUS' ? null : BRAND;  // ponytail: null = union graph for ZEUS
+  var ACCENT = BRAND === 'ZEUS' ? '56,189,248' : BRAND === 'EROS' ? '245,158,11' : '239,68,68';
+  var card = window.KGGraph(document.getElementById('ares-kg'), { box: KGBOX, accent: ACCENT });
   var full = null, ov = document.getElementById('ares-kg-full');
   document.getElementById('ares-kg-expand').onclick = function () {
     ov.style.display = 'block';
-    if (!full) full = window.KGGraph(document.getElementById('ares-kg-full-g'), { box: 'ARES', accent: '239,68,68', limit: 150 });
+    if (!full) full = window.KGGraph(document.getElementById('ares-kg-full-g'), { box: KGBOX, accent: ACCENT, limit: 150 });
     else full.reload();
   };
   function close() { ov.style.display = 'none'; }
