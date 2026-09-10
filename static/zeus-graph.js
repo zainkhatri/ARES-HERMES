@@ -1,5 +1,10 @@
-(function(){
-  var el = document.getElementById('zeus-graph'); if (!el) return;
+window.KGGraph = function (el, opts) {
+  if (!el) return null;
+  opts = opts || {};
+  var BOX = (opts.box == null ? null : opts.box);
+  var ACCENT = opts.accent || '125,205,255';
+  var LIMIT = opts.limit || 90;
+  var onNodeCb = null, rafId = null, alive = true;
   var cv = document.createElement('canvas'); el.appendChild(cv);
   var ctx = cv.getContext('2d'), dpr = 1;                 // 1 = far fewer pixels to clear/draw each frame
   var N = [], L = [], byId = {}, spin = 0, hover = null, mx = -1, my = -1, selId = null;
@@ -26,7 +31,8 @@
     settle(170); alpha = 0; fitView(); fitted = true;     // pre-settle + fit synchronously, then freeze
   }
   function reload(){
-    fetch('/api/kg?limit=90').then(function(r){ return r.json(); }).then(function(d){
+    var url = '/api/kg?limit=' + LIMIT + (BOX ? '&box=' + encodeURIComponent(BOX) : '');
+    fetch(url).then(function(r){ return r.json(); }).then(function(d){
       if (!d.ok || !d.nodes || !d.nodes.length) throw 0; ingest(d);
     }).catch(function(){ fetch('/static/_kg_sample.json').then(function(r){ return r.json(); }).then(ingest).catch(function(){
       var cc=document.getElementById('zg-count'); if (cc) cc.textContent='graph offline'; }); });
@@ -70,12 +76,13 @@
     zoom=z; panX=-(cx-W/2)*z; panY=-(cy-H/2)*z;
   }
   function frame(){
-    requestAnimationFrame(frame);
+    if (!alive) return;
+    rafId = requestAnimationFrame(frame);
     var d=size(),W=d[0]/dpr,H=d[1]/dpr; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
     if (N.length && alpha>0.02){ step(); alpha*=0.97; if (!fitted && alpha<0.25){ fitView(); fitted=true; } }
     // edges — depth-shaded strokes, NO shadowBlur (that was the lag)
     for (var k=0;k<L.length;k++){ var pa=proj(L[k].a,W,H),pb=proj(L[k].b,W,H),oz=(pa[2]+pb[2])/2,ea=Math.max(.12,Math.min(.6,(oz-0.05)*7));
-      ctx.strokeStyle='rgba(125,205,255,'+ea+')'; ctx.lineWidth=Math.max(.5,oz*10*zoom);
+      ctx.strokeStyle='rgba('+ACCENT+','+ea+')'; ctx.lineWidth=Math.max(.5,oz*10*zoom);
       ctx.beginPath(); ctx.moveTo(pa[0],pa[1]); ctx.lineTo(pb[0],pb[1]); ctx.stroke(); }
     var order=N.map(function(n){ return {n:n,p:proj(n,W,H)}; }).sort(function(a,b){ return a.p[2]-b.p[2]; });
     hover=null; var best=280;
@@ -108,14 +115,25 @@
   cv.addEventListener('dblclick', function(e){ var r=cv.getBoundingClientRect(),n=nodeAt(e.clientX-r.left,e.clientY-r.top);
     if (n && window.KG && window.KG.expand){ window.KG.expand(n.id); } else { userYaw=0; pitch=.42; fitView(); } });
   cv.addEventListener('click', function(e){ var r=cv.getBoundingClientRect(),n=nodeAt(e.clientX-r.left,e.clientY-r.top);
-    if (n && window.KG) window.KG.select(n.id); });
-  window.KG = {
-    _setSel:function(id){ selId=id; },
-    reload:reload, mergeChildren:mergeChildren,
-    focus:function(id){ var n=byId[id]; if (n){ selId=id; panX=0; panY=0; zoom=Math.max(zoom,1.4); } },
-    _byId:function(id){ return byId[id]; }
+    if (n){ if (onNodeCb) onNodeCb(n.id); } });
+  var api = {
+    reload: reload, fitView: fitView, mergeChildren: mergeChildren,
+    select: function (id) { selId = id; },
+    _setSel: function (id) { selId = id; },   // ponytail: kept for detail-panel IIFE compat
+    focus: function (id) { var n = byId[id]; if (n) { selId = id; panX = 0; panY = 0; zoom = Math.max(zoom, 1.4); } },
+    expand: function (id) { fetch('/api/kg/children?id=' + encodeURIComponent(id)).then(function(r){return r.json();}).then(function(d){ if (d.ok) mergeChildren(d); }); },
+    byId: function (id) { return byId[id]; },
+    _byId: function (id) { return byId[id]; }, // ponytail: kept for any legacy callers
+    onNode: function (cb) { onNodeCb = cb; },
+    destroy: function () { alive = false; if (rafId) cancelAnimationFrame(rafId); if (el.contains(cv)) el.removeChild(cv); }
   };
-  reload(); setInterval(reload, 60000); requestAnimationFrame(frame);
+  reload(); setInterval(reload, 60000); rafId = requestAnimationFrame(frame);
+  return api;
+};
+// backward-compat auto-init for the ZEUS full-screen view
+(function () {
+  var z = document.getElementById('zeus-graph');
+  if (z) window.KG = window.KGGraph(z, { box: null, accent: '56,189,248' });
 })();
 
 (function(){
