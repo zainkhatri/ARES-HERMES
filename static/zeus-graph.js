@@ -67,17 +67,15 @@ window.KGGraph = function (el, opts) {
   }
 
   // --- detail panel (fullscreen only) ---
-  var panel = null;
-  if (TRAVERSABLE) {
-    panel = document.createElement('div');
-    panel.style.cssText = [
-      'position:absolute;top:48px;right:0;width:260px;max-height:calc(100% - 64px)',
-      'overflow-y:auto;z-index:20;background:rgba(0,0,0,0.82)',
-      'border-left:2px solid rgb('+ACCENT+');padding:14px 16px 16px',
-      'font:12px ui-monospace,monospace;color:#d0d0d0;display:none'
-    ].join(';');
-    el.appendChild(panel);
-  }
+  // detail/summary panel — on BOTH card and fullscreen (card: summary only, no camera/spotlight)
+  var panel = document.createElement('div');
+  panel.style.cssText = [
+    'position:absolute;top:44px;right:0;width:260px;max-width:66%;max-height:calc(100% - 52px)',
+    'overflow-y:auto;z-index:20;background:rgba(0,0,0,0.86)',
+    'border-left:2px solid rgb('+ACCENT+');padding:12px 14px 14px',
+    'font:12px ui-monospace,monospace;color:#d0d0d0;display:none'
+  ].join(';');
+  el.appendChild(panel);
 
   function updateLegend() {
     var kinds = {};
@@ -103,18 +101,21 @@ window.KGGraph = function (el, opts) {
       '<div style="color:#ccc;font-size:11px;line-height:1.5;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px">'+esc(und)+'</div>'
     ].join('');
     var x = panel.querySelector('#kg-panel-x');
-    if (x) x.onclick = function(){ clearFocus(); };
+    if (x) x.onclick = function(){ dismiss(); };
   }
 
   function hidePanel() { if (panel) panel.style.display = 'none'; }
 
-  function clearFocus() {
-    focusId = null;
-    litSet = null;
-    selId = null;
-    camTarget = { zoom: null, panX: 0, panY: 0 };  // ease back to fitView
+  function dismiss() {
     hidePanel();
+    selId = null;
+    if (TRAVERSABLE) {                              // fullscreen: also drop spotlight + ease camera back
+      focusId = null;
+      litSet = null;
+      camTarget = { zoom: null, panX: 0, panY: 0 };
+    }
   }
+  var clearFocus = dismiss;                          // alias (fullscreen exit path)
 
   function size(){
     var r = el.getBoundingClientRect();
@@ -350,11 +351,12 @@ window.KGGraph = function (el, opts) {
     var r = cv.getBoundingClientRect();
     var n = nodeAt(e.clientX - r.left, e.clientY - r.top);
     if (n && TRAVERSABLE) {
-      setFocus(n.id);
+      setFocus(n.id);                                 // fullscreen: fly + spotlight + panel
     } else if (n) {
+      selId = n.id; showPanel(n, countChildren(n.id)); // card: summary panel only, no fullscreen
       if (onNodeCb) onNodeCb(n.id);
-    } else if (TRAVERSABLE && focusId != null) {
-      clearFocus();  // click empty = exit focus
+    } else if (focusId != null || selId != null) {
+      dismiss();                                      // click empty = dismiss summary / exit focus
     }
   });
   cv.addEventListener('mousemove', function(e){

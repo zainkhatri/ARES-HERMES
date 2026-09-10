@@ -2594,12 +2594,7 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
       window.__kgFull = full;  // expose for headless test injection
     } else { full.reload(); }
   }
-  // card click-anywhere opens fullscreen (card canvas click bubbles up)
-  document.getElementById('ares-kg-card').addEventListener('click', function (e) {
-    // let expand button work normally; block only if clicking inside canvas (spin teaser)
-    if (e.target.id === 'ares-kg-expand') return;
-    openFull();
-  });
+  // node click on the card shows its summary panel (handled inside KGGraph); ⤢ opens fullscreen
   document.getElementById('ares-kg-expand').onclick = openFull;
   function close() { ov.style.display = 'none'; }
   document.getElementById('ares-kg-full-close').onclick = close;
