@@ -20,8 +20,8 @@
     accum += e.deltaX;
     clearTimeout(t); t = setTimeout(function () { accum = 0; }, 220);
     if (lock) return;
-    if (accum < -80) { lock = true; go(idx + 1); }        // swipe right → next
-    else if (accum > 80) { lock = true; go(idx - 1); }    // swipe left → previous
+    if (accum > 80) { lock = true; go(idx + 1); }         // swipe right → next (ARES→ZEUS→EROS)
+    else if (accum < -80) { lock = true; go(idx - 1); }   // swipe left → previous
   }, { passive: true });
   // mark the active box in the switcher (works regardless of include order)
   document.addEventListener('DOMContentLoaded', function () {
