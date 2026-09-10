@@ -1,31 +1,618 @@
-<!DOCTYPE html><html lang="en" data-brand="EROS"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<!DOCTYPE html>
+<html lang="en" data-brand="EROS">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>EROS · Compute Engine</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#07060a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
-  *{margin:0;padding:0;box-sizing:border-box}
-  html,body{height:100%;overscroll-behavior-x:none;background:#070608;color:#e8e0ee;
-            font-family:'JetBrains Mono',ui-monospace,monospace;overflow:hidden;
-            display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px}
-  .wm{font-weight:800;font-size:clamp(48px,11vw,150px);letter-spacing:8px;line-height:1;
-      background:linear-gradient(110deg,#f5d0e6,#c8b6ff,#a7f0e0,#ffe6b0,#f5d0e6);
-      background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
-      filter:drop-shadow(0 0 26px rgba(200,182,255,.45));animation:pearl 9s linear infinite}
-  @keyframes pearl{to{background-position:300% 0}}
-  .sub{color:#9a8fb0;font-size:12px;letter-spacing:4px;text-transform:uppercase}
-  .soon{color:#c8b6ff;font-size:13px;letter-spacing:3px;border:1px solid rgba(200,182,255,.3);
-        border-radius:5px;padding:8px 16px;background:rgba(200,182,255,.06)}
-  .hint{color:#6b6478;font-size:10px;letter-spacing:1px;position:fixed;bottom:16px}
-  .boxsw{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:2px;
-         border:1px solid rgba(200,182,255,.28);border-radius:6px;overflow:hidden;background:rgba(10,8,14,.7);backdrop-filter:blur(4px)}
-  .boxsw .bs{padding:6px 16px;font-size:12px;font-weight:700;letter-spacing:2px;color:#7a7290;text-decoration:none}
-  .boxsw .bs.bs-ares:hover{color:#ff6a6a}.boxsw .bs.bs-zeus:hover{color:#38bdf8}
-  .boxsw .bs.is-on{color:#070608;background:linear-gradient(110deg,#f5d0e6,#c8b6ff,#a7f0e0);}
-</style></head><body>
+:root {
+    /* amber palette for EROS */
+    --bg-0:#070608; --bg-1:#0d0a04; --bg-2:#160e06; --bg-3:#1e1409;
+    --ares:#f59e0b; --ares-rgb:245,158,11; --panel-rgb:14,10,4; --ares-bright:#fbbf24; --ember:#b37a08; --ember-dim:rgba(245,158,11,.22);
+    --grid:rgba(245,158,11,.045);
+    --text-1:#f6ede9; --text-2:#c9a080; --text-3:#8d6639; --text-4:#5a3f22;
+    --green:#10b981; --amber:#f59e0b; --red:#ef4444;
+    --dur-fast:120ms; --dur:180ms; --dur-slow:280ms;
+    --ease-out:cubic-bezier(.16,1,.3,1);
+    --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body {
+    min-height:100%; height:100%; background:var(--bg-0); color:var(--text-1);
+    font-family:'JetBrains Mono', monospace;
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    overflow:hidden; overscroll-behavior-x:none;
+}
+::selection { background:var(--ares); color:var(--bg-0); }
+
+/* ── layout ── */
+.hud {
+    display:flex; flex-direction:column;
+    height:100vh; height:100dvh;
+    padding:calc(14px + var(--sat)) 16px calc(14px + var(--sab));
+    gap:12px; transform-origin:top left;
+}
+
+/* ── panels / corner brackets ── */
+.mod { position:relative; contain:layout paint; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.6);
+       box-shadow:inset 0 0 22px rgba(var(--ares-rgb),.04); }
+.mod::before, .mod::after {
+    position:absolute; width:11px; height:11px; border:2px solid var(--ares); pointer-events:none;
+}
+.c-tl::before { content:''; top:-2px; left:-2px; border-right:0; border-bottom:0; }
+.c-tr::before { content:''; top:-2px; right:-2px; border-left:0; border-bottom:0; }
+.c-bl::after  { content:''; bottom:-2px; left:-2px; border-right:0; border-top:0; }
+.c-br::after  { content:''; bottom:-2px; right:-2px; border-left:0; border-top:0; }
+
+.mod-head { display:flex; align-items:center; justify-content:space-between; gap:10px;
+            padding:9px 12px; border-bottom:1px solid rgba(var(--ares-rgb),.14); }
+.mod-title { font-size:13px; letter-spacing:.16em; color:var(--text-2); text-transform:uppercase; }
+.mod-meta  { font-size:12px; letter-spacing:.1em; color:var(--text-3); }
+.mod-body  { padding:12px; }
+
+/* ── switcher bar ── */
+.boxsw { position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:100; display:flex; gap:2px;
+         border:1px solid rgba(245,158,11,.28); border-radius:6px; overflow:hidden;
+         background:rgba(10,8,2,.7); backdrop-filter:blur(4px); }
+.boxsw .bs { padding:6px 16px; font-size:12px; font-weight:700; letter-spacing:2px; color:#7a7260; text-decoration:none; }
+.boxsw .bs.bs-ares:hover { color:#ff6a6a; }
+.boxsw .bs.bs-zeus:hover { color:#38bdf8; }
+.boxsw .bs.bs-eros:hover { color:#f59e0b; }
+.boxsw .bs.is-on { color:#070608; background:linear-gradient(110deg,#f59e0b,#fbbf24,#f59e0b); }
+
+/* ── top header strip ── */
+.eros-header {
+    display:flex; align-items:center; gap:0; flex:0 0 auto;
+    border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.5);
+}
+/* pearlescent wordmark — gradient shimmer */
+.pk-wm { display:flex; align-items:flex-start; padding:8px 14px; border-right:1px solid var(--ember-dim); flex:0 0 auto; }
+.pk-wm pre { margin:0; white-space:pre; font-family:ui-monospace,monospace; font-size:7px; line-height:1.03; }
+.pk-wm .a {
+    background:linear-gradient(110deg,#f59e0b,#fbbf24,#fde68a,#f59e0b);
+    background-size:300% 100%;
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 0 10px rgba(245,158,11,.6));
+    animation:pearl 8s linear infinite;
+}
+@keyframes pearl { to { background-position:300% 0; } }
+.pk-wm .b { color:#f4f8fd; text-shadow:0 0 13px rgba(244,248,253,.4); }
+
+.pk-facts { display:flex; flex:1 1 auto; border-right:1px solid var(--ember-dim); }
+.pk-fact { padding:6px 16px; border-right:1px solid var(--ember-dim); }
+.pk-fact:last-child { border-right:0; }
+.pk-fact-k { font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); }
+.pk-fact-v { font-size:12.5px; color:var(--text-1); margin-top:2px; font-weight:600; white-space:nowrap; }
+.pk-meta { font-size:11px; letter-spacing:.06em; color:var(--text-3); padding:6px 16px; flex:0 0 auto; white-space:nowrap; }
+
+/* ── main grid ── */
+.eros-grid {
+    flex:1 1 0; min-height:0;
+    display:grid;
+    grid-template-columns:1fr 1.6fr 1fr;
+    grid-template-rows:1.4fr 1fr;
+    gap:12px;
+}
+
+/* ── radar card ── */
+.pk-radar { position:relative; }
+.pk-radar canvas { display:block; width:100%; height:100%; }
+
+/* ── meters ── */
+.pk-meters { display:flex; flex-direction:column; gap:10px; }
+.pk-mt-top { display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; }
+.pk-mt-top .k { letter-spacing:.1em; color:var(--text-3); text-transform:uppercase; }
+.pk-mt-top .v { font-weight:600; font-variant-numeric:tabular-nums; }
+.pk-bar { height:6px; background:rgba(var(--ares-rgb),.14); overflow:hidden; }
+.pk-bar > i { display:block; height:100%; width:0; background:var(--ares); box-shadow:0 0 7px rgba(var(--ares-rgb),.55); transition:width .6s var(--ease-out); }
+
+/* ── service / business chips ── */
+.pk-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.pk-chip { font-size:11px; padding:4px 10px; border:1px solid rgba(var(--ares-rgb),.45); color:var(--ares);
+           background:rgba(var(--ares-rgb),.07); white-space:nowrap; font-variant-numeric:tabular-nums; }
+.pk-chip.is-down { border-color:var(--red); color:var(--red); background:rgba(239,68,68,.09); }
+.pk-svc-hd { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); margin:9px 0 5px; }
+.pk-svc-sum { color:var(--ares); letter-spacing:.06em; margin-left:6px; }
+
+/* ── chat ── */
+.pk-chat { display:flex; flex-direction:column; gap:6px; flex:1 1 0; min-height:0; }
+.pk-chat-hd { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); display:flex; align-items:center; gap:8px; }
+.pk-chat-hd select { background:var(--bg-1); color:var(--ares); border:1px solid rgba(var(--ares-rgb),.4); font-size:10px; padding:2px 5px; font-family:inherit; max-width:160px; }
+.pk-chat-out { flex:1 1 auto; min-height:60px; overflow-y:auto; border:1px solid var(--ember-dim); background:rgba(0,0,0,.28); padding:8px 11px; font-size:12px; line-height:1.5; }
+.pk-chat-hint { color:var(--text-3); font-size:11px; }
+.pk-chat-q { color:var(--ares); font-weight:600; margin-bottom:5px; }
+.pk-chat-a { color:var(--text-1); white-space:pre-wrap; }
+.pk-chat-cursor { animation:pkblink 1s steps(2,end) infinite; color:var(--ares); }
+@keyframes pkblink { 50% { opacity:0; } }
+.pk-chat-in { display:flex; gap:6px; flex:0 0 auto; }
+.pk-chat-in input { flex:1; min-width:0; background:var(--bg-1); border:1px solid var(--ember-dim); color:var(--text-1); padding:7px 11px; font-family:inherit; font-size:12.5px; }
+.pk-chat-in input:focus { outline:none; border-color:var(--ares); }
+.pk-chat-in button { flex:none; width:36px; background:rgba(var(--ares-rgb),.12); border:1px solid var(--ares); color:var(--ares); cursor:pointer; font-size:13px; }
+.pk-chat-in button:hover { background:rgba(var(--ares-rgb),.25); }
+.pk-chat-in button:disabled { opacity:.5; cursor:wait; }
+
+/* ── mod-body helpers ── */
+.mod-body.fill { display:flex; flex-direction:column; flex:1 1 0; min-height:0; }
+.full-height { display:flex; flex-direction:column; }
+.full-height > .mod-body { flex:1 1 0; min-height:0; }
+
+/* ── grid assignments ── */
+/* row 1: meters(col1) | radar centerpiece(col2) | services(col3) */
+/* row 2: business(col1) | ollama spans(col2+col3) */
+.card-meters  { grid-column:1; grid-row:1; display:flex; flex-direction:column; }
+.card-radar   { grid-column:2; grid-row:1; display:flex; flex-direction:column; }
+.card-svc     { grid-column:3; grid-row:1; display:flex; flex-direction:column; }
+.card-biz     { grid-column:1; grid-row:2; display:flex; flex-direction:column; }
+.card-ollama  { grid-column:2 / span 2; grid-row:2; display:flex; flex-direction:column; }
+
+/* radar fills parent */
+.card-radar .mod { flex:1 1 0; display:flex; flex-direction:column; }
+.card-radar .mod-body { flex:1 1 0; min-height:0; padding:0; }
+.card-radar .pk-radar { flex:1 1 0; min-height:120px; }
+
+/* svc/biz fill */
+.card-svc .mod, .card-biz .mod { flex:1 1 0; display:flex; flex-direction:column; }
+.card-svc .mod-body, .card-biz .mod-body { flex:1 1 0; overflow-y:auto; }
+
+/* ollama card fills */
+.card-ollama .mod { flex:1 1 0; display:flex; flex-direction:column; }
+.card-ollama .mod-body { flex:1 1 0; min-height:0; display:flex; flex-direction:column; }
+
+/* meters card fill */
+.card-meters .mod { flex:1 1 0; display:flex; flex-direction:column; }
+.card-meters .mod-body { flex:1 1 auto; display:flex; flex-direction:column; justify-content:space-around; }
+
+/* responsive: collapse to 2-col then 1-col */
+@media (max-width:900px) {
+    .eros-grid { grid-template-columns:1fr 1fr; grid-template-rows:auto; }
+    .card-radar { grid-column:1 / span 2; grid-row:1; min-height:280px; }
+    .card-meters { grid-column:1; grid-row:2; }
+    .card-svc { grid-column:2; grid-row:2; }
+    .card-biz { grid-column:1; grid-row:3; }
+    .card-ollama { grid-column:2; grid-row:3; }
+}
+@media (max-width:600px) {
+    .eros-grid { grid-template-columns:1fr; grid-template-rows:auto; }
+    .card-radar { grid-column:1; grid-row:1; min-height:240px; }
+    .card-meters { grid-column:1; grid-row:2; }
+    .card-svc { grid-column:1; grid-row:3; }
+    .card-biz { grid-column:1; grid-row:4; }
+    .card-ollama { grid-column:1; grid-row:5; }
+    html, body { overflow:auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation:none!important; transition:none!important; }
+}
+</style>
+</head>
+<body>
 {% include "_switcher.html" %}
-<div class="wm">EROS</div>
-<div class="sub">Compute Engine</div>
-<div class="soon">FULL VIEW · COMING SOON</div>
-<div class="hint">two-finger swipe ← → to change box · or use the switcher</div>
+
+<div class="hud" id="eros-hud">
+
+    <!-- header strip: wordmark + facts -->
+    <header class="eros-header mod c-tl c-br" id="panel-eros" style="display:none">
+        <div class="pk-wm">
+<pre class="a">███████╗██████╗
+██╔════╝██╔══██╗
+█████╗  ██████╔╝
+██╔══╝  ██╔══██╗
+███████╗██║  ██║
+╚══════╝╚═╝  ╚═╝</pre><pre class="b"> ██████╗ ███████╗
+██╔═══██╗██╔════╝
+██║   ██║███████╗
+██║   ██║╚════██║
+╚██████╔╝███████║
+ ╚═════╝ ╚══════╝</pre>
+        </div>
+        <div class="pk-facts">
+            <div class="pk-fact"><div class="pk-fact-k">Processor</div><div class="pk-fact-v">Ryzen 7 5700X</div></div>
+            <div class="pk-fact"><div class="pk-fact-k">Memory</div><div class="pk-fact-v" id="eros-f-mem">—</div></div>
+            <div class="pk-fact"><div class="pk-fact-k">Uptime</div><div class="pk-fact-v" id="eros-f-up">—</div></div>
+            <div class="pk-fact"><div class="pk-fact-k">Cores</div><div class="pk-fact-v" id="eros-f-cores">—</div></div>
+        </div>
+        <span class="pk-meta" id="eros-meta">connecting…</span>
+    </header>
+
+    <!-- offline state shown when header is hidden -->
+    <header class="eros-header mod c-tl c-br" id="eros-offline-hdr">
+        <div class="pk-wm">
+<pre class="a">███████╗██████╗
+██╔════╝██╔══██╗
+█████╗  ██████╔╝
+██╔══╝  ██╔══██╗
+███████╗██║  ██║
+╚══════╝╚═╝  ╚═╝</pre><pre class="b"> ██████╗ ███████╗
+██╔═══██╗██╔════╝
+██║   ██║███████╗
+██║   ██║╚════██║
+╚██████╔╝███████║
+ ╚═════╝ ╚══════╝</pre>
+        </div>
+        <span class="pk-meta" style="margin-left:18px">EROS · Ryzen 7 5700X · GTX 1070 · offline / connecting…</span>
+    </header>
+
+    <!-- main grid -->
+    <div class="eros-grid">
+
+        <!-- meters -->
+        <div class="card-meters">
+            <section class="mod c-tl c-bl">
+                <div class="mod-head">
+                    <span class="mod-title">Vitals</span>
+                    <span class="mod-meta">live · 3s</span>
+                </div>
+                <div class="mod-body">
+                    <div class="pk-meters">
+                        <div>
+                            <div class="pk-mt-top"><span class="k">Memory</span><span class="v" id="eros-mem">—</span></div>
+                            <div class="pk-bar"><i id="eros-mem-bar"></i></div>
+                        </div>
+                        <div>
+                            <div class="pk-mt-top"><span class="k">Disk /</span><span class="v" id="eros-disk">—</span></div>
+                            <div class="pk-bar"><i id="eros-disk-bar"></i></div>
+                        </div>
+                        <div>
+                            <div class="pk-mt-top"><span class="k">GPU VRAM</span><span class="v" id="eros-vram">—</span></div>
+                            <div class="pk-bar"><i id="eros-vram-bar"></i></div>
+                        </div>
+                        <div>
+                            <div class="pk-mt-top"><span class="k">Net · rx</span><span class="v" id="eros-net">—</span></div>
+                            <div class="pk-bar"><i id="eros-net-bar"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- crown radar (center) -->
+        <div class="card-radar">
+            <section class="mod c-tl c-tr c-bl c-br">
+                <div class="mod-head">
+                    <span class="mod-title">Crown Radar</span>
+                    <span class="mod-meta">CPU · GPU · VRAM · TEMP · NET · DISK · MEM · LOAD</span>
+                </div>
+                <div class="mod-body">
+                    <div class="pk-radar" id="eros-radar"></div>
+                </div>
+            </section>
+        </div>
+
+        <!-- services -->
+        <div class="card-svc">
+            <section class="mod c-tr c-br">
+                <div class="mod-head">
+                    <span class="mod-title">Services</span>
+                    <span class="pk-svc-sum" id="eros-svc-sum"></span>
+                </div>
+                <div class="mod-body">
+                    <div class="pk-chips" id="eros-svc"><span style="color:var(--text-3);font-size:11px">loading…</span></div>
+                    <div class="pk-svc-hd">▸ Business <span class="pk-svc-sum" id="eros-mnt-sum"></span></div>
+                    <div class="pk-chips" id="eros-mnt"></div>
+                </div>
+            </section>
+        </div>
+
+        <!-- business (row 2 col 1) — kept in svc card on mobile, standalone on desktop -->
+        <div class="card-biz" style="display:none" id="card-biz-extra">
+            <section class="mod c-bl">
+                <div class="mod-head">
+                    <span class="mod-title">Business</span>
+                    <span class="pk-svc-sum" id="eros-mnt-sum2"></span>
+                </div>
+                <div class="mod-body">
+                    <div class="pk-chips" id="eros-mnt2"></div>
+                </div>
+            </section>
+        </div>
+
+        <!-- ollama chat -->
+        <div class="card-ollama">
+            <section class="mod c-bl c-br">
+                <div class="mod-head">
+                    <span class="mod-title">▸ Ollama</span>
+                    <select id="eros-model" title="model" style="background:var(--bg-1);color:var(--ares);border:1px solid rgba(245,158,11,.4);font-size:11px;padding:2px 6px;font-family:inherit;max-width:180px;"></select>
+                </div>
+                <div class="mod-body">
+                    <div class="pk-chat">
+                        <div class="pk-chat-out" id="eros-chat-out"><span class="pk-chat-hint">ask a model running on the EROS GPU…</span></div>
+                        <form class="pk-chat-in" id="eros-chat-form" autocomplete="off">
+                            <input id="eros-prompt" placeholder="prompt…" autocomplete="off">
+                            <button type="submit" id="eros-send" title="send">▶</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+    </div><!-- /eros-grid -->
+</div><!-- /hud -->
+
+<script>
+// ── helpers ──────────────────────────────────────────────────────────────
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+}
+function _setBar(id, pct) {
+    var el = document.getElementById(id);
+    if (el) el.style.width = Math.max(0, Math.min(100, +pct || 0)) + '%';
+}
+function _txt(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
+function _arc(id, pct) { var a = document.getElementById(id); if (a) a.style.strokeDashoffset = (238.76 * (1 - Math.max(0, Math.min(100, +pct || 0)) / 100)).toFixed(1); }
+
+// ── 3D crown radar ────────────────────────────────────────────────────────
+// ponytail: copied verbatim from home.html to keep identical rendering
+function radar3d(el, rgb, opts) {
+  var accent = 'rgb(' + rgb + ')';
+  var cv = document.createElement('canvas'); cv.style.display = 'block'; el.appendChild(cv);
+  var ctx = cv.getContext('2d'), W = 0, H = 0;
+  function resize() {
+    var r = el.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = r.width || 420; H = r.height || 300;
+    cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  }
+  resize(); window.addEventListener('resize', resize);
+  var tilt = (opts && opts.tilt) || .92, spinSpd = (opts && opts.spin) || .005,
+      maxH = (opts && opts.maxH) || 1.2, Kf = (opts && opts.k) || .32;
+  var spin = 0, sweep = 0, AX = [], cur = [], avg = [];
+  function update(axes) { AX = axes; while (cur.length < axes.length) { cur.push(0); avg.push(0); } }
+  function proj(x, y, z) {
+    var cw = Math.cos(spin), sw = Math.sin(spin), x1 = x * cw - y * sw, y1 = x * sw + y * cw;
+    var yp = y1 * Math.cos(tilt) + z * Math.sin(tilt), depth = y1 * Math.sin(tilt) - z * Math.cos(tilt);
+    var Kp = Math.min(W, H) * Kf;
+    return [W / 2 + Kp * x1, H * 0.60 - Kp * yp, depth];
+  }
+  function seg(p, q, w, a) { ctx.globalAlpha = a; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); }
+  function ringPath(rad, h) {
+    var N = 72; ctx.beginPath();
+    for (var i = 0; i <= N; i++) { var a = i / N * 6.2832, p = proj(Math.cos(a) * rad, Math.sin(a) * rad, h); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); }
+  }
+  (function loop() {
+    requestAnimationFrame(loop);
+    if (!el.isConnected) return;
+    spin += spinSpd; sweep += .02;
+    ctx.clearRect(0, 0, W, H); ctx.strokeStyle = accent; ctx.fillStyle = accent; ctx.shadowColor = accent;
+    var K = AX.length, k, kk;
+    if (K) {
+      for (k = 0; k < K; k++) { cur[k] += ((AX[k].val || 0) - cur[k]) * .18; avg[k] += ((AX[k].val || 0) - avg[k]) * .012; }
+      var ang = function(k) { return k / K * 6.2832 - Math.PI / 2; };
+      var gx = function(k) { return Math.cos(ang(k)); };
+      var gy = function(k) { return Math.sin(ang(k)); };
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = .10; ctx.lineWidth = 1; ringPath(.5, 0); ctx.stroke();
+      ctx.globalAlpha = .18; ringPath(1, 0); ctx.stroke();
+      ctx.globalAlpha = .22; ctx.setLineDash([5, 5]); ringPath(1, maxH); ctx.stroke(); ctx.setLineDash([]);
+      for (k = 0; k < K; k++) seg(proj(0, 0, 0), proj(gx(k), gy(k), 0), 1, .10);
+      ctx.globalAlpha = .3; ctx.font = "9px 'JetBrains Mono',monospace"; ctx.textAlign = 'center';
+      var cl = proj(0, -1, maxH); ctx.fillText('100%', cl[0], cl[1] - 3); ctx.textAlign = 'start';
+      for (var i2 = 0; i2 < 7; i2++) { var a2 = sweep - i2 * .09; seg(proj(0, 0, 0), proj(Math.cos(a2), Math.sin(a2), 0), i2 ? 1 : 2, .30 * (1 - i2 / 7)); }
+      var quads = [];
+      for (k = 0; k < K; k++) {
+        var k2 = (k + 1) % K;
+        quads.push({ b1: proj(gx(k), gy(k), 0), b2: proj(gx(k2), gy(k2), 0), t1: proj(gx(k), gy(k), cur[k] * maxH), t2: proj(gx(k2), gy(k2), cur[k2] * maxH), d: (proj(gx(k), gy(k), 0)[2] + proj(gx(k2), gy(k2), 0)[2]) / 2 });
+      }
+      quads.sort(function(p, q) { return q.d - p.d; });
+      ctx.shadowBlur = 8;
+      quads.forEach(function(q) {
+        ctx.globalAlpha = .15; ctx.fillStyle = 'rgb(' + rgb + ')';
+        ctx.beginPath(); ctx.moveTo(q.b1[0], q.b1[1]); ctx.lineTo(q.b2[0], q.b2[1]); ctx.lineTo(q.t2[0], q.t2[1]); ctx.lineTo(q.t1[0], q.t1[1]); ctx.closePath(); ctx.fill();
+      });
+      for (k = 0; k < K; k++) { var al = AX[k].alert; ctx.strokeStyle = al ? '#ff6a6a' : accent; ctx.shadowColor = al ? '#ff6a6a' : accent; seg(proj(gx(k), gy(k), 0), proj(gx(k), gy(k), cur[k] * maxH), al ? 2.6 : 1.6, .6); }
+      ctx.strokeStyle = accent; ctx.shadowColor = accent;
+      ctx.shadowBlur = 3; ctx.globalAlpha = .38; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); ctx.beginPath();
+      for (k = 0; k <= K; k++) { kk = k % K; var pa = proj(gx(kk), gy(kk), avg[kk] * maxH); k ? ctx.lineTo(pa[0], pa[1]) : ctx.moveTo(pa[0], pa[1]); }
+      ctx.stroke(); ctx.setLineDash([]);
+      ctx.shadowBlur = 12; ctx.globalAlpha = 1; ctx.lineWidth = 2.6; ctx.beginPath();
+      for (k = 0; k <= K; k++) { kk = k % K; var pt = proj(gx(kk), gy(kk), cur[kk] * maxH); k ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1]); }
+      ctx.stroke();
+      ctx.font = "11px 'JetBrains Mono',monospace"; ctx.textBaseline = 'alphabetic';
+      for (k = 0; k < K; k++) {
+        var al2 = AX[k].alert, t = proj(gx(k), gy(k), cur[k] * maxH);
+        ctx.shadowBlur = 6; ctx.globalAlpha = 1; ctx.fillStyle = al2 ? '#ff6a6a' : accent;
+        ctx.beginPath(); ctx.arc(t[0], t[1], al2 ? 3.4 : 2.3, 0, 6.29); ctx.fill();
+        var o = proj(gx(k) * 1.14, gy(k) * 1.14, cur[k] * maxH + .14); ctx.shadowBlur = 4;
+        ctx.textAlign = o[0] < W / 2 - 6 ? 'end' : o[0] > W / 2 + 6 ? 'start' : 'center';
+        ctx.fillText(AX[k].disp, o[0], o[1]); ctx.textAlign = 'start';
+      }
+    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(0,0,0,.24)';
+    for (var y = (Math.random() * 3 | 0); y < H; y += 3) ctx.fillRect(0, y, W, 1);
+    ctx.strokeStyle = accent; ctx.globalAlpha = .45; ctx.lineWidth = 2;
+    var m = 9, s = 15; ctx.beginPath();
+    ctx.moveTo(m, m + s); ctx.lineTo(m, m); ctx.lineTo(m + s, m);
+    ctx.moveTo(W - m - s, m); ctx.lineTo(W - m, m); ctx.lineTo(W - m, m + s);
+    ctx.moveTo(m, H - m - s); ctx.lineTo(m, H - m); ctx.lineTo(m + s, H - m);
+    ctx.moveTo(W - m - s, H - m); ctx.lineTo(W - m, H - m); ctx.lineTo(W - m, H - m - s);
+    ctx.stroke(); ctx.globalAlpha = 1;
+  })();
+  return { update: update };
+}
+
+var erosRadar = null;
+function ensureErosRadar() {
+    if (!erosRadar) {
+        var el = document.getElementById('eros-radar');
+        if (el) erosRadar = radar3d(el, '245,158,11', { tilt: .92, spin: .005, maxH: 1.2, k: .34 });
+    }
+    return erosRadar;
+}
+
+// ── renderEros ────────────────────────────────────────────────────────────
+// ponytail: copied from home.html renderEros, same element IDs, same data shape
+function renderEros(d) {
+    var e = d.eros || {}, g = e.gpu || {};
+    var panel = document.getElementById('panel-eros');
+    var offhdr = document.getElementById('eros-offline-hdr');
+    var meta = document.getElementById('eros-meta');
+
+    if (panel) panel.style.display = '';
+    if (offhdr) offhdr.style.display = 'none';
+
+    if (!e.up) {
+        if (meta) meta.textContent = 'offline';
+        ['eros-mem', 'eros-disk', 'eros-vram', 'eros-net'].forEach(function(i) { _txt(i, '—'); });
+        ['eros-mem-bar', 'eros-disk-bar', 'eros-vram-bar', 'eros-net-bar'].forEach(function(i) { _setBar(i, 0); });
+        var sv = document.getElementById('eros-svc'); if (sv) sv.innerHTML = ''; _txt('eros-svc-sum', '');
+        var mn = document.getElementById('eros-mnt'); if (mn) mn.innerHTML = ''; _txt('eros-mnt-sum', '');
+        return;
+    }
+
+    if (meta) meta.textContent = (d.stale ? 'stale · ' : '') + (e.uptime ? 'up ' + e.uptime : 'online') + (e.cores ? '  ·  ' + e.cores + ' cores' : '');
+
+    // bars
+    _txt('eros-mem', (e.mem_used_gb != null ? e.mem_used_gb : '—') + ' / ' + (e.mem_total_gb != null ? e.mem_total_gb : '—') + ' GB');
+    _setBar('eros-mem-bar', (e.mem_used_gb != null && e.mem_total_gb) ? (e.mem_used_gb / e.mem_total_gb * 100) : 0);
+    _txt('eros-disk', (e.disk_used_gb != null ? e.disk_used_gb : '—') + ' / ' + (e.disk_total_gb != null ? e.disk_total_gb : '—') + ' GB');
+    _setBar('eros-disk-bar', e.disk_pct);
+    _txt('eros-vram', g.mem_total ? (g.mem_used + ' / ' + g.mem_total + ' MB') : '—');
+    _setBar('eros-vram-bar', g.mem_total ? (g.mem_used / g.mem_total * 100) : 0);
+    _txt('eros-net', (e.net_rx_mbs != null ? e.net_rx_mbs : '—') + ' MB/s');
+    _setBar('eros-net-bar', e.net_rx_mbs != null ? Math.min(100, e.net_rx_mbs / 125 * 100) : 0);
+
+    // header facts
+    _txt('eros-f-mem', (e.mem_used_gb != null ? e.mem_used_gb : '—') + ' / ' + (e.mem_total_gb != null ? e.mem_total_gb : '—') + ' GB');
+    _txt('eros-f-up', e.uptime || '—');
+    _txt('eros-f-cores', e.cores != null ? e.cores : '—');
+
+    // radar
+    var _r = ensureErosRadar();
+    if (_r) {
+        var vt = g.mem_total ? g.mem_used / g.mem_total : 0,
+            tn = g.temp != null ? Math.max(0, Math.min(1, (g.temp - 30) / 60)) : 0,
+            ln = e.cores ? Math.max(0, Math.min(1, e.load / e.cores)) : 0,
+            mp = (e.mem_used_gb != null && e.mem_total_gb) ? e.mem_used_gb / e.mem_total_gb : 0;
+        _r.update([
+            { disp: 'CPU ' + (e.cpu_pct || 0) + '%', val: (e.cpu_pct || 0) / 100 },
+            { disp: 'GPU ' + (g.util || 0) + '%', val: (g.util || 0) / 100 },
+            { disp: 'VRAM ' + Math.round(vt * 100) + '%', val: vt },
+            { disp: 'TEMP ' + (g.temp != null ? g.temp : '?') + '°', val: tn },
+            { disp: 'NET ' + (e.net_rx_mbs || 0), val: Math.max(0, Math.min(1, (e.net_rx_mbs || 0) / 125)) },
+            { disp: 'DISK ' + (e.disk_pct || 0) + '%', val: (e.disk_pct || 0) / 100 },
+            { disp: 'MEM ' + Math.round(mp * 100) + '%', val: mp },
+            { disp: 'LOAD ' + (e.load != null ? e.load : 0), val: ln }
+        ]);
+    }
+
+    // services
+    var svc = document.getElementById('eros-svc');
+    if (svc) {
+        var cs = e.containers || [], down = cs.filter(function(c) { return c.state !== 'running'; }).length;
+        svc.innerHTML = cs.map(function(c) {
+            var isdown = c.state !== 'running';
+            var nm = c.name.replace(/^linkedout.*/, 'linkedout').replace(/-nexus$/, '');
+            return '<span class="pk-chip' + (isdown ? ' is-down' : '') + '" title="' + esc(c.name) + ' · ' + esc(c.state) + '">' + esc(nm) + '</span>';
+        }).join('');
+        _txt('eros-svc-sum', cs.length ? ((cs.length - down) + '/' + cs.length + ' up' + (down ? ' · ' + down + ' down' : '')) : '');
+    }
+
+    // business mount
+    var mnt = document.getElementById('eros-mnt');
+    if (mnt) {
+        var mo = e.mount || {}, fld = mo.folders || [];
+        if (!mo.mounted) {
+            mnt.innerHTML = '<span class="pk-chip is-down">unmounted</span>';
+            _txt('eros-mnt-sum', mo.path || '/mnt/eros');
+        } else {
+            mnt.innerHTML = fld.map(function(f) { return '<span class="pk-chip" title="' + esc((mo.path || '/mnt/eros') + '/BUSINESS/AUTOMATION-IBT/' + f) + '">' + esc(f) + '</span>'; }).join('');
+            _txt('eros-mnt-sum', (mo.path || '/mnt/eros') + ' · ' + fld.length);
+        }
+    }
+
+    // ollama model picker
+    var sel = document.getElementById('eros-model');
+    if (sel && sel.dataset.filled !== '1') {
+        var chat = (e.models || []).filter(function(m) { return !/embed/i.test(m); });
+        if (chat.length) {
+            sel.innerHTML = chat.map(function(m) { return '<option value="' + esc(m) + '">' + esc(m.replace(':latest', '').replace('-instruct-q5_K_M', '')) + '</option>'; }).join('');
+            sel.dataset.filled = '1';
+        }
+    }
+}
+
+// ── ollama chat submit ────────────────────────────────────────────────────
+document.addEventListener('submit', function(ev) {
+    if (!ev.target || ev.target.id !== 'eros-chat-form') return;
+    ev.preventDefault();
+    var inp = document.getElementById('eros-prompt'), out = document.getElementById('eros-chat-out'),
+        sel = document.getElementById('eros-model'), btn = document.getElementById('eros-send');
+    var prompt = (inp.value || '').trim(); if (!prompt) return;
+    var model = sel && sel.value ? sel.value : 'llama3.2:3b';
+    out.innerHTML = '<div class="pk-chat-q">' + esc(prompt) + '</div><div class="pk-chat-a" id="eros-chat-a"><span class="pk-chat-cursor">▍</span></div>';
+    inp.value = ''; if (btn) btn.disabled = true;
+    var a = document.getElementById('eros-chat-a'), acc = '';
+    fetch('/api/eros/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: model, prompt: prompt }) })
+      .then(function(r) {
+        var reader = r.body.getReader(), dec = new TextDecoder(), buf = '';
+        function pump() {
+            return reader.read().then(function(res) {
+                if (res.done) { if (btn) btn.disabled = false; return; }
+                buf += dec.decode(res.value, { stream: true });
+                var parts = buf.split('\n\n'); buf = parts.pop();
+                parts.forEach(function(pt) {
+                    var m = pt.match(/^data: (.*)$/m); if (!m) return;
+                    try { var o = JSON.parse(m[1]); if (o.t) { acc += o.t; a.textContent = acc; } if (o.err) { a.textContent = '⚠ ' + o.err; } } catch (e) {}
+                });
+                out.scrollTop = out.scrollHeight; return pump();
+            });
+        }
+        return pump();
+      }).catch(function(e) { if (a) a.textContent = '⚠ ' + e; if (btn) btn.disabled = false; });
+});
+
+// ── switcher: mark EROS as active ────────────────────────────────────────
+(function() {
+    var sw = document.querySelector('.boxsw');
+    if (!sw) return;
+    var eros = sw.querySelector('.bs-eros');
+    if (eros) eros.classList.add('is-on');
+})();
+
+// ── fleet poll ────────────────────────────────────────────────────────────
+// init radar immediately so it shows spinning while waiting for data
+ensureErosRadar();
+
+var _fleetBusy = false;
+async function pollFleet() {
+    if (_fleetBusy) return;
+    _fleetBusy = true;
+    try {
+        var d = await fetch('/api/fleet').then(function(r) { return r.json(); });
+        if (d && d.ok) renderEros(d);
+    } catch (e) {}
+    finally { _fleetBusy = false; }
+}
+pollFleet();
+setInterval(pollFleet, 3000);
+
+// ── fitScale: shrink the full hud to the viewport if needed ──────────────
+// ponytail: same pattern as home.html so iPad/phone sees a complete dashboard
+function fitScale() {
+    var hud = document.getElementById('eros-hud');
+    if (!hud) return;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var nw = hud.scrollWidth, nh = hud.scrollHeight;
+    if (nw <= 0 || nh <= 0) return;
+    var sx = vw / nw, sy = vh / nh, s = Math.min(sx, sy, 1);
+    hud.style.transform = s < 1 ? ('scale(' + s + ')') : '';
+    hud.style.opacity = '1';
+}
+hud.style.opacity = '0';
+window.addEventListener('resize', fitScale);
+setTimeout(fitScale, 120);
+</script>
+
 <script src="/static/box-nav.js"></script>
-</body></html>
+</body>
+</html>
