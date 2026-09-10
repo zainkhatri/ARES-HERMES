@@ -71,7 +71,7 @@ window.KGGraph = function (el, opts) {
     zoom=1; panX=0; panY=0;
     var minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9;
     for (var i=0;i<N.length;i++){ var p=proj(N[i],W,H); if(p[0]<minx)minx=p[0]; if(p[0]>maxx)maxx=p[0]; if(p[1]<miny)miny=p[1]; if(p[1]>maxy)maxy=p[1]; }
-    var z=Math.min(W*0.88/Math.max(1,maxx-minx), H*0.84/Math.max(1,maxy-miny)); z=Math.max(.04,Math.min(3,z));
+    var z=Math.min(W*0.94/Math.max(1,maxx-minx), H*0.90/Math.max(1,maxy-miny)); z=Math.max(.04,Math.min(3,z));
     var cx=(minx+maxx)/2, cy=(miny+maxy)/2;
     zoom=z; panX=-(cx-W/2)*z; panY=-(cy-H/2)*z;
   }
@@ -128,6 +128,11 @@ window.KGGraph = function (el, opts) {
     destroy: function () { alive = false; if (rafId) cancelAnimationFrame(rafId); if (pollId) clearInterval(pollId); if (el.contains(cv)) el.removeChild(cv); }
   };
   reload(); pollId = setInterval(reload, 60000); rafId = requestAnimationFrame(frame);
+  // refit when the host element resizes (e.g. KG card grows via flex after fitScale reveals the HUD)
+  if (typeof ResizeObserver !== 'undefined') {
+    var ro = new ResizeObserver(function(){ if (fitted) fitView(); });
+    ro.observe(el);
+  }
   return api;
 };
 // backward-compat auto-init for the ZEUS full-screen view
