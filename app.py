@@ -962,6 +962,11 @@ def kayla_page():
 def josh_page():
     return render_template("josh.html")
 
+@app.route("/demo")
+@require_auth
+def demo_page():
+    return render_template("sigma_demo.html")
+
 
 @app.route("/terminal")
 @require_auth
