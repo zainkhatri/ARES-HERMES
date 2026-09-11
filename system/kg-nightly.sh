@@ -28,6 +28,12 @@ env KG_DB="$CENTRAL" PYTHONPATH="$MNEMO" \
   python3 -m mnemosyne.cli index-gpt --box ARES --summary-budget 0 \
   && echo "kg-nightly: GPT archive indexed" || echo "kg-nightly: GPT index FAILED"
 
+# 1c2) claude.ai web export, IF you've dropped one in (Settings -> Export data -> conversations.json)
+CLAUDE_WEB=/mnt/nvme/PROMETHEUS/PERSONAL/CLAUDE
+[ -d "$CLAUDE_WEB" ] && env KG_DB="$CENTRAL" PYTHONPATH="$MNEMO" \
+  python3 -m mnemosyne.cli index-claude-web --box ARES --dir "$CLAUDE_WEB" --summary-budget 0 \
+  && echo "kg-nightly: claude.ai export indexed" || true
+
 # 1d) progressive Ollama summaries for still-raw chat/gpt nodes (GPT + ZEUS backfill), budgeted
 #     so a ~9k-conversation backfill spreads across nights instead of blocking. gpu-loan guarded.
 env KG_DB="$CENTRAL" OLLAMA_HOST=http://127.0.0.1:11434 PYTHONPATH="$MNEMO" \
