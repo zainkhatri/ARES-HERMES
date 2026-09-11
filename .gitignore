@@ -82,3 +82,5 @@ ai_data/doc_chunks.json
 .superpowers/
 .playwright-mcp/
 static/_fleet.json
+vault_video_cache/
+blurhashes.json
