@@ -219,7 +219,7 @@
         /* ARES right column: panel-diskio/panel-net are display:none, so :last-child
            lands on a hidden panel. Grow Thermals and Telemetry via IDs so they fill
            the column height instead of leaving a black gap at the bottom. */
-        #panel-thermals { flex:0 1 auto; max-height:300px; display:flex; flex-direction:column; }
+        #panel-thermals { flex:1 1 auto; min-height:150px; max-height:480px; display:flex; flex-direction:column; }
         #panel-thermals > .mod-body { flex:1 1 auto; display:flex; flex-direction:column; }
         #panel-thermals .thermal { flex:1; height:auto !important; min-height:40px; }
         #panel-telemetry { flex:0 0 auto; }   /* sparkline stats hug — stretching them just makes gaps */
