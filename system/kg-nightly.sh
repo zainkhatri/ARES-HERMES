@@ -19,6 +19,11 @@ env KG_DB="$CENTRAL" KG_MAX_DEPTH=4 OLLAMA_HOST=http://127.0.0.1:11434 PYTHONPAT
   python3 -m mnemosyne.cli reindex /mnt/nvme/PROMETHEUS --box ARES \
   && echo "kg-nightly: ARES reindex ok" || echo "kg-nightly: ARES reindex FAILED"
 
+# 1b) index Claude Code chats into the graph (searchable session context; bounded head-read)
+env KG_DB="$CENTRAL" PYTHONPATH="$MNEMO" \
+  python3 -m mnemosyne.cli index-chats --box ARES \
+  && echo "kg-nightly: chats indexed ok" || echo "kg-nightly: chat index FAILED"
+
 # 2) EROS over the tailnet (best-effort; the script self-skips if EROS is unreachable)
 /mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/system/kg-sync-eros.sh \
   && echo "kg-nightly: EROS sync ok" || echo "kg-nightly: EROS sync skipped/failed"
