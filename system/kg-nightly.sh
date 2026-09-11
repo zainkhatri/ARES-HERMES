@@ -34,6 +34,11 @@ CLAUDE_WEB=/mnt/nvme/PROMETHEUS/PERSONAL/CLAUDE
   python3 -m mnemosyne.cli index-claude-web --box ARES --dir "$CLAUDE_WEB" --summary-budget 0 \
   && echo "kg-nightly: claude.ai export indexed" || true
 
+# 1c3) index this box's Claude environment (skills + MCP servers) so a new account/box knows what you use + how to re-add
+env KG_DB="$CENTRAL" PYTHONPATH="$MNEMO" \
+  python3 -m mnemosyne.cli index-env --box ARES \
+  && echo "kg-nightly: env (skills+mcps) indexed" || true
+
 # 1d) progressive Ollama summaries for still-raw chat/gpt nodes (GPT + ZEUS backfill), budgeted
 #     so a ~9k-conversation backfill spreads across nights instead of blocking. gpu-loan guarded.
 env KG_DB="$CENTRAL" OLLAMA_HOST=http://127.0.0.1:11434 PYTHONPATH="$MNEMO" \
