@@ -219,7 +219,7 @@
         /* ARES right column: panel-diskio/panel-net are display:none, so :last-child
            lands on a hidden panel. Grow Thermals and Telemetry via IDs so they fill
            the column height instead of leaving a black gap at the bottom. */
-        #panel-thermals { flex:1 1 auto; min-height:120px; max-height:300px; display:flex; flex-direction:column; }
+        #panel-thermals { flex:1 1 auto; min-height:120px; display:flex; flex-direction:column; }
         #panel-thermals > .mod-body { flex:1 1 auto; display:flex; flex-direction:column; }
         #panel-thermals .thermal { flex:1; height:auto !important; min-height:40px; }
         #panel-telemetry { flex:0 0 auto; }   /* sparkline stats hug — stretching them just makes gaps */
@@ -736,7 +736,8 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
             
 
             {% if _brand == 'ARES' %}
-            <section class="mod c-bl c-br" id="panel-array" style="flex:1 1 0;min-height:0;display:flex;flex-direction:column">
+            <div class="mid-floor" style="display:flex;gap:14px;flex:1 1 0;min-height:0">
+              <section class="mod c-bl c-br" id="panel-array" style="flex:1.5 1 0;min-width:0;min-height:0;display:flex;flex-direction:column">
                 <div class="mod-head">
                     <span class="mod-title">Array map</span>
                     <span class="mod-meta" id="arr-count">—</span>
@@ -744,7 +745,14 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
                 <div class="mod-body arr-list" id="arr-list" style="flex:1 1 auto">
                     <div class="arr-empty">waiting for array…</div>
                 </div>
-            </section>
+              </section>
+              <section class="mod c-tl c-br" id="ares-kg-card" style="flex:1 1 0;min-width:0;min-height:0;display:flex;flex-direction:column;cursor:pointer" title="click to explore">
+                <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
+                  <span class="mod-meta" id="ares-kg-expand" style="cursor:pointer" title="expand · full-screen">⤢</span></div>
+                <div class="mod-body" style="position:relative;flex:1 1 auto;min-height:0;padding:0">
+                  <div id="ares-kg" style="position:absolute;inset:0"></div></div>
+              </section>
+            </div>
             {% else %}
             <!-- EROS/ZEUS have no storage data — the graph is their centre centrepiece -->
             <section class="mod c-tl c-br" id="ares-kg-card" style="flex:1 1 0;min-height:0;display:flex;flex-direction:column;cursor:pointer" title="click to explore">
@@ -821,15 +829,6 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
                     <div class="th-scale"><span id="th-hi">90&deg;C</span><span id="th-lo">0&deg;C</span></div>
                 </div>
             </section>
-
-            {% if _brand == 'ARES' %}
-            <section class="mod c-tr c-br" id="ares-kg-card" style="display:flex;flex-direction:column;cursor:pointer" title="click to explore">
-                <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
-                  <span class="mod-meta" id="ares-kg-expand" style="cursor:pointer" title="expand · full-screen">⤢</span></div>
-                <div class="mod-body" style="position:relative;aspect-ratio:1/1;max-height:280px;min-height:0;padding:0">
-                  <div id="ares-kg" style="position:absolute;inset:0"></div></div>
-            </section>
-            {% endif %}
 
             <section class="mod c-bl c-br" id="panel-telemetry">
                 <div class="mod-head">
@@ -977,8 +976,11 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
        each growing to split the column height as chunky bars (no void). */
     /* Array-map + Where-it-lives are compact content-height panels with moderate bars;
        the centre distributes leftover height as even spacing between sections (not a void). */
-    .col-mid #panel-array, .col-mid #panel-fbreak { flex:0 0 auto !important; min-height:0; }
-    .col-mid .mod-body.arr-list { flex:0 0 auto !important; justify-content:flex-start !important; gap:11px; padding:8px 12px; }
+    .col-mid #panel-fbreak { flex:0 0 auto !important; min-height:0; }
+    /* Array + Knowledge-Graph share a growing floor row — array fills its height so
+       its rows spread instead of leaving a void beneath them. */
+    .col-mid .mid-floor #panel-array { flex:1.5 1 0 !important; min-height:0; }
+    .col-mid .mod-body.arr-list { flex:1 1 auto !important; justify-content:space-between !important; gap:11px; padding:10px 12px; }
     .col-mid .arr-list .arr-row { flex:0 0 auto !important; display:flex; flex-direction:column; }
     .col-mid .arr-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px; }
     .col-mid .arr-name { font-size:12.5px; }
@@ -991,7 +993,7 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     .col-mid #panel-fbreak .frow-bar { height:11px; border-radius:3px; }
     .col-mid #panel-array .mod-head { padding-top:6px; padding-bottom:6px; }
     .col-mid #vitals-hero { flex:0 0 auto !important; grid-auto-rows:64px !important; align-content:start; }
-    .col-mid { justify-content:space-between; }
+    .col-mid { justify-content:flex-start; }
     /* compress the tallest ARES panels so the grid shrinks and the EROS/ZEUS
        band claims the dead space. col0 (CPU gauge + ops) was forcing 542px. */
     .hud { gap:7px; }
