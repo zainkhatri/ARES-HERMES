@@ -2606,6 +2606,14 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
   var card = window.KGGraph(document.getElementById('ares-kg'), { box: KGBOX, accent: ACCENT, limit: 420, detailInline: false });
   var kAccent = 'rgb(' + ACCENT + ')';
   function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+  // default (no node selected) Inspect state = a live KG summary instead of a bare prompt
+  fetch('/api/kg?limit=1' + (KGBOX ? '&box=' + encodeURIComponent(KGBOX) : '')).then(function(r){ return r.json(); }).then(function(d){
+    var e = document.getElementById('kgi-empty'); if (!e || !d || !d.total_nodes) return;
+    e.innerHTML = '<div style="font-size:22px;font-weight:700;color:' + kAccent + ';line-height:1.1">' + d.total_nodes.toLocaleString() + '</div>' +
+      '<div style="font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-2);margin:2px 0 12px">nodes · ' + (d.total_edges || 0).toLocaleString() + ' links</div>' +
+      '<div style="font-size:12px;line-height:1.6;color:var(--text-1)">Your filesystem, every Claude &amp; ChatGPT conversation, skills, MCPs &amp; agents — one graph.</div>' +
+      '<div style="font-size:11px;color:var(--text-2);margin-top:10px;opacity:.75">Click any node to read what it is.</div>';
+  }).catch(function(){});
   card.onNode(function (id) {
     var n = card.byId(id); if (!n) return;
     var empty = document.getElementById('kgi-empty'), det = document.getElementById('kgi-detail');
