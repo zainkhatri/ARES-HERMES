@@ -216,6 +216,8 @@
               <button class="k" data-k="down">↓</button>
               <button class="k" data-k="left">←</button>
               <button class="k" data-k="right">→</button>
+              <button class="k" data-k="space">space</button>
+              <button class="k" data-k="enter">⏎</button>
               <button class="k" data-k="slash">/</button>
               <button class="k" data-k="pipe">|</button>
               <button class="k" data-k="tilde">~</button>
@@ -494,6 +496,7 @@
     var KEYSEQ = {
         esc: '\x1b', tab: '\t', ctrlc: '\x03', bksp: '\x7f',
         up: '\x1b[A', down: '\x1b[B', left: '\x1b[D', right: '\x1b[C',
+        enter: '\r', space: ' ',
         slash: '/', pipe: '|', tilde: '~'
     };
     document.getElementById('keys').addEventListener('click', function (e) {

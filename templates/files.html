@@ -729,11 +729,25 @@
             .chat-input { min-height:44px; font-size:16px; }
             .chat-send-btn { height:44px; width:48px; }
         }
+        /* App shell (native A&Z passes ?app=1): the native header already gives a
+           back button + title, so drop the redundant web brand/back chrome. Keep the
+           hamburger — it's the folder-tree toggle. */
+        body.appmode .nbr-self, body.appmode .back-chip, body.appmode .node-switcher { display:none; }
+        body.appmode .navbar { padding-top:calc(8px + var(--sat)); }
+        /* Mobile: the 400px preview pane can't sit beside the grid on a phone. When a
+           file is opened, float it as a full-screen overlay so it never shoves the
+           file list off-screen. The existing close button dismisses it. */
+        @media (max-width:600px) {
+            .explorer-preview {
+                position:fixed; inset:0; top:0; width:100%; height:100dvh;
+                z-index:600; border-left:none; padding-top:var(--sat);
+            }
+        }
     </style>
     <script>window.__NODE="ARES"</script>
     <script src="/static/node-switcher.js" defer></script>
 </head>
-<body>
+<body class="{% if request.args.get('app') %}appmode{% endif %}">
 <div class="app">
     <header class="navbar">
         <div class="navbar-left">

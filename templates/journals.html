@@ -189,9 +189,13 @@
     .rail-foot { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); border-top:1px solid var(--line); padding-top:10px; display:flex; justify-content:space-between; }
     @media (max-width:600px){ .rcard-frame{ height:56vh; } }
     @media (prefers-reduced-motion: reduce){ .rcard,.rmark{ animation:none; opacity:1; transform:none; } }
-    .otd-row { border-radius:7px; padding:8px 10px; margin:0 -10px; transition:background .15s, transform .15s; }
-    .otd-row.clickable { cursor:pointer; }
-    .otd-row.clickable:hover { background:rgba(239,68,68,.08); transform:translateX(2px); }
+    .otd-grid { display:flex; flex-wrap:wrap; gap:22px; }
+    .otd-card { cursor:pointer; width:320px; max-width:100%; }
+    .otd-frame { border-radius:9px; overflow:hidden; position:relative; background:var(--panel); border:1px solid var(--line); box-shadow:var(--shadow); transition:transform .2s, box-shadow .2s; }
+    .otd-card:hover .otd-frame { transform:translateY(-4px); box-shadow:0 24px 48px -18px rgba(0,0,0,.75); }
+    .otd-frame img { width:100%; height:auto; display:block; }
+    .otd-badge { position:absolute; top:10px; right:10px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.04em; color:var(--accent-b); background:rgba(4,7,13,.72); border:1px solid var(--accent); border-radius:999px; padding:4px 10px; box-shadow:0 4px 12px rgba(0,0,0,.45); backdrop-filter:blur(4px); }
+    .otd-cap { margin-top:11px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); }
 
     /* ── Notebook page grid ── */
     .book-toolbar { display:flex; align-items:center; gap:14px; margin-bottom:24px; flex-wrap:wrap; }
@@ -321,6 +325,7 @@
 <section class="mod c-tl c-br" id="jr-today" hidden>
     <div class="mod-head">
         <span class="mod-title">On This Day</span>
+        <span class="mod-meta" id="otd-date"></span>
     </div>
     <div class="mod-body">
         <div class="wrap" id="otd-body"></div>
@@ -414,19 +419,23 @@ function renderOnThisDay() {
         panel.hidden = true;
         return;
     }
-    let rows = '';
+    const dateEl = document.getElementById('otd-date');
+    if (dateEl) dateEl.textContent = onThisDay.month_day || '';
+    let cards = '';
     onThisDay.entries.forEach(e => {
-        const clickable = e.pdf ? ' clickable' : '';
-        const onclick = e.pdf ? ` onclick="openJournalPage('${esc(e.pdf).replace(/'/g, "\\'")}', ${e.page || 0})"` : '';
-        rows += `<div class="otd-row${clickable}" style="margin-bottom:10px"${onclick}>
-            <div class="eyebrow" style="margin-bottom:4px">${e.year} · ${e.ago}</div>
-            <div style="font-size:13px;line-height:1.6;color:var(--ink)">${esc(e.snippet)}</div>
+        if (!e.pdf) return;  // no page image → nothing to show
+        const pdfArg = esc(e.pdf).replace(/'/g, "\\'");
+        const img = `/api/journals/${encodeURIComponent(e.pdf)}/page/${e.page || 0}?thumb=hq`;
+        cards += `<div class="otd-card" onclick="openJournalPage('${pdfArg}', ${e.page || 0})" title="${e.year} · ${e.ago}">
+            <div class="otd-frame">
+                <img src="${img}" alt="Journal page from ${e.year}" loading="lazy">
+                <span class="otd-badge">${e.year}</span>
+            </div>
+            <div class="otd-cap">${e.ago}</div>
         </div>`;
     });
-    body.innerHTML = `<div class="otd reveal" style="border:1px solid var(--line);border-radius:10px;padding:18px 20px;background:rgba(255,255,255,0.02)">
-        <div class="eyebrow" style="color:var(--accent);margin-bottom:12px">📓 On this day · ${esc(onThisDay.month_day)}</div>
-        ${rows}
-    </div>`;
+    if (!cards) { panel.hidden = true; return; }
+    body.innerHTML = `<div class="otd otd-grid reveal">${cards}</div>`;
     panel.hidden = false;
 }
 
