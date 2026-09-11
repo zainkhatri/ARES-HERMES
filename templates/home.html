@@ -747,8 +747,21 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
                 <div class="mod-body" style="position:relative;flex:1 1 auto;min-height:160px;padding:0">
                   <div id="ares-kg" style="position:absolute;inset:0"></div></div>
               </section>
-              <section class="mod c-tr c-br" id="panel-slot" style="flex:1 1 0;min-height:0;display:flex;align-items:center;justify-content:center;border-style:dashed;opacity:.32">
-                <span style="font-size:11px;letter-spacing:.14em;color:var(--text-2)">+ MODULE SLOT</span>
+              <section class="mod c-tr c-br" id="panel-kg-inspect" style="flex:1 1 0;min-height:0;display:flex;flex-direction:column">
+                <div class="mod-head"><span class="mod-title">Graph · Inspect</span>
+                  <span class="mod-meta" id="kgi-kind">—</span></div>
+                <div class="mod-body" id="kgi-body" style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:14px 16px">
+                  <div id="kgi-empty" style="color:var(--text-2);font-size:12px;line-height:1.7">
+                    Click a node in the graph to read what it is.<br>
+                    <span style="opacity:.6">Each node is a folder, sized by depth; the label is an AI-written summary of what lives there.</span>
+                  </div>
+                  <div id="kgi-detail" style="display:none">
+                    <div id="kgi-name" style="font-size:15px;font-weight:600;color:var(--text-0);word-break:break-word;margin-bottom:4px"></div>
+                    <div id="kgi-path" style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--text-2);word-break:break-all;margin-bottom:12px"></div>
+                    <div id="kgi-meta" style="display:flex;gap:14px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);margin-bottom:12px"></div>
+                    <div id="kgi-und" style="font-size:12.5px;line-height:1.65;color:var(--text-1);border-top:1px solid var(--line);padding-top:12px"></div>
+                  </div>
+                </div>
               </section>
             </div>
         </div>
@@ -2590,7 +2603,22 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
   var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUpperCase();
   var KGBOX = BRAND === 'ZEUS' ? null : BRAND;  // ponytail: null = union graph for ZEUS
   var ACCENT = BRAND === 'ZEUS' ? '56,189,248' : BRAND === 'EROS' ? '245,158,11' : '239,68,68';
-  var card = window.KGGraph(document.getElementById('ares-kg'), { box: KGBOX, accent: ACCENT, limit: 420 });
+  // card routes node detail to the Inspect slot (not the on-canvas popup)
+  var card = window.KGGraph(document.getElementById('ares-kg'), { box: KGBOX, accent: ACCENT, limit: 420, detailInline: false });
+  var kAccent = 'rgb(' + ACCENT + ')';
+  function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+  card.onNode(function (id) {
+    var n = card.byId(id); if (!n) return;
+    var empty = document.getElementById('kgi-empty'), det = document.getElementById('kgi-detail');
+    if (empty) empty.style.display = 'none';
+    if (det) det.style.display = 'block';
+    var K = document.getElementById('kgi-kind'); if (K){ K.textContent = n.kind; K.style.color = kAccent; }
+    document.getElementById('kgi-name').textContent = n.name || id;
+    document.getElementById('kgi-path').textContent = n.path || id;
+    document.getElementById('kgi-meta').innerHTML = '<span style="color:' + kAccent + '">' + esc(n.kind) + '</span><span>depth ' + esc(n.depth) + '</span>';
+    var u = (n.u && String(n.u).trim()) ? n.u : (n.kind + ' · no description generated yet');
+    document.getElementById('kgi-und').textContent = u;
+  });
   var full = null, ov = document.getElementById('ares-kg-full');
   function openFull() {
     ov.style.display = 'block';
