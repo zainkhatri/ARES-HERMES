@@ -8,51 +8,62 @@ lives on that machine, each node annotated with an AI-written description of the
 
 ---
 
-## The dashboards
+## Evolution
 
-### ARES — the host (red)
-Proxmox host: runs the dashboard, the photo library, and the shared RTX 3080.
+It started as one box and a photo browser. Four versions later it's a three-machine mission-control
+layer. These are the actual dashboards, rendered straight from their git history.
 
+### V1 · `prometheon`
+The origin: a single box running a **photo gallery**, a **web terminal**, and a **system-vitals** panel,
+under a blue `PROMETHEON` wordmark. More app-launcher than dashboard.
+
+![V1 — prometheon](docs/screenshots/versions/v1-prometheon.png)
+
+### V2 · `nexus`
+The rename. `prometheon` became **nexus** as a second machine came online — the small "nexus" mini-NAS
+beside the main host. A bridge phase: it carried V1's foundation forward and set up the two-box split.
+*(No standalone dashboard from this short-lived naming era survives in the history — it went straight
+into V3.)*
+
+### V3 · `ARES & NEXUS`
+Two boxes. The main host became **ARES** (the "super-NAS"), with **NEXUS** as its mini-NAS peer. The
+dashboard grew into the red **ARES** wordmark, a capability-gated layout shared across both machines,
+**operation modules**, and a peer/sister-node panel showing the other box's health.
+
+![V3 — ARES & NEXUS](docs/screenshots/versions/v3-ares-nexus.png)
+
+### V4 · `ARES · EROS · ZEUS`  *(current)*
+Three machines. **NEXUS became ZEUS**, and a third box — **EROS** — joined. One template renders three
+full-screen, per-box themed views (red / amber / blue), each pulling its own data, each with a
+traversable knowledge graph. A switcher (top-left) and a live clock (top-right) tie them together.
+
+**ARES** — the Proxmox host: dashboard, photo library, shared RTX 3080.
 ![ARES dashboard](docs/screenshots/ares.png)
 
-### EROS — the worker (amber)
-Ryzen + GTX 1070 box that runs the business container stack. Its "operation modules" are the live
-containers, not apps.
-
+**EROS** — the worker: Ryzen + GTX 1070 running the business container stack (its "operation modules"
+are the live containers, not apps).
 ![EROS dashboard](docs/screenshots/eros.png)
 
-### ZEUS — the vault (blue)
-Backup mule that wakes on a timer, pulls nightly copies of ARES + EROS, and sleeps. Its view centers on
-the **combined** knowledge graph — the union of all three machines.
-
+**ZEUS** — the vault: a backup mule that wakes on a timer, pulls nightly copies of ARES + EROS, and
+sleeps. Its view centers on the **combined** knowledge graph — the union of all three machines.
 ![ZEUS dashboard](docs/screenshots/zeus.png)
 
----
-
-## Lineage
-
-It started as **prometheon**. It became **nexus**. Then I split it into **ARES** + nexus, built **EROS**,
-and it settled into three machines: **ARES · EROS · ZEUS**.
-
-> "nexus" was the earlier name for the third box — it's **ZEUS** now. The name survives here as history.
-
-The repo name (`ARES-HERMES`) and the pool path (`PROMETHEUS`) are fossils from earlier stops on that
-road. Same project, more machines.
+> The repo name (`ARES-HERMES`) and the pool path (`PROMETHEUS`) are fossils from earlier stops on that
+> road. Same project, more machines.
 
 ---
 
 ## What's inside
 
-- **One template, three brands.** `templates/home.html` renders per-box via `data-brand`; a switcher
-  (top-left) and a live clock (top-right) tie the three views together. Each box pulls its own data —
-  ARES from its host APIs, EROS/ZEUS from a shared fleet snapshot — so no view ever shows another box's
-  numbers.
+- **One template, three brands.** `templates/home.html` renders per-box via `data-brand`; each box pulls
+  its own data — ARES from its host APIs, EROS/ZEUS from a shared fleet snapshot — so no view ever shows
+  another box's numbers.
 - **Knowledge graph (MNEMOSYNE).** A stdlib-only Python indexer walks each box's filesystem to a bounded
   depth, fingerprints folders, and asks a local LLM (Ollama) to write a one-line "understanding" of each
   one — vault directories are name-only, never scanned. The result is a force-directed 3D graph you can
-  spin, zoom, and click: pick a node to read its write-up, or open fullscreen to focus-and-spotlight a
-  subtree. A nightly job keeps it current, and an always-on MCP server exposes it to any agent session
-  (`kg_search`, `kg_get`, `kg_neighbors`, `kg_tree`, `kg_stat`).
+  spin, zoom, and click: pick a node to read its write-up in the inspector, or open fullscreen to
+  focus-and-spotlight a subtree. A nightly job keeps it current, and an always-on MCP server exposes it
+  to any agent session (`kg_search`, `kg_get`, `kg_neighbors`, `kg_tree`, `kg_stat`).
 - **Fleet telemetry.** CPU / memory / load / thermals / GPU relay per box, plus a storage "where it
   lives" breakdown.
 - **The apps behind the tiles.** A CLIP-searchable photo gallery with face clustering, a GoodNotes
