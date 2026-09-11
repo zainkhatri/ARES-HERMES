@@ -549,13 +549,14 @@
 {% include "_switcher.html" %}
 <div class="boxclock" id="box-clock"></div>
 <style>
-.boxsw{position:fixed;top:10px;left:14px;z-index:9000;display:flex;gap:2px;border:1px solid rgba(var(--ares-rgb),.32);border-radius:6px;overflow:hidden;background:rgba(12,7,7,.72);backdrop-filter:blur(4px)}
-.boxsw .bs{padding:6px 15px;font-size:12px;font-weight:700;letter-spacing:2px;color:#8a7270;text-decoration:none}
-.boxsw .bs.bs-zeus:hover{color:#38bdf8}.boxsw .bs.bs-eros:hover{color:#f59e0b}.boxsw .bs.bs-ares:hover{color:var(--ares)}
-.boxsw .bs.is-on{color:var(--bg-0);background:var(--ares)}
-.boxclock{position:fixed;top:9px;right:16px;z-index:9000;text-align:right;line-height:1.05;pointer-events:none;font-family:'JetBrains Mono',monospace}
-.boxclock .t{display:block;font-size:21px;font-weight:800;color:var(--text-1);letter-spacing:2px;font-variant-numeric:tabular-nums;text-shadow:0 0 11px rgba(var(--ares-rgb),.5)}
-.boxclock .d{display:block;font-size:9px;letter-spacing:3px;color:var(--text-3);margin-top:2px}
+.boxsw{position:fixed;top:10px;left:16px;z-index:9000;display:flex;overflow:hidden;border:1px solid var(--ember-dim);background:rgba(var(--panel-rgb),.85);backdrop-filter:blur(4px);box-shadow:inset 0 0 22px rgba(var(--ares-rgb),.045),0 0 12px rgba(var(--ares-rgb),.06);font-family:'JetBrains Mono',monospace}
+.boxsw .bs{padding:6px 14px;font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--text-3);text-decoration:none;text-transform:uppercase;border-left:1px solid var(--ember-dim)}
+.boxsw .bs:first-child{border-left:0}
+.boxsw .bs:hover{color:var(--text-1);background:rgba(var(--ares-rgb),.08)}
+.boxsw .bs.is-on{color:var(--bg-0);background:var(--ares);text-shadow:none}
+.boxclock{position:fixed;top:10px;right:16px;z-index:9000;text-align:right;line-height:1.05;pointer-events:none;font-family:'JetBrains Mono',monospace;padding:5px 12px 6px;border:1px solid var(--ember-dim);background:rgba(var(--panel-rgb),.85);backdrop-filter:blur(4px);box-shadow:inset 0 0 22px rgba(var(--ares-rgb),.045),0 0 12px rgba(var(--ares-rgb),.06)}
+.boxclock .t{display:block;font-size:19px;font-weight:800;color:var(--text-1);letter-spacing:.14em;font-variant-numeric:tabular-nums;text-shadow:0 0 11px rgba(var(--ares-rgb),.5)}
+.boxclock .d{display:block;font-size:9px;letter-spacing:.22em;color:var(--text-3);margin-top:3px;text-transform:uppercase}
 /* fleet freshness badge on non-ARES boxes */
 .fleet-fresh{position:fixed;bottom:10px;right:14px;z-index:9000;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--text-3);pointer-events:none}
 .fleet-fresh.stale{color:#ef4444}
@@ -990,7 +991,7 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     .col-mid #panel-fbreak .frow-bar { height:11px; border-radius:3px; }
     .col-mid #panel-array .mod-head { padding-top:6px; padding-bottom:6px; }
     .col-mid #vitals-hero { flex:0 0 auto !important; grid-auto-rows:64px !important; align-content:start; }
-    .col-mid { justify-content:flex-start; }
+    .col-mid { justify-content:space-between; }
     /* compress the tallest ARES panels so the grid shrinks and the EROS/ZEUS
        band claims the dead space. col0 (CPU gauge + ops) was forcing 542px. */
     .hud { gap:7px; }
