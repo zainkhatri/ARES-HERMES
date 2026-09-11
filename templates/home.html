@@ -219,7 +219,7 @@
         /* ARES right column: panel-diskio/panel-net are display:none, so :last-child
            lands on a hidden panel. Grow Thermals and Telemetry via IDs so they fill
            the column height instead of leaving a black gap at the bottom. */
-        #panel-thermals { flex:1 1 auto; min-height:150px; max-height:480px; display:flex; flex-direction:column; }
+        #panel-thermals { flex:1 1 auto; min-height:120px; max-height:300px; display:flex; flex-direction:column; }
         #panel-thermals > .mod-body { flex:1 1 auto; display:flex; flex-direction:column; }
         #panel-thermals .thermal { flex:1; height:auto !important; min-height:40px; }
         #panel-telemetry { flex:0 0 auto; }   /* sparkline stats hug — stretching them just makes gaps */
@@ -727,29 +727,30 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
 
             
 
-            <div style="display:flex;gap:14px;flex:1 1 0;min-height:220px">
-              <div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:14px;justify-content:center">
-                <section class="mod c-bl c-br" id="panel-array">
-                    <div class="mod-head">
-                        <span class="mod-title">Array map</span>
-                        <span class="mod-meta" id="arr-count">—</span>
-                    </div>
-                    <div class="mod-body arr-list" id="arr-list">
-                        <div class="arr-empty">waiting for array…</div>
-                    </div>
-                </section>
-                <section class="fbreak" style="flex:0 0 auto">
-                    <div class="fbreak-head"><span>Where it lives</span><span id="fbreak-total">—</span></div>
-                    <div id="fbreak-list"><div class="arr-empty">measuring…</div></div>
-                </section>
-              </div>
-              <section class="mod c-tl c-br" id="ares-kg-card" style="flex:0 0 clamp(300px,26vw,400px);min-height:0;display:flex;flex-direction:column;cursor:pointer" title="click to explore">
+            {% set _brand = (boot.hostname if boot else 'ARES')|upper %}
+            {% if _brand == 'ARES' %}
+            <section class="mod c-bl c-br" id="panel-array" style="flex:1 1 0;min-height:0;display:flex;flex-direction:column">
+                <div class="mod-head">
+                    <span class="mod-title">Array map</span>
+                    <span class="mod-meta" id="arr-count">—</span>
+                </div>
+                <div class="mod-body arr-list" id="arr-list" style="flex:1 1 auto">
+                    <div class="arr-empty">waiting for array…</div>
+                </div>
+            </section>
+            <section class="fbreak mod c-bl c-br" id="panel-fbreak" style="flex:1 1 0;min-height:0;display:flex;flex-direction:column">
+                <div class="fbreak-head"><span>Where it lives</span><span id="fbreak-total">—</span></div>
+                <div id="fbreak-list" style="flex:1 1 auto"><div class="arr-empty">measuring…</div></div>
+            </section>
+            {% else %}
+            <!-- EROS/ZEUS have no storage data — the graph is their centre centrepiece -->
+            <section class="mod c-tl c-br" id="ares-kg-card" style="flex:1 1 0;min-height:0;display:flex;flex-direction:column;cursor:pointer" title="click to explore">
                 <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
                   <span class="mod-meta" id="ares-kg-expand" style="cursor:pointer" title="expand · full-screen">⤢</span></div>
                 <div class="mod-body" style="position:relative;flex:1 1 auto;min-height:0;padding:0">
                   <div id="ares-kg" style="position:absolute;inset:0"></div></div>
-              </section>
-            </div>
+            </section>
+            {% endif %}
         </div>
 
         <!-- ── right: jobs + GPU ─────────────────────────────────────────── -->
@@ -817,6 +818,15 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
                     <div class="th-scale"><span id="th-hi">90&deg;C</span><span id="th-lo">0&deg;C</span></div>
                 </div>
             </section>
+
+            {% if _brand == 'ARES' %}
+            <section class="mod c-tr c-br" id="ares-kg-card" style="display:flex;flex-direction:column;cursor:pointer" title="click to explore">
+                <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
+                  <span class="mod-meta" id="ares-kg-expand" style="cursor:pointer" title="expand · full-screen">⤢</span></div>
+                <div class="mod-body" style="position:relative;aspect-ratio:1/1;max-height:280px;min-height:0;padding:0">
+                  <div id="ares-kg" style="position:absolute;inset:0"></div></div>
+            </section>
+            {% endif %}
 
             <section class="mod c-bl c-br" id="panel-telemetry">
                 <div class="mod-head">
@@ -960,12 +970,12 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     /* trim ~vertical so fitScale barely zooms (fonts stay full size) */
     .peer-band { min-height:190px; }
     .col-mid #vitals-hero .v-tile { padding:8px 12px 9px; }
-    /* compact Array Map — the 3 volume bars were stretching to fill the panel
-       (arr-list flex:1 + space-between + arr-row flex:1 1 0). Force content-height,
-       clustered at the top — !important to beat the earlier rules. */
-    .col-mid #panel-array { flex:0 0 auto !important; }
-    .col-mid .mod-body.arr-list { flex:0 0 auto !important; justify-content:flex-start !important; gap:9px; padding:9px 12px; }
-    .col-mid .arr-list .arr-row { flex:0 0 auto !important; }
+    /* KG moved to the right column — the center is now Array map + Where-it-lives,
+       each growing to split the column height as chunky bars (no void). */
+    .col-mid #panel-array, .col-mid #panel-fbreak { flex:1 1 0 !important; min-height:0; }
+    .col-mid .mod-body.arr-list { flex:1 1 auto !important; justify-content:space-between !important; gap:10px; padding:12px; }
+    .col-mid .arr-list .arr-row { flex:1 1 0 !important; display:flex; flex-direction:column; justify-content:center; }
+    .col-mid #panel-fbreak > #fbreak-list { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; justify-content:space-between; gap:8px; padding:4px 2px 8px; }
     .col-mid #panel-array .mod-head { padding-top:6px; padding-bottom:6px; }
     .col-mid .arr-name { font-size:12px; }
     .col-mid .arr-cap { font-size:11px; }
