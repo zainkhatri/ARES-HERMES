@@ -220,19 +220,32 @@ def get_usage_stats():
 
 
 def _kg_search(query, limit=8):
-    """Search the unified homelab knowledge graph (folders + every past conversation)."""
+    """Search the unified homelab knowledge graph (folders + every past conversation).
+    Term-based OR-of-prefixes FTS for recall (a memory tool wants recall over precision)."""
+    import re, sqlite3, urllib.parse
     try:
         from system import kg_query
         db = kg_query.db_path()
         if not db:
             return "Knowledge graph unavailable."
-        res = kg_query.search(db, query, limit=limit).get("results", [])
-        if not res:
+        terms = [t for t in re.findall(r"[a-z0-9]{3,}", query.lower())]
+        if not terms:
+            return f"Give a more specific query than '{query}'."
+        fts = " OR ".join(t + "*" for t in terms)
+        c = sqlite3.connect(f"file:{urllib.parse.quote(db)}?mode=ro", uri=True)
+        c.row_factory = sqlite3.Row
+        try:
+            rows = c.execute(
+                "SELECT n.kind, n.name, n.understanding FROM nodes_fts f JOIN nodes n ON n.id=f.id"
+                " WHERE nodes_fts MATCH ? ORDER BY rank LIMIT ?", (fts, limit)).fetchall()
+        finally:
+            c.close()
+        if not rows:
             return f"No knowledge-graph matches for '{query}'."
         lines = [f"KNOWLEDGE GRAPH — top matches for '{query}':"]
-        for r in res:
-            u = (r.get("understanding") or "").strip().replace("\n", " ")
-            lines.append(f"• [{r.get('kind')}] {r.get('name')}" + (f" — {u[:240]}" if u else ""))
+        for r in rows:
+            u = (r["understanding"] or "").strip().replace("\n", " ")
+            lines.append(f"• [{r['kind']}] {r['name']}" + (f" — {u[:240]}" if u else ""))
         return "\n".join(lines)
     except Exception as e:
         return f"kg_search error: {e}"
