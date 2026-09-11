@@ -79,3 +79,6 @@ system/_files_thumb_cache/
 ai_data/files_index.db*
 ai_data/doc_embeddings.npy
 ai_data/doc_chunks.json
+.superpowers/
+.playwright-mcp/
+static/_fleet.json
