@@ -254,6 +254,90 @@ CONSOLE_KEYS = {"Escape", "Tab", "Enter", "Up", "Down", "Left", "Right",
                 "C-c", "C-d", "C-l", "C-r", "C-u", "PPage", "NPage", "BSpace"}
 
 
+_CLAUDE_HOME = os.path.expanduser("~/.claude")
+
+
+def _scan_skill_dirs(root, prefix, out):
+    """Each immediate subdir containing a SKILL.md is a skill -> '/prefixname'."""
+    assert isinstance(out, set), "out must be a set"
+    try:
+        names = os.listdir(root)
+    except OSError:
+        return
+    for name in names[:400]:                       # bounded
+        if name.startswith((".", "_")):
+            continue
+        if os.path.isfile(os.path.join(root, name, "SKILL.md")):
+            out.add("/" + prefix + name)
+
+
+def _scan_command_files(root, prefix, out):
+    """*.md command files -> '/prefixname'; one nesting level -> '/prefixdir:name'."""
+    assert isinstance(out, set), "out must be a set"
+    try:
+        entries = os.listdir(root)
+    except OSError:
+        return
+    for name in entries[:400]:                     # bounded
+        if name.startswith((".", "_")):
+            continue
+        full = os.path.join(root, name)
+        if name.endswith(".md") and os.path.isfile(full):
+            out.add("/" + prefix + name[:-3])
+        elif os.path.isdir(full):
+            try:
+                subs = os.listdir(full)
+            except OSError:
+                continue
+            for sub in subs[:400]:                 # bounded
+                if sub.endswith(".md") and not sub.startswith(("_", ".")) \
+                        and os.path.isfile(os.path.join(full, sub)):
+                    out.add("/" + prefix + name + ":" + sub[:-3])
+
+
+def _enabled_plugin_paths():
+    """(pluginName, installPath) for each ENABLED plugin, from settings enabledPlugins
+    + the plugins manifest. Fail-soft: any missing/invalid file yields a partial list."""
+    enabled = set()
+    for fn in ("settings.json", "settings.local.json"):
+        try:
+            with open(os.path.join(_CLAUDE_HOME, fn)) as f:
+                ep = json.load(f).get("enabledPlugins", {})
+        except (OSError, ValueError):
+            continue
+        for k, v in ep.items():
+            enabled.add(k) if v is True else enabled.discard(k)
+    try:
+        with open(os.path.join(_CLAUDE_HOME, "plugins", "installed_plugins.json")) as f:
+            manifest = json.load(f).get("plugins", {})
+    except (OSError, ValueError):
+        return []
+    out = []
+    for key in list(enabled)[:100]:                # bounded
+        entries = manifest.get(key) or []
+        path = entries[0].get("installPath", "") if entries else ""
+        name = key.split("@", 1)[0]
+        if path and name:
+            out.append((name, path))
+    return out
+
+
+def _slash_commands():
+    """On-disk slash tokens the phone composer autofills: user skills/commands
+    ('/name') + ENABLED plugin skills/commands ('/plugin:name'). CLI built-ins
+    (/clear, /model…) live on the client; this adds the custom ones. Bounded + sorted."""
+    out = set()
+    _scan_skill_dirs(os.path.join(_CLAUDE_HOME, "skills"), "", out)
+    _scan_command_files(os.path.join(_CLAUDE_HOME, "commands"), "", out)
+    for plugin, path in _enabled_plugin_paths():
+        _scan_skill_dirs(os.path.join(path, "skills"), plugin + ":", out)
+        _scan_command_files(os.path.join(path, "commands"), plugin + ":", out)
+        if len(out) > 800:                         # hard cap, statically bounded
+            break
+    assert len(out) <= 1200, "unbounded command scan"
+    return sorted(out)[:800]
+
+
 def _capture(session):
     """Pane text incl. ~300 lines of scrollback, SGR colors kept, wrapped lines
     joined (-J) so the phone re-wraps at its own width."""
@@ -647,6 +731,10 @@ async def console_loop(ws, target):
                 if name in CONSOLE_KEYS:
                     subprocess.run(["tmux", "send-keys", "-t", _win_target(d), name],
                                    capture_output=True, timeout=4)
+            elif c == "commands":
+                # Live slash-command list for the composer's autofill (user + enabled plugins).
+                cmds = await asyncio.to_thread(_slash_commands)
+                await _safe_send(ws, json.dumps({"commands": cmds}))
             elif c == "windows":
                 await _safe_send(ws, json.dumps({"windows": _windows(target)}))
             elif c in ("selectwin", "newwin", "killwin"):
