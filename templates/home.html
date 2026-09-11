@@ -727,25 +727,29 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
 
             
 
-            <section class="mod c-bl c-br" id="panel-array">
-                <div class="mod-head">
-                    <span class="mod-title">Array map</span>
-                    <span class="mod-meta" id="arr-count">—</span>
-                </div>
-                <div class="mod-body arr-list" id="arr-list">
-                    <div class="arr-empty">waiting for array…</div>
-                </div>
-            </section>
-            <section class="fbreak">
-                <div class="fbreak-head"><span>Where it lives</span><span id="fbreak-total">—</span></div>
-                <div id="fbreak-list"><div class="arr-empty">measuring…</div></div>
-            </section>
-            <section class="mod c-tl c-br" id="ares-kg-card" style="flex:0 0 auto;height:210px;min-height:0;display:flex;flex-direction:column;cursor:pointer" title="click to explore">
-              <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
-                <span class="mod-meta" id="ares-kg-expand" style="cursor:pointer" title="expand · full-screen">⤢</span></div>
-              <div class="mod-body" style="position:relative;flex:1 1 auto;min-height:0;padding:0">
-                <div id="ares-kg" style="position:absolute;inset:0"></div></div>
-            </section>
+            <div style="display:flex;gap:14px;flex:1 1 0;min-height:220px">
+              <div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:14px;justify-content:center">
+                <section class="mod c-bl c-br" id="panel-array">
+                    <div class="mod-head">
+                        <span class="mod-title">Array map</span>
+                        <span class="mod-meta" id="arr-count">—</span>
+                    </div>
+                    <div class="mod-body arr-list" id="arr-list">
+                        <div class="arr-empty">waiting for array…</div>
+                    </div>
+                </section>
+                <section class="fbreak" style="flex:0 0 auto">
+                    <div class="fbreak-head"><span>Where it lives</span><span id="fbreak-total">—</span></div>
+                    <div id="fbreak-list"><div class="arr-empty">measuring…</div></div>
+                </section>
+              </div>
+              <section class="mod c-tl c-br" id="ares-kg-card" style="flex:0 0 clamp(300px,26vw,400px);min-height:0;display:flex;flex-direction:column;cursor:pointer" title="click to explore">
+                <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
+                  <span class="mod-meta" id="ares-kg-expand" style="cursor:pointer" title="expand · full-screen">⤢</span></div>
+                <div class="mod-body" style="position:relative;flex:1 1 auto;min-height:0;padding:0">
+                  <div id="ares-kg" style="position:absolute;inset:0"></div></div>
+              </section>
+            </div>
         </div>
 
         <!-- ── right: jobs + GPU ─────────────────────────────────────────── -->
