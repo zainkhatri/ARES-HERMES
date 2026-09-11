@@ -5,6 +5,7 @@ window.KGGraph = function (el, opts) {
   var ACCENT = opts.accent || '125,205,255';
   var LIMIT = opts.limit || 90;
   var TRAVERSABLE = !!opts.traversable;  // fullscreen only gets focus/spotlight
+  var DETAIL_INLINE = opts.detailInline !== false;  // false = host renders detail elsewhere (a slot) via onNode
   var onNodeCb = null, rafId = null, alive = true, api = null, pollId = null;
 
   // read brand once at construction time
@@ -354,7 +355,8 @@ window.KGGraph = function (el, opts) {
     if (n && TRAVERSABLE) {
       setFocus(n.id);                                 // fullscreen: fly + spotlight + panel
     } else if (n) {
-      selId = n.id; showPanel(n, countChildren(n.id)); // card: summary panel only, no fullscreen
+      selId = n.id;                                    // card: highlight; detail goes inline OR to a host slot
+      if (DETAIL_INLINE) showPanel(n, countChildren(n.id));
       if (onNodeCb) onNodeCb(n.id);
     } else if (focusId != null || selId != null) {
       dismiss();                                      // click empty = dismiss summary / exit focus
