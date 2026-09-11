@@ -723,11 +723,17 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
 ██╔══╝  ╚════██║
 ███████╗███████║
 ╚══════╝╚══════╝</pre>{% endif %}</div>
+            {% set _brand = (boot.hostname if boot else 'ARES')|upper %}
+            {% if _brand == 'ARES' %}
+            <section class="fbreak mod c-bl c-br" id="panel-fbreak" style="flex:1 1 0;min-height:0;display:flex;flex-direction:column">
+                <div class="fbreak-head"><span>Where it lives</span><span id="fbreak-total">—</span></div>
+                <div id="fbreak-list" style="flex:1 1 auto"><div class="arr-empty">measuring…</div></div>
+            </section>
+            {% endif %}
             <div class="vitals" id="vitals-hero"><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div><div class="v-tile v-skel"><div class="v-skel-key"></div><div class="v-skel-num"></div><div class="v-skel-bar"></div><div class="v-skel-meta"></div></div></div>
 
             
 
-            {% set _brand = (boot.hostname if boot else 'ARES')|upper %}
             {% if _brand == 'ARES' %}
             <section class="mod c-bl c-br" id="panel-array" style="flex:1 1 0;min-height:0;display:flex;flex-direction:column">
                 <div class="mod-head">
@@ -737,10 +743,6 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
                 <div class="mod-body arr-list" id="arr-list" style="flex:1 1 auto">
                     <div class="arr-empty">waiting for array…</div>
                 </div>
-            </section>
-            <section class="fbreak mod c-bl c-br" id="panel-fbreak" style="flex:1 1 0;min-height:0;display:flex;flex-direction:column">
-                <div class="fbreak-head"><span>Where it lives</span><span id="fbreak-total">—</span></div>
-                <div id="fbreak-list" style="flex:1 1 auto"><div class="arr-empty">measuring…</div></div>
             </section>
             {% else %}
             <!-- EROS/ZEUS have no storage data — the graph is their centre centrepiece -->
@@ -932,7 +934,7 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     .pk-stat-v { font-size:24px; font-weight:700; color:var(--ares); font-variant-numeric:tabular-nums; line-height:1; }
     .pk-stat-k { font-size:8.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-3); margin-top:5px; }
     /* free vertical room for the (now data-rich) peer band */
-    .col-mid .mark pre { font-size:clamp(11px, 1.2vw, 21px) !important; }
+    .col-mid .mark pre { font-size:clamp(14px, 2.1vw, 38px) !important; }
     .peer-band { min-height:240px; }
     .peer-band .pk-gauge { width:90px; height:90px; }
     .peer-band .pk-gauge .n { font-size:19px; }
