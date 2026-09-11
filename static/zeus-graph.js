@@ -33,10 +33,7 @@ window.KGGraph = function (el, opts) {
     if (k === 'skill') return '52,211,153';                 // Claude skills — emerald
     if (k === 'mcp') return '96,165,250';                   // MCP servers — sky-blue
     if (k === 'agent') return '244,114,182';                // sub-agents — pink
-    if (BRAND !== 'ZEUS' && k === 'folder' && depth != null && depth >= 6) {
-      return BRAND === 'EROS' ? '180,120,40' : '180,60,40';  // ember for deep folders
-    }
-    return PAL[k] || PAL._default;
+    return PAL[k] || PAL._default;   // depth is encoded by node size, not color — keeps legend == canvas
   }
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
@@ -59,10 +56,11 @@ window.KGGraph = function (el, opts) {
   var focusId = null;
   var litSet = null;
 
-  // --- legend DOM (always; card + fullscreen) ---
+  // --- legend DOM (collapsed pill by default; click to expand) ---
   var legEl = document.createElement('div');
-  legEl.style.cssText = 'position:absolute;bottom:8px;left:8px;z-index:10;display:flex;flex-wrap:wrap;gap:4px 8px;pointer-events:none;max-width:55%';
+  legEl.style.cssText = 'position:absolute;bottom:8px;left:8px;z-index:10;font:10px ui-monospace,monospace';
   el.appendChild(legEl);
+  var legOpen = false;
 
   // --- hint line (fullscreen only) ---
   var hintEl = null;
@@ -87,10 +85,16 @@ window.KGGraph = function (el, opts) {
   function updateLegend() {
     var kinds = {};
     N.forEach(function(n){ kinds[n.kind] = (kinds[n.kind]||0)+1; });
-    legEl.innerHTML = Object.keys(kinds).map(function(k){
-      return '<span style="display:flex;align-items:center;gap:4px;color:rgba(255,255,255,0.7);font:10px ui-monospace,monospace">' +
-        '<i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:rgb('+col(k)+')" ></i>' + k + '</span>';
+    var keys = Object.keys(kinds);
+    var chips = keys.map(function(k){
+      return '<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px 4px 0;color:rgba(255,255,255,0.7)">' +
+        '<i style="width:8px;height:8px;border-radius:50%;background:rgb('+col(k)+')"></i>' + k + '</span>';
     }).join('');
+    legEl.innerHTML =
+      '<span id="leg-pill" style="cursor:pointer;pointer-events:auto;color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.16);border-radius:10px;padding:2px 8px;background:rgba(0,0,0,0.45)">legend · ' + keys.length + '</span>' +
+      '<div id="leg-chips" style="display:' + (legOpen ? 'flex' : 'none') + ';flex-wrap:wrap;max-width:60vw;margin-top:6px">' + chips + '</div>';
+    var pill = legEl.querySelector('#leg-pill');
+    if (pill) pill.onclick = function(){ legOpen = !legOpen; var c = legEl.querySelector('#leg-chips'); if (c) c.style.display = legOpen ? 'flex' : 'none'; };
   }
 
   function showPanel(n, childCount) {
