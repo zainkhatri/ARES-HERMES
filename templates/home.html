@@ -60,7 +60,7 @@
            height. No clipping, no per-panel shrinking games. Columns fill evenly so
            there's no dead space at full size. */
         .hud-grid { grid-template-rows: minmax(0, 1fr); }
-        .hud-grid > .col:last-child > .mod { flex:1 1 0; }   /* grow all visible right-col panels equally (no ragged blank) */
+        .hud-grid > .col:last-child > .mod { flex:0 0 auto; }   /* fixed-content panels (Jobs, GPU) hug — no internal void; only the chart grows (below) */
         .hud { transform-origin: top left; }
         /* ZEUS right column has only Thermals + Telemetry (no jobs/gpu), so let their
            charts grow to fill the column — no big empty gap, looks full like ARES. */
@@ -222,9 +222,9 @@
         #panel-thermals { flex:1 1 0; display:flex; flex-direction:column; }
         #panel-thermals > .mod-body { flex:1 1 auto; display:flex; flex-direction:column; }
         #panel-thermals .thermal { flex:1; height:auto !important; min-height:40px; }
-        #panel-telemetry { flex:1 1 0; }
-        #panel-telemetry > .mod-body { flex:1 1 auto; display:flex; flex-direction:column; }
-        #panel-telemetry .sparks { flex:1; justify-content:space-around; }
+        #panel-telemetry { flex:0 0 auto; }   /* sparkline stats hug — stretching them just makes gaps */
+        #panel-telemetry > .mod-body { display:flex; flex-direction:column; }
+        #panel-telemetry .sparks { justify-content:flex-start; gap:10px; }
         #panel-telemetry .spark-row { flex:1; align-items:center; }
         #panel-telemetry .spark { height:100%; min-height:22px; }
         /* Centre column centres its group vertically instead of pinning the
