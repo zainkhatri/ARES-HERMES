@@ -32,6 +32,7 @@ window.KGGraph = function (el, opts) {
     if (k === 'claude-chat') return '251,146,110';          // claude.ai web chats — coral
     if (k === 'skill') return '52,211,153';                 // Claude skills — emerald
     if (k === 'mcp') return '96,165,250';                   // MCP servers — sky-blue
+    if (k === 'agent') return '244,114,182';                // sub-agents — pink
     if (BRAND !== 'ZEUS' && k === 'folder' && depth != null && depth >= 6) {
       return BRAND === 'EROS' ? '180,120,40' : '180,60,40';  // ember for deep folders
     }
