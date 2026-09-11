@@ -132,7 +132,7 @@
         @keyframes fx-reveal { from { opacity:1; } to { opacity:0; } }
 
         .hud { position:relative; z-index:1; display:flex; flex-direction:column;
-               min-height:100vh; min-height:100dvh; padding:calc(14px + var(--sat)) 16px calc(14px + var(--sab)); gap:14px; }
+               min-height:100vh; min-height:100dvh; padding:calc(52px + var(--sat)) 16px calc(14px + var(--sab)); gap:14px; }
 
         /* ---- panels ---------------------------------------------------- */
         /* Corner brackets are opt-in per corner. The base rule deliberately omits
@@ -989,7 +989,7 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     .col-mid #panel-fbreak .frow-size { font-size:10.5px; }
     .col-mid #panel-fbreak .frow-bar { height:11px; border-radius:3px; }
     .col-mid #panel-array .mod-head { padding-top:6px; padding-bottom:6px; }
-    .col-mid #vitals-hero { flex:1 1 auto !important; grid-auto-rows:minmax(64px,1fr) !important; align-content:stretch; }
+    .col-mid #vitals-hero { flex:0 0 auto !important; grid-auto-rows:64px !important; align-content:start; }
     .col-mid { justify-content:flex-start; }
     /* compress the tallest ARES panels so the grid shrinks and the EROS/ZEUS
        band claims the dead space. col0 (CPU gauge + ops) was forcing 542px. */
