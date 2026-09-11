@@ -19,12 +19,6 @@ under a blue `PROMETHEON` wordmark. More app-launcher than dashboard.
 
 ![V1 — prometheon](docs/screenshots/versions/v1-prometheon.png)
 
-### V2 · `nexus`
-The rename. `prometheon` became **nexus** as a second machine came online — the small "nexus" mini-NAS
-beside the main host. A bridge phase: it carried V1's foundation forward and set up the two-box split.
-*(No standalone dashboard from this short-lived naming era survives in the history — it went straight
-into V3.)*
-
 ### V3 · `ARES & NEXUS`
 Two boxes. The main host became **ARES** (the "super-NAS"), with **NEXUS** as its mini-NAS peer. The
 dashboard grew into the red **ARES** wordmark, a capability-gated layout shared across both machines,
