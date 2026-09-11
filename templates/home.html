@@ -974,23 +974,22 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     .col-mid #vitals-hero .v-tile { padding:8px 12px 9px; }
     /* KG moved to the right column — the center is now Array map + Where-it-lives,
        each growing to split the column height as chunky bars (no void). */
-    .col-mid #panel-array, .col-mid #panel-fbreak { flex:1 1 0 !important; min-height:0; }
-    /* Array map: each volume row fills its share; the bar fills the row under the name/cap → chunky nubs, no blank */
-    .col-mid .mod-body.arr-list { flex:1 1 auto !important; justify-content:space-between !important; gap:12px; padding:10px 12px; }
-    .col-mid .arr-list .arr-row { flex:1 1 0 !important; display:flex; flex-direction:column; }
+    /* Array-map + Where-it-lives are compact content-height panels with moderate bars;
+       the centre distributes leftover height as even spacing between sections (not a void). */
+    .col-mid #panel-array, .col-mid #panel-fbreak { flex:0 0 auto !important; min-height:0; }
+    .col-mid .mod-body.arr-list { flex:0 0 auto !important; justify-content:flex-start !important; gap:11px; padding:8px 12px; }
+    .col-mid .arr-list .arr-row { flex:0 0 auto !important; display:flex; flex-direction:column; }
     .col-mid .arr-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px; }
-    .col-mid .arr-name { font-size:13px; }
-    .col-mid .arr-cap { font-size:12px; }
-    .col-mid .arr-bar { flex:1 1 auto !important; height:auto !important; min-height:18px; margin-top:0 !important; border-radius:3px; }
-    /* Where it lives: rows fill, bar is a thick share of each row */
-    .col-mid #panel-fbreak > #fbreak-list { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; justify-content:space-between; gap:10px; padding:8px 4px; }
-    .col-mid #panel-fbreak .frow { flex:1 1 0; grid-template-columns:92px minmax(0,1fr) 68px; padding:0; align-items:center; }
-    .col-mid #panel-fbreak .frow-name { font-size:12px; }
-    .col-mid #panel-fbreak .frow-size { font-size:11px; }
-    .col-mid #panel-fbreak .frow-bar { height:58%; min-height:14px; border-radius:3px; }
+    .col-mid .arr-name { font-size:12.5px; }
+    .col-mid .arr-cap { font-size:11.5px; }
+    .col-mid .arr-bar { flex:0 0 auto !important; height:14px !important; margin-top:0 !important; border-radius:3px; }
+    .col-mid #panel-fbreak > #fbreak-list { flex:0 0 auto; display:flex; flex-direction:column; gap:8px; padding:6px 4px; }
+    .col-mid #panel-fbreak .frow { grid-template-columns:92px minmax(0,1fr) 68px; padding:0; align-items:center; }
+    .col-mid #panel-fbreak .frow-name { font-size:11.5px; }
+    .col-mid #panel-fbreak .frow-size { font-size:10.5px; }
+    .col-mid #panel-fbreak .frow-bar { height:11px; border-radius:3px; }
     .col-mid #panel-array .mod-head { padding-top:6px; padding-bottom:6px; }
-    /* vitals also content-height (no stretched empty tiles); center packs from the top */
-    .col-mid #vitals-hero { flex:0 0 auto !important; grid-auto-rows:auto !important; align-content:start; }
+    .col-mid #vitals-hero { flex:1 1 auto !important; grid-auto-rows:minmax(64px,1fr) !important; align-content:stretch; }
     .col-mid { justify-content:flex-start; }
     /* compress the tallest ARES panels so the grid shrinks and the EROS/ZEUS
        band claims the dead space. col0 (CPU gauge + ops) was forcing 542px. */
