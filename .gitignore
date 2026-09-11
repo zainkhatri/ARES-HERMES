@@ -84,3 +84,7 @@ ai_data/doc_chunks.json
 static/_fleet.json
 vault_video_cache/
 blurhashes.json
+templates/josh.html
+templates/kriti.html
+templates/se_course.html
+templates/sigma_demo.html
