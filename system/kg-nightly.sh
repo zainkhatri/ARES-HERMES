@@ -19,10 +19,20 @@ env KG_DB="$CENTRAL" KG_MAX_DEPTH=4 OLLAMA_HOST=http://127.0.0.1:11434 PYTHONPAT
   python3 -m mnemosyne.cli reindex /mnt/nvme/PROMETHEUS --box ARES \
   && echo "kg-nightly: ARES reindex ok" || echo "kg-nightly: ARES reindex FAILED"
 
-# 1b) index Claude Code chats into the graph (searchable session context; bounded head-read)
+# 1b) index Claude Code chats (ARES) + the ChatGPT archive — STRUCTURE only (searchable now);
+#     summaries fill in progressively via 1d. Budget 0 = no Ollama in the index step.
+env KG_DB="$CENTRAL" PYTHONPATH="$MNEMO" \
+  python3 -m mnemosyne.cli index-chats --box ARES --summary-budget 0 \
+  && echo "kg-nightly: ARES chats indexed" || echo "kg-nightly: ARES chat index FAILED"
+env KG_DB="$CENTRAL" PYTHONPATH="$MNEMO" \
+  python3 -m mnemosyne.cli index-gpt --box ARES --summary-budget 0 \
+  && echo "kg-nightly: GPT archive indexed" || echo "kg-nightly: GPT index FAILED"
+
+# 1d) progressive Ollama summaries for still-raw chat/gpt nodes (GPT + ZEUS backfill), budgeted
+#     so a ~9k-conversation backfill spreads across nights instead of blocking. gpu-loan guarded.
 env KG_DB="$CENTRAL" OLLAMA_HOST=http://127.0.0.1:11434 PYTHONPATH="$MNEMO" \
-  python3 -m mnemosyne.cli index-chats --box ARES \
-  && echo "kg-nightly: chats indexed ok" || echo "kg-nightly: chat index FAILED"
+  python3 -m mnemosyne.cli summarize-pending --budget 900 \
+  && echo "kg-nightly: summaries batch ok" || echo "kg-nightly: summaries FAILED"
 
 # 2) EROS over the tailnet (best-effort; the script self-skips if EROS is unreachable)
 /mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/system/kg-sync-eros.sh \
