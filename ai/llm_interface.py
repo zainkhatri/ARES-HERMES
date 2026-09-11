@@ -73,7 +73,8 @@ You have deep, specific knowledge of the homelab topology and can run commands d
 - `gpu_info` — RTX 3080 live stats (temp, util, VRAM, power). ALWAYS use this for GPU questions. Do NOT try `nvidia-smi` via run_command — it isn't installed here.
 - `homelab_status` — snapshot of VMs, GPU driver binding, and ZEUS reachability. Use for any "what's running / is X up" question.
 - `run_command` — shell on the ARES LXC. For host state or GPU specifics, prefer the tools above. SSH targets available: `root@192.168.20.51` (Proxmox host), `zain@192.168.20.212` (VM 300 / GPU).
-- `search_chatgpt_history` — search Zain's past ChatGPT conversations.
+- `kg_search` — search the whole KNOWLEDGE GRAPH: the filesystem (folders/projects) PLUS every past conversation (all Claude Code on ARES + ZEUS, the ChatGPT archive, claude.ai — ~9,600 chats). This is your long-term memory of everything Zain has done. Reach for it for ANY "what did I / where is / have we discussed / remember when / where does X live" question. Prefer it over search_chatgpt_history for broad recall (it covers ChatGPT AND everything else).
+- `search_chatgpt_history` — search Zain's past ChatGPT conversations only (kg_search is broader).
 - `trash_file` / `list_trash` / `restore_from_trash` — safe delete.
 
 ## Hard rules
@@ -101,6 +102,20 @@ TOOLS = [
                     }
                 },
                 "required": ["command"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "kg_search",
+            "description": "Search the homelab KNOWLEDGE GRAPH — a unified index of everything: the filesystem (folders/projects, each with an AI-written description) PLUS ~9,600 past conversations (all Claude Code sessions on ARES + ZEUS, the entire ChatGPT archive, and claude.ai chats). This is Zain's whole memory. Use it WHENEVER he asks about anything he previously did, said, learned, built, decided, or where something lives — 'what did I...', 'where is...', 'remember when...', 'have I talked about...'. Returns top matching nodes with their descriptions and dates.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural-language search (e.g. 'the dashboard knowledge graph', 'FCSF reply monitor', 'my job offer salary', 'where do photos live')"}
+                },
+                "required": ["query"]
             }
         }
     },
@@ -204,6 +219,25 @@ def get_usage_stats():
     return {"model": OLLAMA_MODEL, "local": True, "host": "vm-300 · RTX 3080"}
 
 
+def _kg_search(query, limit=8):
+    """Search the unified homelab knowledge graph (folders + every past conversation)."""
+    try:
+        from system import kg_query
+        db = kg_query.db_path()
+        if not db:
+            return "Knowledge graph unavailable."
+        res = kg_query.search(db, query, limit=limit).get("results", [])
+        if not res:
+            return f"No knowledge-graph matches for '{query}'."
+        lines = [f"KNOWLEDGE GRAPH — top matches for '{query}':"]
+        for r in res:
+            u = (r.get("understanding") or "").strip().replace("\n", " ")
+            lines.append(f"• [{r.get('kind')}] {r.get('name')}" + (f" — {u[:240]}" if u else ""))
+        return "\n".join(lines)
+    except Exception as e:
+        return f"kg_search error: {e}"
+
+
 def _handle_tool_call(tool_name: str, tool_input: dict) -> str:
     """Execute a tool call and return the result as a string."""
     if tool_name == "run_command":
@@ -250,6 +284,9 @@ def _handle_tool_call(tool_name: str, tool_input: dict) -> str:
 
     elif tool_name == "search_chatgpt_history":
         return search_history(tool_input["query"])
+
+    elif tool_name == "kg_search":
+        return _kg_search(tool_input["query"])
 
     elif tool_name == "safe_shutdown":
         result = safe_shutdown()
