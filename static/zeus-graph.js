@@ -27,6 +27,7 @@ window.KGGraph = function (el, opts) {
   var PAL = BRAND === 'EROS' ? PAL_EROS : BRAND === 'ZEUS' ? PAL_ZEUS : PAL_ARES;
 
   function col(k, depth) {
+    if (k === 'chat') return '196,181,253';                 // Claude Code chats — lavender, brand-agnostic
     if (BRAND !== 'ZEUS' && k === 'folder' && depth != null && depth >= 6) {
       return BRAND === 'EROS' ? '180,120,40' : '180,60,40';  // ember for deep folders
     }
