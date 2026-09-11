@@ -28,6 +28,7 @@ window.KGGraph = function (el, opts) {
 
   function col(k, depth) {
     if (k === 'chat') return '196,181,253';                 // Claude Code chats — lavender, brand-agnostic
+    if (k === 'gpt-chat') return '110,231,183';             // ChatGPT archive — teal-green
     if (BRAND !== 'ZEUS' && k === 'folder' && depth != null && depth >= 6) {
       return BRAND === 'EROS' ? '180,120,40' : '180,60,40';  // ember for deep folders
     }
