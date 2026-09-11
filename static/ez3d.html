@@ -1,0 +1,413 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>EROS/ZEUS · live</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#050505;color:#e5e5e5;font-family:'JetBrains Mono',monospace;padding:22px;display:flex;flex-direction:column;gap:22px}
+  .biome{--a:245,158,11;position:relative;border:1px solid rgba(var(--a),.28);border-radius:6px;
+         background:linear-gradient(150deg,rgba(var(--a),.05),rgba(0,0,0,0) 55%),#080808;padding:16px 18px}
+  .biome::before,.biome::after{content:'';position:absolute;width:15px;height:15px;border:2px solid rgb(var(--a));z-index:3}
+  .biome::before{top:8px;left:8px;border-right:0;border-bottom:0}
+  .biome::after{bottom:8px;right:8px;border-left:0;border-top:0}
+  #eros{--a:245,158,11}#zeus{--a:56,189,248}
+  .head{display:flex;align-items:flex-end;gap:20px;margin-bottom:14px}
+  .wm{font-weight:800;font-size:40px;letter-spacing:4px;line-height:1;filter:drop-shadow(0 0 14px rgba(var(--a),.5))}
+  .wm .a{color:rgb(var(--a))}.wm .b{color:#fff}
+  .sub{color:#6a6a6a;font-size:10px;letter-spacing:2.5px;text-transform:uppercase;padding-bottom:5px}
+  .meta{color:rgb(var(--a));font-size:10px;letter-spacing:1px;padding-bottom:5px;opacity:.85}
+  .tabs{margin-left:auto;display:flex;gap:1px;padding-bottom:3px}
+  .tab{border:1px solid rgba(var(--a),.22);border-bottom:2px solid rgba(var(--a),.5);padding:5px 12px;min-width:82px;text-align:center}
+  .tab .k{font-size:8px;letter-spacing:2px;color:#666;text-transform:uppercase}
+  .tab .v{font-size:12px;color:#ddd;margin-top:2px}
+  .tab .v b{color:rgb(var(--a))}
+  .grid{display:grid;gap:14px}
+  .erosgrid{grid-template-columns:300px 1fr 300px}
+  .zeusgrid{grid-template-columns:1fr 360px}
+  .card{border:1px solid rgba(var(--a),.16);border-radius:4px;background:rgba(255,255,255,.012);padding:12px 14px;position:relative}
+  .ct{display:flex;justify-content:space-between;font-size:10px;letter-spacing:2px;color:#7a7a7a;text-transform:uppercase;margin-bottom:12px}
+  .ct b{color:rgb(var(--a))}
+  .gauges{display:flex;gap:18px;justify-content:center;margin:4px 0 14px}
+  .gg{text-align:center}.gg svg{transform:rotate(-90deg)}
+  .gg .lab{font-size:9px;letter-spacing:2px;color:#888;margin-top:4px}
+  .gtxt{font-size:22px;font-weight:800;fill:#fff}
+  .barrow{margin:9px 0}
+  .barrow .l{display:flex;justify-content:space-between;font-size:10px;color:#999;margin-bottom:4px}
+  .bar{height:6px;border-radius:3px;background:rgba(255,255,255,.06);overflow:hidden}
+  .bar>i{display:block;height:100%;width:0;background:rgb(var(--a));box-shadow:0 0 8px rgba(var(--a),.7);transition:width .5s}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .kv div{border:1px solid rgba(var(--a),.14);border-radius:3px;padding:6px 8px}
+  .kv .k{font-size:8px;letter-spacing:1.5px;color:#666;text-transform:uppercase}
+  .kv .v{font-size:14px;color:#e8e8e8;margin-top:2px}
+  .stage{width:100%;height:400px;position:relative;border-radius:4px;overflow:hidden}
+  .hud{position:absolute;inset:0;pointer-events:none;font-size:10px;letter-spacing:1px}
+  .hud .cn{position:absolute;line-height:1.55;text-shadow:0 0 6px rgba(var(--a),.55);color:rgb(var(--a))}
+  .hud .cn .k{color:#6f6f6f;font-size:8px;letter-spacing:2px}
+  .hud .cn b{color:#fff;font-weight:700}
+  .hud .big{font-size:30px;font-weight:800;color:#fff;line-height:.95;text-shadow:0 0 12px rgba(var(--a),.7)}
+  .hud .tl{top:8px;left:10px}.hud .tr{top:8px;right:10px;text-align:right}
+  .hud .bl{bottom:8px;left:10px}.hud .br{bottom:8px;right:10px;text-align:right}
+  .hud .warn b{color:#ff5a5a}
+  .hud .drow{display:flex;gap:6px;align-items:center}
+  .hud .dbar{width:46px;height:5px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;display:inline-block}
+  .hud .dbar i{display:block;height:100%;background:rgb(var(--a));box-shadow:0 0 6px rgba(var(--a),.7)}
+  .oll input{width:100%;background:rgba(255,255,255,.03);border:1px solid rgba(var(--a),.3);border-radius:3px;color:#eee;padding:9px 11px;font-family:inherit;font-size:12px}
+  .oll .row{display:flex;gap:6px;margin-top:9px}
+  .oll select{background:rgba(255,255,255,.03);border:1px solid rgba(var(--a),.3);border-radius:3px;color:#ccc;font-family:inherit;font-size:11px;padding:0 6px}
+  .oll button{flex:1;background:rgb(var(--a));color:#111;border:0;border-radius:3px;padding:9px;font-family:inherit;font-weight:700;letter-spacing:2px;font-size:11px;cursor:pointer}
+  .oll .out{margin-top:11px;font-size:11px;color:#9a9a9a;line-height:1.5;height:130px;overflow:auto;border-top:1px dashed rgba(var(--a),.2);padding-top:9px}
+  .oll .out .u{color:rgb(var(--a))}
+  .dfacts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .df{border:1px solid rgba(var(--a),.16);border-radius:3px;padding:7px 10px}
+  .df .k{font-size:9px;letter-spacing:1px;color:#7a7a7a}
+  .df .v{font-size:13px;color:#e8e8e8;margin-top:3px}
+  .df .v.warn{color:#ff5a5a;font-weight:700}
+  .heat{display:grid;grid-template-columns:repeat(15,1fr);gap:3px;margin:6px 0 12px}
+  .heat i{aspect-ratio:1;border-radius:2px;background:rgba(56,189,248,.85)}
+  .heat i.f{background:#ff5a5a}.heat i.m{background:rgba(255,255,255,.06)}
+  .lgd{font-size:10px;color:#8a8a8a;letter-spacing:1px;display:flex;gap:14px;margin-top:8px}
+  .lgd i{display:inline-block;width:9px;height:9px;margin-right:5px;border-radius:1px;vertical-align:middle}
+</style>
+</head><body>
+
+<div class="biome" id="eros">
+  <div class="head">
+    <div class="wm"><span class="a">ER</span><span class="b">OS</span></div>
+    <div class="sub">Compute Engine</div><div class="meta" id="eros-meta">connecting…</div>
+    <div class="tabs">
+      <div class="tab"><div class="k">Processor</div><div class="v" id="e-cpu-model"><b>—</b></div></div>
+      <div class="tab"><div class="k">Memory</div><div class="v" id="e-mem"><b>—</b></div></div>
+      <div class="tab"><div class="k">Uptime</div><div class="v" id="e-up"><b>—</b></div></div>
+      <div class="tab"><div class="k">Host</div><div class="v"><b>10.0.1.69</b></div></div>
+    </div>
+  </div>
+  <div class="grid erosgrid">
+    <div class="card">
+      <div class="ct"><span>Live Utilization</span><b id="e-load">—</b></div>
+      <div class="gauges">
+        <div class="gg"><svg width="86" height="86" viewBox="0 0 86 86"><circle cx="43" cy="43" r="34" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="7"/><circle id="e-cpu-arc" cx="43" cy="43" r="34" fill="none" stroke="#f59e0b" stroke-width="7" stroke-linecap="round" stroke-dasharray="213.6" stroke-dashoffset="213.6" style="filter:drop-shadow(0 0 5px #f59e0b)"/><text id="e-cpu-t" x="43" y="50" text-anchor="middle" class="gtxt" transform="rotate(90 43 43)">—</text></svg><div class="lab">CPU %</div></div>
+        <div class="gg"><svg width="86" height="86" viewBox="0 0 86 86"><circle cx="43" cy="43" r="34" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="7"/><circle id="e-gpu-arc" cx="43" cy="43" r="34" fill="none" stroke="#fbbf24" stroke-width="7" stroke-linecap="round" stroke-dasharray="213.6" stroke-dashoffset="213.6" style="filter:drop-shadow(0 0 5px #fbbf24)"/><text id="e-gpu-t" x="43" y="50" text-anchor="middle" class="gtxt" transform="rotate(90 43 43)">—</text></svg><div class="lab">GPU %</div></div>
+      </div>
+      <div class="barrow"><div class="l"><span>POWER DRAW</span><span id="e-pow">—</span></div><div class="bar"><i id="e-pow-b"></i></div></div>
+      <div class="kv">
+        <div><div class="k">GPU Temp</div><div class="v" id="e-gtemp">—</div></div>
+        <div><div class="k">VRAM</div><div class="v" id="e-vram">—</div></div>
+        <div><div class="k">Disk /</div><div class="v" id="e-disk">—</div></div>
+        <div><div class="k">Net rx</div><div class="v" id="e-net">—</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ct"><span>Load Reactor</span><b>LIVE TELEMETRY</b></div>
+      <div class="stage" id="stE"><div class="hud">
+        <div class="cn tl"><div class="k">CPU</div><div class="big" id="hud-cpu">–</div><div class="k">GPU <b id="hud-gpu">–</b></div></div>
+        <div class="cn tr"><div class="k">LOAD</div><b id="hud-load">–</b><div class="k">5-MIN AVG/PEAK</div><b id="hud-avg">–</b></div>
+        <div class="cn bl"><div class="k">POWER</div><b id="hud-pwr">–</b> &nbsp; <span class="k">TEMP</span> <b id="hud-temp">–</b></div>
+        <div class="cn br"><div class="k">VRAM</div><b id="hud-vram">–</b><div class="k">NET RX</div><b id="hud-net">–</b></div>
+      </div></div>
+    </div>
+    <div class="card oll">
+      <div class="ct"><span>Ollama Control</span><b id="e-modn">EROS GPU</b></div>
+      <input id="e-prompt" placeholder="ask a model on EROS' GPU…">
+      <div class="row"><select id="e-model"></select><button id="e-send">EXECUTE ▸</button></div>
+      <div class="out" id="e-out"><span style="color:#5a5a5a">run a prompt — watch the GPU ridge rise on the terrain in real time.</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="biome" id="zeus">
+  <div class="head">
+    <div class="wm"><span class="a">ZE</span><span class="b">US</span></div>
+    <div class="sub">Archive Vault</div><div class="meta" id="zeus-meta">—</div>
+    <div class="tabs">
+      <div class="tab"><div class="k">Array</div><div class="v" id="z-array"><b>—</b></div></div>
+      <div class="tab"><div class="k">Fullest</div><div class="v" id="z-full"><b>—</b></div></div>
+      <div class="tab"><div class="k">Next Wake</div><div class="v"><b id="z-wake">--:--</b></div></div>
+      <div class="tab"><div class="k">Host</div><div class="v"><b>ZEUS</b></div></div>
+    </div>
+  </div>
+  <div class="grid zeusgrid">
+    <div class="card">
+      <div class="ct"><span>Knowledge Graph</span><b id="z-eta">ARES ⊕ EROS → ZEUS</b></div>
+      <div class="stage" id="stZ"><div class="hud">
+        <div class="cn tl"><div class="k">ARRAY</div><b>3 SSD</b> · <span id="hz-health">–</span><div class="k">FULLEST</div><b id="hz-full">–</b></div>
+        <div class="cn tr warn" id="hz-predict"><div class="k">PREDICT</div><b>–</b></div>
+        <div class="cn bl" id="hz-drives"></div>
+        <div class="cn br"><div class="k">LAST PULL</div><b id="hz-pull">–</b><div class="k">A→Z / E→Z</div><b id="hz-sync">–</b></div>
+      </div></div>
+      <div class="dfacts" id="z-dfacts"></div>
+    </div>
+    <div class="card">
+      <div class="ct"><span>Backup Continuity</span><b>NIGHTLY HORCRUX PULL</b></div>
+      <div class="heat" id="z-heat"></div>
+      <div class="kv">
+        <div><div class="k">ARES → ZEUS</div><div class="v" id="z-a2z">—</div></div>
+        <div><div class="k">EROS → ZEUS</div><div class="v" id="z-e2z">—</div></div>
+      </div>
+      <div class="lgd"><span><i style="background:#38bdf8"></i>pull ok</span><span><i style="background:#ff5a5a"></i>missed</span><span><i style="background:rgba(255,255,255,.1)"></i>asleep</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+// ---- 3D crown radar — pillars rise from a tilted ground ring toward a 100% ceiling ----
+// each spoke = one live metric; pillar height = value. Glowing vector, CRT-framed. You READ it.
+function radar3d(el,rgb,opts){
+  const accent='rgb('+rgb+')';
+  const cv=document.createElement('canvas');cv.style.display='block';el.appendChild(cv);
+  const ctx=cv.getContext('2d');let W=0,H=0;
+  function resize(){const r=el.getBoundingClientRect();const dpr=Math.min(2,devicePixelRatio||1);
+    W=r.width||520;H=r.height||400;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);ctx.lineJoin='round';ctx.lineCap='round';}
+  resize();addEventListener('resize',resize);
+  const tilt=(opts&&opts.tilt)||.95,spinSpd=(opts&&opts.spin)||.005,maxH=(opts&&opts.maxH)||1.25,Kf=(opts&&opts.k)||.31;
+  let spin=0,sweep=0,AX=[],cur=[],avg=[];
+  function update(axes){AX=axes;while(cur.length<axes.length){cur.push(0);avg.push(0);}}
+  function proj(x,y,z){const cw=Math.cos(spin),sw=Math.sin(spin);const x1=x*cw-y*sw,y1=x*sw+y*cw;
+    const yp=y1*Math.cos(tilt)+z*Math.sin(tilt),depth=y1*Math.sin(tilt)-z*Math.cos(tilt);
+    const Kp=Math.min(W,H)*Kf;return [W/2+Kp*x1, H*0.60-Kp*yp, depth];}
+  function seg(p,q,w,a){ctx.globalAlpha=a;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(q[0],q[1]);ctx.stroke();}
+  function ringPath(rad,h){const N=72;ctx.beginPath();for(let i=0;i<=N;i++){const a=i/N*6.2832,p=proj(Math.cos(a)*rad,Math.sin(a)*rad,h);i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);}}
+  (function loop(){requestAnimationFrame(loop);spin+=spinSpd;sweep+=.02;
+    ctx.clearRect(0,0,W,H);ctx.strokeStyle=accent;ctx.fillStyle=accent;ctx.shadowColor=accent;
+    const K=AX.length;
+    if(K){
+      for(let i=0;i<K;i++){cur[i]+=((AX[i].val||0)-cur[i])*.18;avg[i]+=((AX[i].val||0)-avg[i])*.012;}
+      const ang=k=>k/K*6.2832-Math.PI/2, gx=k=>Math.cos(ang(k)), gy=k=>Math.sin(ang(k));
+      ctx.shadowBlur=0;ctx.strokeStyle=accent;
+      // ground grid rings
+      ctx.globalAlpha=.10;ctx.lineWidth=1;ringPath(.5,0);ctx.stroke();
+      ctx.globalAlpha=.18;ringPath(1,0);ctx.stroke();
+      // 100% ceiling ring (dashed)
+      ctx.globalAlpha=.22;ctx.setLineDash([5,5]);ringPath(1,maxH);ctx.stroke();ctx.setLineDash([]);
+      // ground spokes + ceiling scale label
+      for(let k=0;k<K;k++)seg(proj(0,0,0),proj(gx(k),gy(k),0),1,.10);
+      ctx.globalAlpha=.3;ctx.font="9px 'JetBrains Mono',monospace";ctx.textAlign='center';const cl=proj(0,-1,maxH);ctx.fillText('100%',cl[0],cl[1]-3);ctx.textAlign='start';
+      // rotating ground sweep with trail
+      for(let i=0;i<7;i++){const a=sweep-i*.09;seg(proj(0,0,0),proj(Math.cos(a),Math.sin(a),0),i?1:2,.30*(1-i/7));}
+      // walls (translucent, back-to-front)
+      const quads=[];for(let k=0;k<K;k++){const k2=(k+1)%K;
+        quads.push({b1:proj(gx(k),gy(k),0),b2:proj(gx(k2),gy(k2),0),t1:proj(gx(k),gy(k),cur[k]*maxH),t2:proj(gx(k2),gy(k2),cur[k2]*maxH),d:(proj(gx(k),gy(k),0)[2]+proj(gx(k2),gy(k2),0)[2])/2});}
+      quads.sort((p,q)=>q.d-p.d);
+      ctx.shadowBlur=8;
+      quads.forEach(q=>{ctx.globalAlpha=.15;ctx.fillStyle='rgb('+rgb+')';ctx.beginPath();ctx.moveTo(q.b1[0],q.b1[1]);ctx.lineTo(q.b2[0],q.b2[1]);ctx.lineTo(q.t2[0],q.t2[1]);ctx.lineTo(q.t1[0],q.t1[1]);ctx.closePath();ctx.fill();});
+      // pillars
+      for(let k=0;k<K;k++){const al=AX[k].alert;ctx.strokeStyle=al?'#ff6a6a':accent;ctx.shadowColor=al?'#ff6a6a':accent;seg(proj(gx(k),gy(k),0),proj(gx(k),gy(k),cur[k]*maxH),al?2.6:1.6,.6);}
+      ctx.strokeStyle=accent;ctx.shadowColor=accent;
+      // ghost avg rim
+      ctx.shadowBlur=3;ctx.globalAlpha=.38;ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.beginPath();
+      for(let k=0;k<=K;k++){const kk=k%K,p=proj(gx(kk),gy(kk),avg[kk]*maxH);k?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);}ctx.stroke();ctx.setLineDash([]);
+      // top rim (bright glow)
+      ctx.shadowBlur=12;ctx.globalAlpha=1;ctx.lineWidth=2.6;ctx.beginPath();
+      for(let k=0;k<=K;k++){const kk=k%K,p=proj(gx(kk),gy(kk),cur[kk]*maxH);k?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);}ctx.stroke();
+      // vertices + labels
+      ctx.font="12px 'JetBrains Mono',monospace";ctx.textBaseline='alphabetic';
+      for(let k=0;k<K;k++){const al=AX[k].alert,t=proj(gx(k),gy(k),cur[k]*maxH);
+        ctx.shadowBlur=6;ctx.globalAlpha=1;ctx.fillStyle=al?'#ff6a6a':accent;ctx.beginPath();ctx.arc(t[0],t[1],al?3.4:2.3,0,6.29);ctx.fill();
+        const o=proj(gx(k)*1.14,gy(k)*1.14,cur[k]*maxH+.14);ctx.shadowBlur=4;
+        ctx.textAlign=o[0]<W/2-6?'end':o[0]>W/2+6?'start':'center';ctx.fillText(AX[k].disp,o[0],o[1]);ctx.textAlign='start';}
+    }
+    // CRT scanlines + corner brackets (ARES identity)
+    ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.fillStyle='rgba(0,0,0,.24)';for(let y=(Math.random()*3|0);y<H;y+=3)ctx.fillRect(0,y,W,1);
+    ctx.strokeStyle=accent;ctx.globalAlpha=.45;ctx.lineWidth=2;const m=9,s=15;ctx.beginPath();
+    ctx.moveTo(m,m+s);ctx.lineTo(m,m);ctx.lineTo(m+s,m);ctx.moveTo(W-m-s,m);ctx.lineTo(W-m,m);ctx.lineTo(W-m,m+s);
+    ctx.moveTo(m,H-m-s);ctx.lineTo(m,H-m);ctx.lineTo(m+s,H-m);ctx.moveTo(W-m-s,H-m);ctx.lineTo(W-m,H-m);ctx.lineTo(W-m,H-m-s);ctx.stroke();ctx.globalAlpha=1;
+  })();
+  return {update};
+}
+// ---- 3D knowledge graph — ARES subgraph ⊕ EROS subgraph → ZEUS core (the union it backs up) ----
+function kgraph(el){
+  const cv=document.createElement('canvas');cv.style.display='block';el.appendChild(cv);
+  const ctx=cv.getContext('2d');let W=0,H=0;
+  function resize(){const r=el.getBoundingClientRect(),dpr=Math.min(2,devicePixelRatio||1);W=r.width||520;H=r.height||400;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);ctx.lineJoin='round';ctx.lineCap='round';}
+  resize();addEventListener('resize',resize);
+  const COL={A:'245,158,11',E:'74,222,128',Z:'56,189,248'};
+  const N=[
+    {id:'Ah',g:'A',l:'ARES',hub:1},{id:'Ad',g:'A',l:'dash'},{id:'Av',g:'A',l:'win11'},{id:'A3',g:'A',l:'3080'},
+    {id:'Ap',g:'A',l:'photos'},{id:'Ao',g:'A',l:'ollama'},{id:'Am',g:'A',l:'nvme'},{id:'Ac',g:'A',l:'caddy'},
+    {id:'Eh',g:'E',l:'EROS',hub:1},{id:'E7',g:'E',l:'1070'},{id:'Eo',g:'E',l:'ollama'},{id:'Eb',g:'E',l:'BDR'},{id:'Es',g:'E',l:'ssd'},
+    {id:'Zh',g:'Z',l:'ZEUS',hub:1},{id:'Z5',g:'Z',l:'T5'},{id:'Z9',g:'Z',l:'T9'},{id:'Z7',g:'Z',l:'T7'}
+  ];
+  const L=[['Ah','Ad'],['Ah','Av'],['Ah','A3'],['Ad','Ap'],['Ad','Ao'],['Ah','Am'],['Ad','Ac'],['Av','A3'],['Ao','Am'],
+           ['Eh','E7'],['Eh','Eo'],['Eo','E7'],['Eh','Eb'],['Eh','Es'],
+           ['Zh','Z5'],['Zh','Z9'],['Zh','Z7']];
+  const BK=[['Ah','Zh'],['Eh','Zh'],['Am','Zh'],['Es','Zh']]; // nightly backup / data flows into ZEUS
+  const anchor={A:[-3.4,.2,0],E:[3.4,.2,0],Z:[0,-.4,0]},byId={};
+  N.forEach(n=>{const a=anchor[n.g];n.x=a[0]+(Math.random()-.5)*2;n.y=a[1]+(Math.random()-.5)*2;n.z=(Math.random()-.5)*2;n.vx=n.vy=n.vz=0;byId[n.id]=n;});
+  let spin=0,flow=0,st={};
+  function update(s){st=s||{};}
+  function step(){
+    N.forEach(n=>{n.fx=n.fy=n.fz=0;});
+    for(let i=0;i<N.length;i++)for(let j=i+1;j<N.length;j++){const a=N[i],b=N[j];let dx=a.x-b.x,dy=a.y-b.y,dz=a.z-b.z,d2=dx*dx+dy*dy+dz*dz+.2,d=Math.sqrt(d2),f=.85/d2;dx/=d;dy/=d;dz/=d;a.fx+=dx*f;a.fy+=dy*f;a.fz+=dz*f;b.fx-=dx*f;b.fy-=dy*f;b.fz-=dz*f;}
+    const spr=(e,rest,k)=>{const a=byId[e[0]],b=byId[e[1]];let dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z,d=Math.sqrt(dx*dx+dy*dy+dz*dz)+.001,f=k*(d-rest)/d;a.fx+=dx*f;a.fy+=dy*f;a.fz+=dz*f;b.fx-=dx*f;b.fy-=dy*f;b.fz-=dz*f;};
+    L.forEach(e=>spr(e,1.15,.06));BK.forEach(e=>spr(e,3.2,.05));
+    N.forEach(n=>{const a=anchor[n.g];n.fx+=(a[0]-n.x)*.02;n.fy+=(a[1]-n.y)*.02;n.fz+=(a[2]-n.z)*.02;
+      n.vx=(n.vx+n.fx*.1)*.84;n.vy=(n.vy+n.fy*.1)*.84;n.vz=(n.vz+n.fz*.1)*.84;n.x+=n.vx;n.y+=n.vy;n.z+=n.vz;});
+  }
+  function proj(x,y,z){const c=Math.cos(spin),s=Math.sin(spin),x1=x*c-z*s,z1=x*s+z*c,tilt=.34;
+    const y1=y*Math.cos(tilt)-z1*Math.sin(tilt),z2=y*Math.sin(tilt)+z1*Math.cos(tilt),K2=8.5,ooz=1/(K2+z2),Kp=Math.min(W,H)*1.55;
+    return [W/2+Kp*ooz*x1,H*0.54-Kp*ooz*y1,ooz];}
+  (function loop(){requestAnimationFrame(loop);spin+=.0035;flow+=1;step();
+    ctx.clearRect(0,0,W,H);
+    const eDim=st.eros_up===false?.3:1;
+    // intra-cluster edges
+    L.forEach(e=>{const a=byId[e[0]],b=byId[e[1]],pa=proj(a.x,a.y,a.z),pb=proj(b.x,b.y,b.z),dim=(a.g==='E'?eDim:1);
+      ctx.strokeStyle='rgba('+COL[a.g]+','+(.24*dim)+')';ctx.lineWidth=1;ctx.shadowBlur=0;ctx.beginPath();ctx.moveTo(pa[0],pa[1]);ctx.lineTo(pb[0],pb[1]);ctx.stroke();});
+    // backup flows into ZEUS (animated dashes, glow if last pull OK)
+    BK.forEach(e=>{const a=byId[e[0]],b=byId[e[1]],pa=proj(a.x,a.y,a.z),pb=proj(b.x,b.y,b.z),ok=(a.g==='E'?st.z2a_ok:st.a2z_ok);
+      ctx.strokeStyle='rgba(56,189,248,'+(ok?.55:.2)+')';ctx.lineWidth=1.5;ctx.setLineDash([2,7]);ctx.lineDashOffset=-flow*.5;ctx.shadowColor='rgb(56,189,248)';ctx.shadowBlur=6;
+      ctx.beginPath();ctx.moveTo(pa[0],pa[1]);ctx.lineTo(pb[0],pb[1]);ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;});
+    // nodes, depth-sorted
+    N.map(n=>({n,p:proj(n.x,n.y,n.z)})).sort((a,b)=>a.p[2]-b.p[2]).forEach(({n,p})=>{
+      let col=COL[n.g],dim=(n.g==='E'?eDim:1),pulse=0;
+      if(n.g==='Z'&&st.worst&&n.l===st.worst){col='255,90,90';pulse=.35*Math.sin(flow*.15);}
+      const r=(n.hub?4.6:2.8)*(p[2]*9.5)+(pulse>0?pulse*3:0);
+      ctx.globalAlpha=dim;ctx.fillStyle='rgb('+col+')';ctx.shadowColor='rgb('+col+')';ctx.shadowBlur=n.hub?14:8;
+      ctx.beginPath();ctx.arc(p[0],p[1],Math.max(1.5,r),0,6.29);ctx.fill();
+      ctx.shadowBlur=2;ctx.globalAlpha=.9*dim;ctx.fillStyle='rgb('+col+')';ctx.font=(n.hub?"bold 12px":"10px")+" 'JetBrains Mono',monospace";ctx.textAlign='center';ctx.fillText(n.l,p[0],p[1]-9);ctx.textAlign='start';});
+    // CRT scanlines + corner brackets
+    ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.fillStyle='rgba(0,0,0,.24)';for(let y=(Math.random()*3|0);y<H;y+=3)ctx.fillRect(0,y,W,1);
+    ctx.strokeStyle='rgb(56,189,248)';ctx.globalAlpha=.45;ctx.lineWidth=2;const m=9,s=15;ctx.beginPath();
+    ctx.moveTo(m,m+s);ctx.lineTo(m,m);ctx.lineTo(m+s,m);ctx.moveTo(W-m-s,m);ctx.lineTo(W-m,m);ctx.lineTo(W-m,m+s);
+    ctx.moveTo(m,H-m-s);ctx.lineTo(m,H-m);ctx.lineTo(m+s,H-m);ctx.moveTo(W-m-s,H-m);ctx.lineTo(W-m,H-m);ctx.lineTo(W-m,H-m-s);ctx.stroke();ctx.globalAlpha=1;
+  })();
+  return {update};
+}
+const ringE=radar3d($('stE'),'245,158,11',{tilt:.92,spin:.005,maxH:1.2,k:.30});
+const dialZ=kgraph($('stZ'));
+
+// ---- rolling EROS metric buffers (persisted so terrain accumulates real history) ----
+const NB=60;
+let EBUF=JSON.parse(localStorage.getItem('erosBuf')||'null')||{cpu:[],gpu:[],temp:[],net:[]};
+function pushBuf(cpu,gpu,temp,net){
+  const push=(a,v)=>{a.push(v);while(a.length>NB)a.shift();while(a.length<NB)a.unshift(v);};
+  push(EBUF.cpu,clamp(cpu/100,0,1));push(EBUF.gpu,clamp(gpu/100,0,1));
+  push(EBUF.temp,clamp((temp-30)/60,0,1));push(EBUF.net,clamp(net/125,0,1));
+  localStorage.setItem('erosBuf',JSON.stringify(EBUF));
+}
+const arc=(id,pct,C)=>{const a=$(id);if(a)a.style.strokeDashoffset=(C*(1-clamp(pct,0,100)/100)).toFixed(1);};
+const ssdName=n=>{const m=String(n||'').match(/T[0-9]+/i);return m?m[0].toUpperCase():(/portable|samsung/i.test(n)?'T5':(n||'SSD'));};
+
+function renderEros(d){
+  const e=d.eros||{},g=e.gpu||{};
+  $('eros-meta').textContent=e.up?((d.stale?'stale · ':'')+'online'):'offline';
+  if(!e.up){$('e-out').innerHTML='<span style="color:#a55">EROS offline</span>';return;}
+  const cpu=+e.cpu_pct||0,gpu=+g.util||0;
+  $('e-cpu-t').textContent=cpu;$('e-gpu-t').textContent=gpu;arc('e-cpu-arc',cpu,213.6);arc('e-gpu-arc',gpu,213.6);
+  $('e-load').textContent='load '+(e.load!=null?e.load:'—');
+  $('e-pow').textContent=(g.power!=null?g.power+' W':'—');$('e-pow-b').style.width=clamp((g.power||0)/180*100,0,100)+'%';
+  $('e-gtemp').textContent=(g.temp!=null?g.temp+'°C':'—');
+  $('e-vram').textContent=g.mem_total?((g.mem_used/1024).toFixed(1)+'/'+(g.mem_total/1024).toFixed(1)+'G'):'—';
+  $('e-disk').textContent=(e.disk_pct!=null?e.disk_pct+'%':'—');
+  $('e-net').textContent=(e.net_rx_mbs!=null?e.net_rx_mbs+' MB/s':'—');
+  $('e-cpu-model').innerHTML='<b>'+esc((e.cpu_model||'—').replace('AMD ','').replace(' 8-Core Processor',''))+'</b>';
+  $('e-mem').innerHTML='<b>'+(e.mem_used_gb!=null?e.mem_used_gb:'—')+'</b>/'+(e.mem_total_gb||'—')+'G';
+  $('e-up').innerHTML='<b>'+String(e.uptime||'—').replace(/ hours?/,'h').replace(/,.*/,'')+'</b>';
+  const sel=$('e-model');
+  if(sel && sel.dataset.filled!=='1'){const chat=(e.models||[]).filter(m=>!/embed/i.test(m));
+    if(chat.length){sel.innerHTML=chat.map(m=>'<option>'+esc(m)+'</option>').join('');sel.dataset.filled='1';}}
+  pushBuf(cpu,gpu,g.temp||41,e.net_rx_mbs||0);
+  const memPct=(e.mem_used_gb&&e.mem_total_gb)?e.mem_used_gb/e.mem_total_gb:0;
+  const vramPct=g.mem_total?g.mem_used/g.mem_total:0;
+  const tempN=g.temp!=null?clamp((g.temp-30)/60,0,1):0;
+  const loadN=e.cores?clamp(e.load/e.cores,0,1):0;
+  ringE.update([
+    {disp:'CPU '+cpu+'%',val:cpu/100},
+    {disp:'GPU '+gpu+'%',val:gpu/100},
+    {disp:'VRAM '+Math.round(vramPct*100)+'%',val:vramPct},
+    {disp:'TEMP '+(g.temp!=null?g.temp:'?')+'°',val:tempN},
+    {disp:'NET '+(e.net_rx_mbs||0),val:clamp((e.net_rx_mbs||0)/125,0,1)},
+    {disp:'DISK '+(e.disk_pct||0)+'%',val:(e.disk_pct||0)/100},
+    {disp:'MEM '+Math.round(memPct*100)+'%',val:memPct},
+    {disp:'LOAD '+(e.load!=null?e.load:0),val:loadN}
+  ]);
+  // HUD intel
+  const cb=EBUF.cpu.map(v=>v*100),avg=cb.length?Math.round(cb.reduce((a,b)=>a+b,0)/cb.length):0,peak=cb.length?Math.round(Math.max.apply(0,cb)):0;
+  $('hud-cpu').textContent=cpu; $('hud-gpu').textContent=gpu+'%';
+  $('hud-load').textContent=(e.load!=null?e.load:'–')+'  ·  '+(e.cores||'?')+'c';
+  $('hud-avg').textContent=avg+'% / '+peak+'%';
+  $('hud-pwr').textContent=(g.power!=null?g.power+'W':'–'); $('hud-temp').textContent=(g.temp!=null?g.temp+'°C':'–');
+  $('hud-vram').textContent=g.mem_total?((g.mem_used/1024).toFixed(1)+'/'+(g.mem_total/1024).toFixed(0)+'G'):'–';
+  $('hud-net').textContent=(e.net_rx_mbs!=null?e.net_rx_mbs+' MB/s':'–');
+}
+
+function growth(hist,name){ // real days-to-full from capacity history
+  const pts=hist.map(h=>{const dr=(h.drives||[]).find(x=>ssdName(x.name)===name);return dr?dr.use:null;}).filter(v=>v!=null);
+  const last=pts.length?pts[pts.length-1]:null;
+  if(pts.length<2)return{last,rate:null,eta:null};
+  const rate=(pts[pts.length-1]-pts[0])/(pts.length-1); // %/day
+  const eta=rate>0.05?Math.round((100-last)/rate):null;
+  return{last,rate,eta};
+}
+function renderZeus(d){
+  const b=d.backups||{},disks=b.disks||[],hist=b.capacity_history||[],pull=b.pull_history||[];
+  $('zeus-meta').textContent=b.zeus_reachable?'awake':'asleep · horcrux';
+  $('z-array').innerHTML='<b>'+(disks.length||3)+'</b> SSD';
+  // per-drive real growth
+  const order=['T5','T9','T7'];const cells=[];let worst={eta:1e9,name:null,use:0};
+  const df=order.map(nm=>{
+    const dr=disks.find(x=>ssdName(x.name)===nm)||{};const gr=growth(hist,nm);
+    const use=gr.last!=null?gr.last:(dr.use||0);
+    const rate=gr.rate;const eta=gr.eta;
+    if(eta!=null&&eta<worst.eta)worst={eta,name:nm,use};
+    cells.push({nm,use,eta});
+    const rateTxt=rate==null?'trend building':(rate>0.05?'+'+rate.toFixed(1)+'%/d':'stable');
+    const warn=eta!=null&&eta<14;
+    return '<div class="df"><div class="k">'+nm+(dr.health?' · '+dr.health:'')+'</div><div class="v'+(warn?' warn':'')+'">'+use+'% · '+rateTxt+(warn?' · FULL ~'+eta+'d':'')+'</div></div>';
+  }).join('');
+  $('z-dfacts').innerHTML=df;
+  const fullest=cells.reduce((a,c)=>c.use>a.use?c:a,{use:-1});
+  $('z-full').innerHTML='<b>'+(fullest.nm||'—')+'</b> '+fullest.use+'%';
+  $('z-eta').textContent=worst.name?('PREDICT · '+worst.name+' FULL ~'+worst.eta+'d'):(hist.length<2?'COLLECTING TREND ('+hist.length+'d)':'30-DAY · STABLE');
+  // radar: each spoke = a drive's real % used; vertex near the outer ring = near full
+  dialZ.update({eros_up:!!(d.eros&&d.eros.up), a2z_ok:!!(b.ares_to_zeus&&b.ares_to_zeus.state==='OK'), z2a_ok:!!(b.zeus_to_ares&&b.zeus_to_ares.state==='OK'), worst:worst.name});
+  // HUD intel
+  $('hz-full').textContent=(fullest.nm||'–')+' '+fullest.use+'%';
+  const allok=disks.length&&disks.every(x=>/PASS|OK/i.test(x.health||''));
+  $('hz-health').textContent=disks.length?(allok?'SMART OK':'CHECK'):'zzz';
+  $('hz-predict').innerHTML='<div class="k">PREDICT</div><b>'+(worst.name?(worst.name+' full ~'+worst.eta+'d'):(hist.length<2?'collecting '+hist.length+'d':'stable'))+'</b>';
+  $('hz-drives').innerHTML=order.map(nm=>{const c=cells.find(x=>x.nm===nm)||{use:0};const dr=disks.find(x=>ssdName(x.name)===nm)||{};
+    const t=dr.temp!=null?dr.temp+'°':'';const h=/PASS|OK/i.test(dr.health||'')?'✓':(dr.health?'⚠':'·');
+    return '<div class="drow"><b style="width:20px">'+nm+'</b><span class="dbar"><i style="width:'+c.use+'%"></i></span><span>'+c.use+'% '+t+' '+h+'</span></div>';}).join('');
+  $('hz-pull').textContent=_fmtAgo((b.ares_to_zeus||{}).epoch);
+  const sy=o=>(o&&o.state==='OK')?'✓':'⚠';$('hz-sync').textContent=sy(b.ares_to_zeus)+' / '+sy(b.zeus_to_ares);
+  // backup heatmap: last 30 nights from pull_history (by date), missing = asleep
+  const byd={};pull.forEach(p=>byd[p.d]=p);
+  const today=new Date();const H=[];
+  for(let i=29;i>=0;i--){const dt=new Date(today);dt.setDate(dt.getDate()-i);
+    const key=dt.toISOString().slice(0,10);const p=byd[key];
+    H.push(!p?'m':(p.a2z==='OK'&&p.z2a==='OK'?'':'f'));}
+  $('z-heat').innerHTML=H.map(c=>'<i class="'+c+'"></i>').join('');
+  const st=o=>o?(o.state==='OK'?'✓ '+o.state:'⚠ '+(o.state||'—')):'—';
+  $('z-a2z').textContent=st(b.ares_to_zeus);$('z-e2z').textContent=st(b.zeus_to_ares);
+}
+function zeusWake(){const now=new Date(),w=new Date(now);w.setHours(4,0,0,0);if(w<=now)w.setDate(w.getDate()+1);
+  const r=Math.max(0,Math.floor((w-now)/1000)),z=n=>(n<10?'0':'')+n;
+  $('z-wake').textContent=z(Math.floor(r/3600))+':'+z(Math.floor(r%3600/60));}
+setInterval(zeusWake,1000);zeusWake();
+
+// ---- ollama stream (real GPU on EROS) ----
+$('e-send').addEventListener('click',()=>{
+  const inp=$('e-prompt'),out=$('e-out'),model=$('e-model').value||'llama3.2:3b';
+  const prompt=(inp.value||'').trim();if(!prompt)return;
+  out.innerHTML='<div class="u">▸ '+esc(prompt)+'</div><div id="e-ans">▍</div>';inp.value='';$('e-send').disabled=true;
+  let acc='';const ans=$('e-ans');
+  fetch('/api/eros/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,prompt})})
+    .then(r=>{const rd=r.body.getReader(),dec=new TextDecoder();let buf='';
+      (function pump(){return rd.read().then(res=>{if(res.done){$('e-send').disabled=false;return;}
+        buf+=dec.decode(res.value,{stream:true});const parts=buf.split('\n\n');buf=parts.pop();
+        parts.forEach(pt=>{const m=pt.match(/^data: (.*)$/m);if(!m)return;
+          try{const o=JSON.parse(m[1]);if(o.t){acc+=o.t;ans.textContent=acc;}if(o.err)ans.textContent='⚠ '+o.err;}catch(e){}});
+        out.scrollTop=out.scrollHeight;return pump();});})();
+    }).catch(e=>{ans.textContent='⚠ '+e;$('e-send').disabled=false;});
+});
+
+// ---- poll ----
+async function poll(){
+  try{let d=await fetch('/api/fleet').then(r=>r.json());
+    if(!d||!d.eros)d=await fetch('/static/_fleet.json').then(r=>r.json());
+    renderEros(d);renderZeus(d);
+  }catch(e){try{const d=await fetch('/static/_fleet.json').then(r=>r.json());renderEros(d);renderZeus(d);}catch(_){}}
+}
+poll();setInterval(poll,3000);
+</script>
+</body></html>
