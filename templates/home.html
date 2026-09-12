@@ -1740,6 +1740,7 @@ async function pollFleet() {
         var d = await fetch('/api/fleet').then(function(r){ return r.json(); });
         if (d && d.ok) {
             window.__FLEET = d;
+            if (window.__LAST_DISKS) renderArray(window.__LAST_DISKS);   // re-render so EROS/ZEUS storage rows appear when fleet lands
             renderEros(d); renderBackups(d);
             if (BRAND !== 'ARES' && d.ts) { window.__FLEET_TS = d.ts; updateFleetFreshness(); }
         }
@@ -2098,7 +2099,8 @@ function applyVitals(i) {
 {% endif %}
             renderVitals(tiles, (_BR === 'ARES') ? winTile() : '');   // WIN tile: ARES only
 
-            renderArray(i.disks || []);
+            window.__LAST_DISKS = i.disks || [];
+            renderArray(window.__LAST_DISKS);
             renderFolders(i.folders || []);
             // ZEUS/EROS: skip scheduled-jobs panel (no collector). EROS services in peer-band.
             if (_BR !== 'ZEUS' && _BR !== 'EROS') {
