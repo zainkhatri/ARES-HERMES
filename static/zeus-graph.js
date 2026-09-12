@@ -96,7 +96,7 @@ window.KGGraph = function (el, opts) {
 
   // --- legend DOM (collapsed pill by default; click to expand) ---
   var legEl = document.createElement('div');
-  legEl.style.cssText = 'position:absolute;bottom:8px;left:8px;z-index:10;font:10px ui-monospace,monospace';
+  legEl.style.cssText = 'position:absolute;bottom:8px;left:8px;right:8px;z-index:10;font:10px ui-monospace,monospace;pointer-events:none';
   el.appendChild(legEl);
   var legOpen = false;
 
@@ -132,7 +132,7 @@ window.KGGraph = function (el, opts) {
     }).join('');
     // legend is ALWAYS visible (no collapse) — the graph is only readable with the key present
     legEl.innerHTML =
-      '<div style="display:flex;flex-wrap:wrap;gap:3px 9px;max-width:'+(TRAVERSABLE?'62vw':'220px')+';' +
+      '<div style="display:flex;flex-wrap:wrap;gap:3px 10px;max-width:'+(TRAVERSABLE?'62vw':'100%')+';' +
       'background:rgba(0,0,0,0.62);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 8px">' + chips + '</div>';
   }
 
