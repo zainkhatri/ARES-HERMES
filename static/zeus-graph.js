@@ -40,11 +40,11 @@ window.KGGraph = function (el, opts) {
   // chat/tool category), so the legend reads "Claude Code / GPT / PROJECTS / WORK…"
   // instead of generic node kinds. Group is derived from the node's id (a path)
   // and kind. ----
-  var GRP = {}, GRPCOL = {}, _gpal_i = 0;
-  // ARES palette only: red, orange, white, yellow, blue, green
-  var GPAL = ['239,68,68','249,115,22','240,240,240','250,204,21','96,165,250','52,211,153'];
-  var GKNOWN = { 'Claude Code':'240,240,240', 'GPT':'52,211,153', 'Claude.ai':'239,68,68',
-                 'Skills':'250,204,21', 'MCP':'96,165,250', 'Agents':'249,115,22' };
+  var GRP = {}, GRPCOL = {};
+  // Ordered by prominence: biggest groups get red, white, orange, yellow first, then the
+  // rest — each group a UNIQUE color (no two similar/same in the legend).
+  var GPAL = ['239,68,68','240,240,240','249,115,22','250,204,21','52,211,153','96,165,250',
+              '34,211,238','167,139,250','244,114,182','163,230,53'];
   function groupOf(n){
     var k = n.kind, nm = (n.name||'').toLowerCase();
     if (k==='chat') return 'Claude Code';
@@ -67,10 +67,13 @@ window.KGGraph = function (el, opts) {
     return n.name || 'root';
   }
   function assignGroups(){
-    for (var i=0;i<N.length;i++){
-      var g = groupOf(N[i]); GRP[N[i].id] = g;
-      if (!GRPCOL[g]) GRPCOL[g] = GKNOWN[g] || GPAL[(_gpal_i++) % GPAL.length];
-    }
+    var cnt = {};
+    for (var i=0;i<N.length;i++){ var g = groupOf(N[i]); GRP[N[i].id] = g; cnt[g] = (cnt[g]||0)+1; }
+    // rank groups by size — biggest gets GPAL[0] (red), then white/orange/yellow… so the
+    // most common groups get the strongest colors and every group is a distinct hue.
+    var ranked = Object.keys(cnt).sort(function(a,b){ return cnt[b]-cnt[a]; });
+    GRPCOL = {};
+    for (var r=0;r<ranked.length;r++) GRPCOL[ranked[r]] = GPAL[r % GPAL.length];
   }
   function gcol(n){ return GRPCOL[GRP[n.id]] || PAL._default; }
 
@@ -125,7 +128,7 @@ window.KGGraph = function (el, opts) {
     var cnt = {};
     N.forEach(function(n){ var g = GRP[n.id]; if (g) cnt[g] = (cnt[g]||0)+1; });
     var keys = Object.keys(cnt).sort(function(a,b){ return cnt[b]-cnt[a]; });
-    if (!TRAVERSABLE) keys = keys.slice(0, 10);   // card: cap so it stays one tidy block
+    keys = keys.slice(0, GPAL.length);   // cap at palette size so no two legend items share a color
     var chips = keys.map(function(g){
       return '<span style="display:inline-flex;align-items:center;gap:4px;color:rgba(255,255,255,0.82);white-space:nowrap">' +
         '<i style="width:8px;height:8px;border-radius:2px;flex:none;background:rgb('+(GRPCOL[g]||PAL._default)+')"></i>' + esc(g) + '</span>';
