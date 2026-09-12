@@ -41,10 +41,10 @@ window.KGGraph = function (el, opts) {
   // instead of generic node kinds. Group is derived from the node's id (a path)
   // and kind. ----
   var GRP = {}, GRPCOL = {}, _gpal_i = 0;
-  var GPAL = ['245,158,11','249,115,22','239,68,68','234,88,12','253,224,71','251,146,60',
-              '167,139,250','34,211,238','250,204,21','253,186,116','129,140,248','217,160,60'];
-  var GKNOWN = { 'Claude Code':'196,181,253', 'GPT':'110,231,183', 'Claude.ai':'251,146,110',
-                 'Skills':'52,211,153', 'MCP':'96,165,250', 'Agents':'244,114,182' };
+  // ARES palette only: red, orange, white, yellow, blue, green
+  var GPAL = ['239,68,68','249,115,22','240,240,240','250,204,21','96,165,250','52,211,153'];
+  var GKNOWN = { 'Claude Code':'240,240,240', 'GPT':'52,211,153', 'Claude.ai':'239,68,68',
+                 'Skills':'250,204,21', 'MCP':'96,165,250', 'Agents':'249,115,22' };
   function groupOf(n){
     var k = n.kind, nm = (n.name||'').toLowerCase();
     if (k==='chat') return 'Claude Code';
@@ -206,10 +206,20 @@ window.KGGraph = function (el, opts) {
     settle(N.length > 250 ? 95 : 170); alpha = 0; fitView(); fitted = true;
   }
 
+  // per-box localStorage cache so a box's graph paints INSTANTLY from the last
+  // visit instead of waiting on the query (matters for EROS/ZEUS, queried across boxes).
+  var CKEY = 'kgcache_' + BRAND + '_' + LIMIT;   // key by VIEW (ZEUS fetches box=null union — must not collide with ARES's box=ARES)
+  function loadCache() {
+    try { var c = localStorage.getItem(CKEY); if (!c) return false;
+      var d = JSON.parse(c); if (d && d.nodes && d.nodes.length) { ingest(d); return true; } } catch (e) {}
+    return false;
+  }
+  function saveCache(d) { try { localStorage.setItem(CKEY, JSON.stringify(d)); } catch (e) {} }
+
   function reload() {
     var url = '/api/kg?limit=' + LIMIT + (BOX ? '&box=' + encodeURIComponent(BOX) : '');
     fetch(url).then(function(r){ return r.json(); }).then(function(d){
-      if (!d.ok || !d.nodes || !d.nodes.length) throw 0; ingest(d);
+      if (!d.ok || !d.nodes || !d.nodes.length) throw 0; saveCache(d); ingest(d);
     }).catch(function(){
       fetch('/static/_kg_sample.json').then(function(r){ return r.json(); }).then(ingest).catch(function(){
         var cc = document.getElementById('zg-count'); if (cc) cc.textContent = 'graph offline';
@@ -453,6 +463,7 @@ window.KGGraph = function (el, opts) {
     destroy: function(){ alive=false; if(rafId) cancelAnimationFrame(rafId); if(pollId) clearInterval(pollId); if(el.contains(cv)) el.removeChild(cv); }
   };
 
+  loadCache();   // instant paint from last visit; reload() then refreshes in the background
   reload(); pollId = setInterval(reload, 60000); rafId = requestAnimationFrame(frame);
 
   if (typeof ResizeObserver !== 'undefined') {
