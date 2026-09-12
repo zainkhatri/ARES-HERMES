@@ -2443,8 +2443,13 @@ function _sizeAllCharts() {
         c._w = w; c._h = h;
     }
 }
+var _lastDraw = 0;
 function _chartLoop() {
-    var frac = _lastKick ? Math.min(1, (performance.now() - _lastKick) / _interval) : 0;
+    if (_chartsOn) requestAnimationFrame(_chartLoop);
+    var now = performance.now();
+    if (now - _lastDraw < 32) return;   // throttle to ~30fps — half the redraw cost, imperceptible on a scrolling line
+    _lastDraw = now;
+    var frac = _lastKick ? Math.min(1, (now - _lastKick) / _interval) : 0;
     for (var c = 0; c < CHARTS.length; c++) {
         var r = _drawChart(CHARTS[c], frac);
         if (CHARTS[c].thermScale) {
@@ -2453,7 +2458,6 @@ function _chartLoop() {
             if (lo) lo.textContent = Math.round(r[0]) + '°C';
         }
     }
-    if (_chartsOn) requestAnimationFrame(_chartLoop);
 }
 function kickCharts() {
     _sizeAllCharts();
