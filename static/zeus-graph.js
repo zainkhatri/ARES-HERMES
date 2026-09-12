@@ -41,10 +41,18 @@ window.KGGraph = function (el, opts) {
   // instead of generic node kinds. Group is derived from the node's id (a path)
   // and kind. ----
   var GRP = {}, GRPCOL = {};
-  // Ordered by prominence: biggest groups get red, white, orange, yellow first, then the
-  // rest — each group a UNIQUE color (no two similar/same in the legend).
-  var GPAL = ['239,68,68','240,240,240','249,115,22','250,204,21','52,211,153','96,165,250',
-              '34,211,238','167,139,250','244,114,182','163,230,53'];
+  // Red-primary ARES palette: reds/maroons/oranges/golds + white, ordered by prominence
+  // (biggest group = brightest red). Warm family only — distinct but no blue/green/purple.
+  var GPAL = ['239,68,68',   // red
+              '124,20,20',   // maroon
+              '249,115,22',  // orange
+              '245,158,11',  // amber
+              '250,204,21',  // gold/yellow
+              '240,240,240', // white
+              '159,18,57',   // crimson
+              '251,146,110', // coral
+              '146,64,14',   // brown
+              '253,186,116'];// peach
   function groupOf(n){
     var k = n.kind, nm = (n.name||'').toLowerCase();
     if (k==='chat') return 'Claude Code';
