@@ -120,6 +120,9 @@ session_display = {}
 # to disk. Subsequent requests are served from RAM. No pre-generation needed.
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
+# Flask static_folder is None (Caddy serves /static with auth), so code that needs
+# the on-disk static root must use this, NOT app.static_folder (which is None → crashes).
+_STATIC_DIR = os.path.join(_APP_DIR, "static")
 
 # ─── GPU loan flag ───
 # Written by the host's gpu-swap.sh hookscript before VM 200/300 borrows the
@@ -9424,7 +9427,7 @@ def api_person_avatar(cluster_id):
         chosen_bbox = best_bbox
         if not chosen_bbox:
             # No detected face at all — center crop the thumbnail
-            thumb_path = os.path.join(app.static_folder, "thumbs", photo_hash + ".jpg")
+            thumb_path = os.path.join(_STATIC_DIR, "thumbs", photo_hash + ".jpg")
             if not os.path.exists(thumb_path):
                 return jsonify({"error": "Photo not found"}), 404
             c["avatar_hash"] = photo_hash
@@ -9459,7 +9462,7 @@ def api_person_avatar(cluster_id):
 
         # Generate and cache the avatar crop
         _invalidate_avatar(cluster_id)
-        thumb_path = os.path.join(app.static_folder, "thumbs", photo_hash + ".jpg")
+        thumb_path = os.path.join(_STATIC_DIR, "thumbs", photo_hash + ".jpg")
         if os.path.exists(thumb_path):
             v = request.args.get("v", "11")
             cache_path = os.path.join(_AVATAR_DIR, f"{cluster_id}_v{v}_{photo_hash[:8]}.jpg")
@@ -9490,7 +9493,7 @@ def api_person_avatar(cluster_id):
 
     # Manual avatar override — use the pinned photo + stored bbox
     if avatar_hash:
-        thumb_path = os.path.join(app.static_folder, "thumbs", avatar_hash + ".jpg")
+        thumb_path = os.path.join(_STATIC_DIR, "thumbs", avatar_hash + ".jpg")
         if os.path.exists(thumb_path):
             # Use stored bbox, or find face via emb_to_cluster
             avatar_bbox = c.get("avatar_bbox")
@@ -9544,7 +9547,7 @@ def api_person_avatar(cluster_id):
             dists = [(i, float(np.linalg.norm(face_embs[i] - centroid))) for i in valid]
             dists.sort(key=lambda x: x[1])
             for best_idx, _ in dists[:10]:
-                face_path = os.path.join(app.static_folder, "faces", f"{best_idx}.jpg")
+                face_path = os.path.join(_STATIC_DIR, "faces", f"{best_idx}.jpg")
                 if os.path.exists(face_path):
                     try:
                         img = Image.open(face_path).convert("RGB")
@@ -9588,7 +9591,7 @@ def api_person_avatar(cluster_id):
         # Sort by distance to centroid — closest = most representative
         best_per_photo.sort(key=lambda x: x[0])
         for _, best_idx in best_per_photo[:10]:
-            face_path = os.path.join(app.static_folder, "faces", f"{best_idx}.jpg")
+            face_path = os.path.join(_STATIC_DIR, "faces", f"{best_idx}.jpg")
             if os.path.exists(face_path):
                 try:
                     img = Image.open(face_path).convert("RGB")
@@ -9620,7 +9623,7 @@ def api_face_crop(photo_hash, emb_idx):
     if not face:
         return jsonify({"error": "Face not found"}), 404
 
-    thumb_path = os.path.join(app.static_folder, "thumbs", photo_hash + ".jpg")
+    thumb_path = os.path.join(_STATIC_DIR, "thumbs", photo_hash + ".jpg")
     if not os.path.exists(thumb_path):
         return jsonify({"error": "Photo not found"}), 404
 
