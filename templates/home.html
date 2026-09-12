@@ -1740,6 +1740,7 @@ async function pollFleet() {
     try {
         var d = await fetch('/api/fleet').then(function(r){ return r.json(); });
         if (d && d.ok) {
+            window.__FLEET = d;
             renderEros(d); renderBackups(d);
             if (BRAND !== 'ARES' && d.ts) { window.__FLEET_TS = d.ts; updateFleetFreshness(); }
         }
@@ -2515,18 +2516,32 @@ function renderArray(disks) {
         if (count) count.textContent = '—';
         return;
     }
-    if (count) count.textContent = disks.length + ' volumes';
-    list.innerHTML = disks.map(function(d) {
+    var rows = disks.map(function(d) {
         var pct = d.percent != null ? d.percent : 0;
         var color = ARR_COLOR[d.name] || 'var(--ares)';
         var temp = d.temp_c != null ? '<span class="hot">' + d.temp_c + '°C</span>' : '<span></span>';
-        return '<div class="arr-row">' +
-                   '<div class="arr-top"><span class="arr-name">' + d.name + '</span>' +
-                   '<span class="arr-cap">' + (d.used || '—') + ' / ' + (d.total || '—') + '</span></div>' +
-                   '<div class="arr-bar"><div class="arr-fill" style="width:' + pct + '%;--arr-color:' + color + '"></div></div>' +
-                   '<div class="arr-meta"><span>' + pct + '% used</span>' + temp + '</div>' +
-               '</div>';
-    }).join('');
+        return arrRow(d.name, d.used, d.total, pct, color, temp);
+    });
+    // Peer boxes' storage (from /api/fleet): EROS root + ZEUS mergerfs pool.
+    var f = window.__FLEET;
+    if (f && f.eros && f.eros.disk_total_gb) {
+        rows.push(arrRow('EROS', f.eros.disk_used_gb + ' GiB', f.eros.disk_total_gb + ' GiB',
+            f.eros.disk_pct != null ? f.eros.disk_pct : 0, '#f59e0b', '<span></span>'));
+    }
+    if (f && f.zeus && f.zeus.store && f.zeus.store.total_gb) {
+        var zs = f.zeus.store;
+        rows.push(arrRow('ZEUS', zs.used_gb + ' GiB', zs.total_gb + ' GiB', zs.pct || 0, '#38bdf8', '<span></span>'));
+    }
+    if (count) count.textContent = rows.length + ' volumes';
+    list.innerHTML = rows.join('');
+}
+function arrRow(name, used, total, pct, color, temp) {
+    return '<div class="arr-row">' +
+               '<div class="arr-top"><span class="arr-name">' + name + '</span>' +
+               '<span class="arr-cap">' + (used || '—') + ' / ' + (total || '—') + '</span></div>' +
+               '<div class="arr-bar"><div class="arr-fill" style="width:' + pct + '%;--arr-color:' + color + '"></div></div>' +
+               '<div class="arr-meta"><span>' + pct + '% used</span>' + (temp || '<span></span>') + '</div>' +
+           '</div>';
 }
 
 function updateInstruments(i, g, pool) {

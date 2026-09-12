@@ -139,6 +139,19 @@ if [ "$zeus_disks" = '[]' ] && [ -r "$DISKS_CACHE" ]; then
   disks_epoch=$(jq -r '.ts // 0' "$DISKS_CACHE" 2>/dev/null || echo 0)
 fi
 
+# ZEUS pool storage (mergerfs PROMETHEUS) in GiB — for the array map. Cached across sleep.
+ZSTORE_CACHE="/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/ai_data/zeus-store.json"
+zeus_store='null'
+if [ "$zeus_reach" = true ]; then
+  zs=$(timeout 10 ssh -o BatchMode=yes -o ConnectTimeout=6 -o StrictHostKeyChecking=accept-new root@"$ZEUS_IP" \
+       'df -P -B1G /srv/mergerfs/PROMETHEUS 2>/dev/null | awk "NR==2{print \$3\"|\"\$2\"|\"\$5}"' 2>/dev/null)
+  if [ -n "$zs" ]; then
+    zeus_store=$(printf '%s' "$zs" | jq -Rn 'input|split("|")|{used_gb:(.[0]|tonumber? // 0), total_gb:(.[1]|tonumber? // 0), pct:(.[2]|gsub("%";"")|tonumber? // 0)}')
+    printf '%s\n' "$zeus_store" > "$ZSTORE_CACHE"
+  fi
+fi
+if [ "$zeus_store" = null ] && [ -r "$ZSTORE_CACHE" ]; then zeus_store=$(cat "$ZSTORE_CACHE"); fi
+
 # --- Daily trend logs (once/day) so ZEUS panel can PREDICT, not just show now --
 # capacity: one row/day of each drive's %used → growth slope → days-to-full.
 # pull: one row/day of the nightly horcrux result → 60-night backup heatmap.
@@ -172,7 +185,9 @@ jq -n \
   --arg snap_oldest "$snap_oldest" --arg snap_size "$snap_size" \
   --argjson disks "$zeus_disks" --argjson disks_epoch "${disks_epoch:-0}" \
   --argjson cap_hist "$cap_hist" --argjson pull_hist "$pull_hist" \
+  --argjson zeus_store "$zeus_store" \
   '{ts:$ts, eros:$eros,
+    zeus:{store:$zeus_store},
     backups:{
       ares_to_zeus:{state:$a2z_state, epoch:$a2z_epoch},
       zeus_to_ares:{state:$z2a_state, epoch:$z2a_epoch},
