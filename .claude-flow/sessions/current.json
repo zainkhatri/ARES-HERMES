@@ -1,0 +1,13 @@
+{
+  "id": "session-1789165682500",
+  "startedAt": "2026-09-11T22:28:02.500Z",
+  "cwd": "/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD",
+  "context": {},
+  "metrics": {
+    "edits": 103,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "restoredAt": "2026-09-11T23:32:55.114Z"
+}

@@ -54,6 +54,7 @@ window.KGGraph = function (el, opts) {
               '146,64,14',   // brown
               '253,186,116'];// peach
   function groupOf(n){
+    if ((n.id||'').indexOf('EROS:') === 0) return 'EROS';   // EROS nodes folded into the ARES graph → one group
     var k = n.kind, nm = (n.name||'').toLowerCase();
     if (k==='chat') return 'Claude Code';
     if (k==='gpt-chat') return 'GPT';

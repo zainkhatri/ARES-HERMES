@@ -546,8 +546,7 @@
         </style>
 </head>
 <body>
-<div id="page-fx"></div>   <!-- box-switch wipe: fades out on load, fades in on switch -->
-{% include "_switcher.html" %}
+<div id="page-fx"></div>   <!-- fades out on load -->
 <div class="boxclock" id="box-clock"></div>
 <style>
 .boxsw{position:fixed;top:10px;left:16px;z-index:9000;display:flex;overflow:hidden;border:1px solid var(--ember-dim);background:rgba(var(--panel-rgb),.85);backdrop-filter:blur(4px);box-shadow:inset 0 0 22px rgba(var(--ares-rgb),.045),0 0 12px rgba(var(--ares-rgb),.06);font-family:'JetBrains Mono',monospace}
@@ -2520,7 +2519,8 @@ function renderArray(disks) {
         var pct = d.percent != null ? d.percent : 0;
         var color = ARR_COLOR[d.name] || 'var(--ares)';
         var temp = d.temp_c != null ? '<span class="hot">' + d.temp_c + '°C</span>' : '<span></span>';
-        return arrRow(d.name, d.used, d.total, pct, color, temp);
+        var nm = d.name === 'PROMETHEUS' ? 'ARES' : d.name;   // the pool is the ARES box's storage
+        return arrRow(nm, d.used, d.total, pct, color, temp);
     });
     // Peer boxes' storage (from /api/fleet): EROS root + ZEUS mergerfs pool.
     var f = window.__FLEET;
@@ -2534,7 +2534,16 @@ function renderArray(disks) {
     }
     if (count) count.textContent = rows.length + ' volumes';
     list.innerHTML = rows.join('');
+    try { localStorage.setItem('arrcache_v1', JSON.stringify({ h: list.innerHTML, c: rows.length + ' volumes' })); } catch (e) {}
 }
+// instant paint from last visit so the Array map isn't blank for a second on load
+(function restoreArrayCache(){
+    try { var c = localStorage.getItem('arrcache_v1'); if (!c) return;
+        var d = JSON.parse(c), l = document.getElementById('arr-list'), cn = document.getElementById('arr-count');
+        if (l && d.h) l.innerHTML = d.h;
+        if (cn && d.c) cn.textContent = d.c;
+    } catch (e) {}
+})();
 function fmtGiB(g) { g = +g || 0; return g >= 1024 ? (g/1024).toFixed(1) + ' TiB' : Math.round(g) + ' GiB'; }
 function arrRow(name, used, total, pct, color, temp) {
     return '<div class="arr-row">' +
@@ -2647,7 +2656,7 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
 (function () {
   if (!window.KGGraph) return;
   var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUpperCase();
-  var KGBOX = BRAND === 'ZEUS' ? null : BRAND;  // ponytail: null = union graph for ZEUS
+  var KGBOX = 'ARES,EROS';  // ARES graph now folds in EROS's nodes (EROS dashboard retired)
   var ACCENT = BRAND === 'ZEUS' ? '56,189,248' : BRAND === 'EROS' ? '245,158,11' : '239,68,68';
   // compact card: node detail shows in the on-canvas popup; ⤢ opens fullscreen
   var card = window.KGGraph(document.getElementById('ares-kg'), { box: KGBOX, accent: ACCENT, limit: 420, detailInline: true });

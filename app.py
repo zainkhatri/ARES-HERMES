@@ -591,99 +591,13 @@ def home():
     return render_template("home.html", boot=get_system_info())
 
 
+# EROS/ZEUS box dashboards retired 2026-09-11 — one ARES dashboard now; EROS data
+# lives in the ARES knowledge graph + the Array-map storage rows. Old URLs redirect home.
 @app.route("/zeus")
-@require_auth
-def zeus_view():
-    import json as _json
-    _fleet_path = os.path.join(os.path.dirname(__file__), "ai_data", "fleet.json")
-    _fleet_ts = 0
-    try:
-        with open(_fleet_path) as _f:
-            _fdata = _json.load(_f)
-            _zeus = _fdata.get("zeus", {})
-            _fleet_ts = _fdata.get("ts", 0)
-    except Exception:
-        _zeus = {}
-    _mem_used = _zeus.get("mem_used_gb", 0)
-    _mem_total = _zeus.get("mem_total_gb", 32)
-    _mem_pct = round(_mem_used / _mem_total * 100, 1) if _mem_total else 0
-    _cores = _zeus.get("cores", 8)
-    _zeus_boot = {
-        "hostname": "ZEUS",
-        "cpu": f"{_zeus.get('cpu_model', 'Intel Core i7')} ({_cores} threads)",
-        "cpu_percent": _zeus.get("cpu_pct", 0),
-        "cpu_temp": 0,
-        "memory_total": f"{_mem_total} GB",
-        "memory_used": f"{_mem_used} GB",
-        "memory_percent": _mem_pct,
-        "uptime": _zeus.get("uptime", "unknown"),
-        "os": "Debian 12",
-        "kernel": "",
-        "architecture": "x86_64",
-        "python": "",
-        "disks": [],
-        "folders": [],
-        "mordor": {"online": False},
-        "gpu": {"online": False},
-        "crons": [],
-        "io": {},
-        "caps": {"docker": 1},  # ZEUS is a docker box; drives panel visibility
-    }
-    return render_template("home.html", boot=_zeus_boot, fleet_ts=_fleet_ts)
-
-
 @app.route("/eros")
 @require_auth
-def eros_view():
-    # Inject raw fleet.eros server-side so Jinja can render EROS identity on first paint
-    # and the client never needs to call ARES-scoped endpoints to populate vitals.
-    import json as _json
-    _fleet_path = os.path.join(os.path.dirname(__file__), "ai_data", "fleet.json")
-    _fleet_ts = 0
-    try:
-        with open(_fleet_path) as _f:
-            _fdata = _json.load(_f)
-            _eros = _fdata.get("eros", {})
-            _fleet_ts = _fdata.get("ts", 0)
-    except Exception:
-        _eros = {}
-    _mem_used = _eros.get("mem_used_gb", 0)
-    _mem_total = _eros.get("mem_total_gb", 15.5)
-    _mem_pct = round(_mem_used / _mem_total * 100, 1) if _mem_total else 0
-    _cores = _eros.get("cores", 16)
-    _gpu = _eros.get("gpu", {})
-    _eros_boot = {
-        "hostname": "EROS",
-        "cpu": f"{_eros.get('cpu_model', 'AMD Ryzen 7 5700X')} ({_cores} threads)",
-        "cpu_percent": _eros.get("cpu_pct", 0),
-        "cpu_temp": _gpu.get("temp", 0),  # ponytail: no CPU temp in fleet; GPU temp is closest proxy
-        "memory_total": f"{_mem_total} GB",
-        "memory_used": f"{_mem_used} GB",
-        "memory_percent": _mem_pct,
-        "uptime": _eros.get("uptime", "unknown"),
-        "os": "Proxmox VE / Debian",
-        "kernel": "",
-        "architecture": "x86_64",
-        "python": "",
-        "disks": [],
-        "folders": [],
-        "mordor": {"online": False},
-        # EROS GPU: GTX 1070 fleet data → show name+stats in h-gpu header. online=True so
-        # applyVitals renders it (but EROS CSS hides panel-gpu; only h-gpu header shows).
-        "gpu": {
-            "online": bool(_gpu),
-            "name": "GTX 1070",
-            "temp_c": _gpu.get("temp", 0),
-            "util_pct": _gpu.get("util", 0),
-            "power_w": float(_gpu.get("power", 0)),
-            "vram_used_mib": _gpu.get("mem_used", 0),
-            "vram_total_mib": _gpu.get("mem_total", 8192),
-        },
-        "crons": [],
-        "io": {},
-        "caps": {},  # no ARES caps; EROS panel visibility driven by BRAND checks
-    }
-    return render_template("home.html", boot=_eros_boot, fleet_eros=_eros, fleet_ts=_fleet_ts)
+def _retired_box_view():
+    return redirect(url_for("home"))
 
 
 @app.route("/healthz")
