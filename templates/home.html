@@ -219,9 +219,10 @@
         /* ARES right column: panel-diskio/panel-net are display:none, so :last-child
            lands on a hidden panel. Grow Thermals and Telemetry via IDs so they fill
            the column height instead of leaving a black gap at the bottom. */
-        #panel-thermals { flex:1 1 auto; min-height:120px; display:flex; flex-direction:column; }
-        #panel-thermals > .mod-body { flex:1 1 auto; display:flex; flex-direction:column; }
-        #panel-thermals .thermal { flex:1; height:auto !important; min-height:40px; }
+        /* Thermals + Network split the right-column residual evenly (thermals was too long alone). */
+        #panel-thermals, #panel-netgraph { flex:1 1 0; min-height:96px; display:flex; flex-direction:column; }
+        #panel-thermals > .mod-body, #panel-netgraph > .mod-body { flex:1 1 auto; display:flex; flex-direction:column; }
+        #panel-thermals .thermal, #panel-netgraph .thermal { flex:1; height:auto !important; min-height:40px; }
         #panel-telemetry { flex:0 0 auto; }   /* sparkline stats hug — stretching them just makes gaps */
         #panel-telemetry > .mod-body { display:flex; flex-direction:column; }
         #panel-telemetry .sparks { justify-content:flex-start; gap:10px; }
@@ -737,27 +738,15 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
 
             {% if _brand == 'ARES' %}
             <div class="mid-floor" style="display:flex;gap:14px;flex:1 1 0;min-height:0">
-              <div class="mid-floor-l" style="display:flex;flex-direction:column;gap:14px;flex:1.5 1 0;min-width:0;min-height:0">
-                <section class="mod c-bl c-br" id="panel-array" style="flex:0 0 auto;min-width:0;display:flex;flex-direction:column">
-                  <div class="mod-head">
-                      <span class="mod-title">Array map</span>
-                      <span class="mod-meta" id="arr-count">—</span>
-                  </div>
-                  <div class="mod-body arr-list" id="arr-list">
-                      <div class="arr-empty">waiting for array…</div>
-                  </div>
-                </section>
-                <section class="mod c-bl c-br" id="panel-netgraph" style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column">
-                  <div class="mod-head">
-                      <span class="mod-title">Network</span>
-                      <span class="mod-meta"><i class="key-dot key-cpu"></i>Down <i class="key-dot key-gpu"></i>Up</span>
-                  </div>
-                  <div class="mod-body" style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column;position:relative">
-                      <canvas class="thermal" id="cv-net" aria-hidden="true" style="flex:1 1 auto;min-height:0"></canvas>
-                      <div class="th-scale"><span id="net-peak">—</span><span>0</span></div>
-                  </div>
-                </section>
-              </div>
+              <section class="mod c-bl c-br" id="panel-array" style="flex:1.5 1 0;min-width:0;min-height:0;display:flex;flex-direction:column">
+                <div class="mod-head">
+                    <span class="mod-title">Array map</span>
+                    <span class="mod-meta" id="arr-count">—</span>
+                </div>
+                <div class="mod-body arr-list" id="arr-list" style="flex:1 1 auto">
+                    <div class="arr-empty">waiting for array…</div>
+                </div>
+              </section>
               <section class="mod c-tl c-br" id="ares-kg-card" style="flex:1 1 0;min-width:0;min-height:0;display:flex;flex-direction:column;cursor:pointer" title="click to explore">
                 <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
                   <span class="mod-meta" id="ares-kg-expand" style="cursor:pointer" title="expand · full-screen">⤢</span></div>
@@ -841,6 +830,19 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
                     <div class="th-scale"><span id="th-hi">90&deg;C</span><span id="th-lo">0&deg;C</span></div>
                 </div>
             </section>
+
+            {% if _brand == 'ARES' %}
+            <section class="mod c-tr c-br" id="panel-netgraph">
+                <div class="mod-head">
+                    <span class="mod-title">Network</span>
+                    <span class="mod-meta"><i class="key-dot key-cpu"></i>Down <i class="key-dot key-gpu"></i>Up</span>
+                </div>
+                <div class="mod-body">
+                    <canvas class="thermal" id="cv-net" aria-hidden="true"></canvas>
+                    <div class="th-scale"><span id="net-peak">—</span><span>0</span></div>
+                </div>
+            </section>
+            {% endif %}
 
             <section class="mod c-bl c-br" id="panel-telemetry">
                 <div class="mod-head">
@@ -989,14 +991,14 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     /* Array-map + Where-it-lives are compact content-height panels with moderate bars;
        the centre distributes leftover height as even spacing between sections (not a void). */
     .col-mid #panel-fbreak { flex:0 0 auto !important; min-height:0; }
-    /* Floor left column: compact Array map (content-height) stacked over the Network chart. */
-    .col-mid .mid-floor #panel-array { flex:0 0 auto !important; min-height:0; }
-    .col-mid .mod-body.arr-list { flex:0 0 auto !important; justify-content:flex-start !important; gap:9px; padding:10px 12px; }
-    .col-mid .arr-list .arr-row { flex:0 0 auto !important; display:flex; flex-direction:column; }
-    .col-mid .arr-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
-    .col-mid .arr-name { font-size:12px; }
-    .col-mid .arr-cap { font-size:11px; }
-    .col-mid .arr-bar { flex:0 0 auto !important; height:15px !important; margin-top:5px !important; border-radius:3px; }
+    /* Array map owns the floor-left — rows split its height with chunky bars (no void). */
+    .col-mid .mid-floor #panel-array { flex:1.5 1 0 !important; min-height:0; }
+    .col-mid .mod-body.arr-list { flex:1 1 auto !important; justify-content:stretch !important; gap:10px; padding:12px; }
+    .col-mid .arr-list .arr-row { flex:1 1 0 !important; display:flex; flex-direction:column; justify-content:center; }
+    .col-mid .arr-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px; }
+    .col-mid .arr-name { font-size:12.5px; }
+    .col-mid .arr-cap { font-size:11.5px; }
+    .col-mid .arr-bar { flex:0 0 auto !important; height:24px !important; margin-top:7px !important; border-radius:4px; }
     .col-mid #panel-fbreak > #fbreak-list { flex:0 0 auto; display:flex; flex-direction:column; gap:8px; padding:6px 4px; }
     .col-mid #panel-fbreak .frow { grid-template-columns:92px minmax(0,1fr) 68px; padding:0; align-items:center; }
     .col-mid #panel-fbreak .frow-name { font-size:11.5px; }

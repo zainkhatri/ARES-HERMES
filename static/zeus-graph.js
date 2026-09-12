@@ -265,10 +265,9 @@ window.KGGraph = function (el, opts) {
       var oz = (pa[2]+pb[2])/2, ea = Math.max(.14, Math.min(.68,(oz-0.05)*7));
       var dimEdge = hasFocus && !(litSet.has(ka.id) && litSet.has(kb.id));
       ctx.globalAlpha = dimEdge ? 0.05 : ea;
-      var chN = (ka.depth||0) >= (kb.depth||0) ? ka : kb, paN = chN===ka ? kb : ka;
-      var g = ctx.createLinearGradient(pa[0],pa[1],pb[0],pb[1]);
-      g.addColorStop(0, 'rgb('+col(paN.kind)+')'); g.addColorStop(1, 'rgb('+col(chN.kind)+')');
-      ctx.strokeStyle = g;
+      // solid color by child kind (cheap — a per-edge gradient every frame janks the whole page)
+      var chN = (ka.depth||0) >= (kb.depth||0) ? ka : kb;
+      ctx.strokeStyle = 'rgb('+col(chN.kind)+')';
       ctx.lineWidth = Math.max(.5, oz*10*zoom);
       ctx.beginPath(); ctx.moveTo(pa[0],pa[1]); ctx.lineTo(pb[0],pb[1]); ctx.stroke();
     }
