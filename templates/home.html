@@ -737,15 +737,27 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
 
             {% if _brand == 'ARES' %}
             <div class="mid-floor" style="display:flex;gap:14px;flex:1 1 0;min-height:0">
-              <section class="mod c-bl c-br" id="panel-array" style="flex:1.5 1 0;min-width:0;min-height:0;display:flex;flex-direction:column">
-                <div class="mod-head">
-                    <span class="mod-title">Array map</span>
-                    <span class="mod-meta" id="arr-count">—</span>
-                </div>
-                <div class="mod-body arr-list" id="arr-list" style="flex:1 1 auto">
-                    <div class="arr-empty">waiting for array…</div>
-                </div>
-              </section>
+              <div class="mid-floor-l" style="display:flex;flex-direction:column;gap:14px;flex:1.5 1 0;min-width:0;min-height:0">
+                <section class="mod c-bl c-br" id="panel-array" style="flex:0 0 auto;min-width:0;display:flex;flex-direction:column">
+                  <div class="mod-head">
+                      <span class="mod-title">Array map</span>
+                      <span class="mod-meta" id="arr-count">—</span>
+                  </div>
+                  <div class="mod-body arr-list" id="arr-list">
+                      <div class="arr-empty">waiting for array…</div>
+                  </div>
+                </section>
+                <section class="mod c-bl c-br" id="panel-netgraph" style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column">
+                  <div class="mod-head">
+                      <span class="mod-title">Network</span>
+                      <span class="mod-meta"><i class="key-dot key-cpu"></i>Down <i class="key-dot key-gpu"></i>Up</span>
+                  </div>
+                  <div class="mod-body" style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column;position:relative">
+                      <canvas class="thermal" id="cv-net" aria-hidden="true" style="flex:1 1 auto;min-height:0"></canvas>
+                      <div class="th-scale"><span id="net-peak">—</span><span>0</span></div>
+                  </div>
+                </section>
+              </div>
               <section class="mod c-tl c-br" id="ares-kg-card" style="flex:1 1 0;min-width:0;min-height:0;display:flex;flex-direction:column;cursor:pointer" title="click to explore">
                 <div class="mod-head"><span class="mod-title">Knowledge Graph</span>
                   <span class="mod-meta" id="ares-kg-expand" style="cursor:pointer" title="expand · full-screen">⤢</span></div>
@@ -977,15 +989,14 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     /* Array-map + Where-it-lives are compact content-height panels with moderate bars;
        the centre distributes leftover height as even spacing between sections (not a void). */
     .col-mid #panel-fbreak { flex:0 0 auto !important; min-height:0; }
-    /* Array + Knowledge-Graph share a growing floor row — array fills its height so
-       its rows spread instead of leaving a void beneath them. */
-    .col-mid .mid-floor #panel-array { flex:1.5 1 0 !important; min-height:0; }
-    .col-mid .mod-body.arr-list { flex:1 1 auto !important; justify-content:stretch !important; gap:10px; padding:12px; }
-    .col-mid .arr-list .arr-row { flex:1 1 0 !important; display:flex; flex-direction:column; justify-content:center; }
-    .col-mid .arr-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px; }
-    .col-mid .arr-name { font-size:12.5px; }
-    .col-mid .arr-cap { font-size:11.5px; }
-    .col-mid .arr-bar { flex:0 0 auto !important; height:26px !important; margin-top:7px !important; border-radius:4px; }
+    /* Floor left column: compact Array map (content-height) stacked over the Network chart. */
+    .col-mid .mid-floor #panel-array { flex:0 0 auto !important; min-height:0; }
+    .col-mid .mod-body.arr-list { flex:0 0 auto !important; justify-content:flex-start !important; gap:9px; padding:10px 12px; }
+    .col-mid .arr-list .arr-row { flex:0 0 auto !important; display:flex; flex-direction:column; }
+    .col-mid .arr-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
+    .col-mid .arr-name { font-size:12px; }
+    .col-mid .arr-cap { font-size:11px; }
+    .col-mid .arr-bar { flex:0 0 auto !important; height:15px !important; margin-top:5px !important; border-radius:3px; }
     .col-mid #panel-fbreak > #fbreak-list { flex:0 0 auto; display:flex; flex-direction:column; gap:8px; padding:6px 4px; }
     .col-mid #panel-fbreak .frow { grid-template-columns:92px minmax(0,1fr) 68px; padding:0; align-items:center; }
     .col-mid #panel-fbreak .frow-name { font-size:11.5px; }
@@ -2272,7 +2283,7 @@ function updateGpu(g) {
 // ---- observed history -----------------------------------------------------
 // One entry per poll. Every chart below is drawn from these samples, so an
 // empty chart means "not observed yet", never a fabricated baseline.
-var HIST = { cpu: [], mem: [], gpu: [], ctemp: [], gtemp: [] };
+var HIST = { cpu: [], mem: [], gpu: [], ctemp: [], gtemp: [], netd: [], netu: [] };
 
 // Persist the observed graph history (per box) so a reload shows the last-known
 // trend immediately instead of building up from an empty chart. Live samples then
@@ -2460,6 +2471,7 @@ _regChart('cv-cpu', [{ key: 'cpu', stroke: COL.ares, fill: 'rgba(' + COL.rgb + '
 _regChart('cv-mem', [{ key: 'mem', stroke: COL.bright, fill: 'rgba(' + COL.rgb + ',.13)' }], { minSpan: 6 });
 _regChart('cv-gpu', [{ key: 'gpu', stroke: COL.amber, fill: 'rgba(' + COL.rgb + ',.10)' }], { minSpan: 8 });
 _regChart('cv-therm', [{ key: 'ctemp', stroke: COL.ares }, { key: 'gtemp', stroke: COL.amber }], { grid: true, minSpan: 6, thermScale: true });
+_regChart('cv-net', [{ key: 'netd', stroke: COL.ares, fill: 'rgba(' + COL.rgb + ',.14)' }, { key: 'netu', stroke: COL.amber }], { grid: true, minSpan: 8 });
 window.addEventListener('resize', kickCharts);
 document.addEventListener('visibilitychange', function () { if (!document.hidden) kickCharts(); });
 kickCharts();
@@ -2551,6 +2563,11 @@ function updateInstruments(i, g, pool) {
     pushHist('gpu', (g && g.online && g.util_pct != null) ? g.util_pct : null);
     pushHist('ctemp', i.cpu_temp != null ? i.cpu_temp : null);
     pushHist('gtemp', (g && g.online && g.temp_c != null) ? g.temp_c : null);
+    pushHist('netd', (i.io && i.io.net_down != null) ? i.io.net_down/1024 : null);   // KiB/s
+    pushHist('netu', (i.io && i.io.net_up   != null) ? i.io.net_up/1024   : null);
+    var _npk = document.getElementById('net-peak');
+    if (_npk) { var _mx = 0, _q; for (_q = 0; _q < HIST.netd.length; _q++) { if (HIST.netd[_q] > _mx) _mx = HIST.netd[_q]; if (HIST.netu[_q] > _mx) _mx = HIST.netu[_q]; }
+        _npk.textContent = _mx >= 1024 ? (_mx/1024).toFixed(1) + ' MiB/s' : Math.round(_mx) + ' KiB/s'; }
     drawCharts();
     updateGpu(g);
     renderIO(i.io);            // live network/disk/load (ZEUS panels)
