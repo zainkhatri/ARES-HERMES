@@ -22,7 +22,11 @@ def overview(db, limit=150, box=None, root=None):
     try:
         where, args = [], []
         if box:
-            where.append("box=?"); args.append(box)
+            boxes = [b.strip() for b in str(box).split(",") if b.strip()]
+            if len(boxes) == 1:
+                where.append("box=?"); args.append(boxes[0])
+            elif boxes:
+                where.append("box IN (%s)" % ",".join("?" * len(boxes))); args += boxes
         if root:
             where.append("(id=? OR path LIKE ?)"); args += [root, root.split(":", 1)[-1] + "/%"]
         wsql = (" WHERE " + " AND ".join(where)) if where else ""
