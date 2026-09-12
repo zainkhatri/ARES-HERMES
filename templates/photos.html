@@ -145,9 +145,17 @@
 
     /* ─── HUD chip nav — mirrors dashboard chip aesthetic ─── */
     .chrome-brand {
-        display:flex; align-items:center; gap:8px;
+        display:flex; align-items:center; gap:14px;
         min-width:0;
     }
+    /* two-tone ASCII wordmark — matches dashboard home */
+    .mark-ascii { display:flex; align-items:flex-start; gap:0; line-height:0; user-select:none; overflow:hidden; flex-shrink:1; }
+    .mark-ascii pre { font-family:'JetBrains Mono',monospace; font-size:7px; line-height:1.0; font-weight:700; margin:0; white-space:pre;
+                      text-shadow:0 0 14px rgba(245,64,45,.45), 0 0 40px rgba(245,64,45,.20); }
+    .mark-ascii .m-ar { color:var(--ares); }
+    .mark-ascii .m-es { color:#f4f8fd; text-shadow:0 0 14px rgba(244,248,253,.38), 0 0 40px rgba(244,248,253,.16); }
+    @media (max-width:760px){ .mark-ascii pre { font-size:5px; } }
+    @media (max-width:560px){ .mark-ascii { display:none; } }
     /* chip: pill-bordered nav element */
     .hud-chip {
         display:inline-flex; align-items:center; gap:7px;
@@ -2949,12 +2957,20 @@
             <span class="hud-chip-label">HOME</span>
             <span class="hud-chip-tag">→</span>
         </a>
-        <!-- HUD chip: active — A · ARES · PHOTOS -->
-        <span class="hud-chip is-active" aria-current="page">
-            <span class="hud-chip-mark">A</span>
-            <span class="hud-chip-label">ARES</span>
-            <span class="hud-chip-tag">· PHOTOS</span>
-        </span>
+        <!-- two-tone ASCII wordmark: PHOTOS -->
+        <div class="mark-ascii" aria-label="PHOTOS">
+<pre class="m-ar">██████╗ ██╗  ██╗ ██████╗
+██╔══██╗██║  ██║██╔═══██╗
+██████╔╝███████║██║   ██║
+██╔═══╝ ██╔══██║██║   ██║
+██║     ██║  ██║╚██████╔╝
+╚═╝     ╚═╝  ╚═╝ ╚═════╝ </pre><pre class="m-es">████████╗ ██████╗ ███████╗
+╚══██╔══╝██╔═══██╗██╔════╝
+   ██║   ██║   ██║███████╗
+   ██║   ██║   ██║╚════██║
+   ██║   ╚██████╔╝███████║
+   ╚═╝    ╚═════╝ ╚══════╝</pre>
+        </div>
         <!-- hidden legacy elements kept so JS id="t-count" still resolves -->
         <a href="/" class="brand-mark" title="Home" style="text-decoration:none">A</a>
         <div class="brand-id">
