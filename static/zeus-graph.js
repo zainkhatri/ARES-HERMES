@@ -36,6 +36,44 @@ window.KGGraph = function (el, opts) {
     return PAL[k] || PAL._default;   // depth is encoded by node size, not color — keeps legend == canvas
   }
 
+  // ---- group coloring: color each node by its TOP-LEVEL group (root folder or
+  // chat/tool category), so the legend reads "Claude Code / GPT / PROJECTS / WORK…"
+  // instead of generic node kinds. Group is derived from the node's id (a path)
+  // and kind. ----
+  var GRP = {}, GRPCOL = {}, _gpal_i = 0;
+  var GPAL = ['245,158,11','249,115,22','239,68,68','234,88,12','253,224,71','251,146,60',
+              '167,139,250','34,211,238','250,204,21','253,186,116','129,140,248','217,160,60'];
+  var GKNOWN = { 'Claude Code':'196,181,253', 'GPT':'110,231,183', 'Claude.ai':'251,146,110',
+                 'Skills':'52,211,153', 'MCP':'96,165,250', 'Agents':'244,114,182' };
+  function groupOf(n){
+    var k = n.kind, nm = (n.name||'').toLowerCase();
+    if (k==='chat') return 'Claude Code';
+    if (k==='gpt-chat') return 'GPT';
+    if (k==='claude-chat') return 'Claude.ai';
+    if (k==='skill') return 'Skills';
+    if (k==='mcp') return 'MCP';
+    if (k==='agent') return 'Agents';
+    if (k==='folder' || k==='file-cluster' || k==='project') {
+      if (nm.indexOf('chatgpt')>=0) return 'GPT';
+      if (nm.indexOf('claude code')>=0) return 'Claude Code';
+      if (nm.indexOf('claude.ai')>=0) return 'Claude.ai';
+      if (nm.indexOf('skill')>=0) return 'Skills';
+      if (nm.indexOf('mcp server')>=0) return 'MCP';
+      if (nm.indexOf('sub-agent')>=0) return 'Agents';
+    }
+    var id = n.id || '';
+    var m = id.match(/PROMETHEUS\/([^\/]+)/);           // first segment under the pool root
+    if (m) return m[1].replace(/^\.+/,'') || m[1];       // strip leading dot on hidden dirs
+    return n.name || 'root';
+  }
+  function assignGroups(){
+    for (var i=0;i<N.length;i++){
+      var g = groupOf(N[i]); GRP[N[i].id] = g;
+      if (!GRPCOL[g]) GRPCOL[g] = GKNOWN[g] || GPAL[(_gpal_i++) % GPAL.length];
+    }
+  }
+  function gcol(n){ return GRPCOL[GRP[n.id]] || PAL._default; }
+
   function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
 
   var cv = document.createElement('canvas');
@@ -83,17 +121,19 @@ window.KGGraph = function (el, opts) {
   el.appendChild(panel);
 
   function updateLegend() {
-    var kinds = {};
-    N.forEach(function(n){ kinds[n.kind] = (kinds[n.kind]||0)+1; });
-    var keys = Object.keys(kinds).sort();
-    var chips = keys.map(function(k){
-      return '<span style="display:inline-flex;align-items:center;gap:4px;color:rgba(255,255,255,0.78)">' +
-        '<i style="width:8px;height:8px;border-radius:50%;background:rgb('+col(k)+')"></i>' + k + '</span>';
+    // count nodes per GROUP (root folder / chat category), biggest first
+    var cnt = {};
+    N.forEach(function(n){ var g = GRP[n.id]; if (g) cnt[g] = (cnt[g]||0)+1; });
+    var keys = Object.keys(cnt).sort(function(a,b){ return cnt[b]-cnt[a]; });
+    if (!TRAVERSABLE) keys = keys.slice(0, 10);   // card: cap so it stays one tidy block
+    var chips = keys.map(function(g){
+      return '<span style="display:inline-flex;align-items:center;gap:4px;color:rgba(255,255,255,0.82);white-space:nowrap">' +
+        '<i style="width:8px;height:8px;border-radius:2px;flex:none;background:rgb('+(GRPCOL[g]||PAL._default)+')"></i>' + esc(g) + '</span>';
     }).join('');
     // legend is ALWAYS visible (no collapse) — the graph is only readable with the key present
     legEl.innerHTML =
-      '<div style="display:flex;flex-wrap:wrap;gap:3px 9px;max-width:'+(TRAVERSABLE?'62vw':'96%')+';' +
-      'background:rgba(0,0,0,0.52);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 8px">' + chips + '</div>';
+      '<div style="display:flex;flex-wrap:wrap;gap:3px 9px;max-width:'+(TRAVERSABLE?'62vw':'220px')+';' +
+      'background:rgba(0,0,0,0.62);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 8px">' + chips + '</div>';
   }
 
   function showPanel(n, childCount) {
@@ -162,7 +202,7 @@ window.KGGraph = function (el, opts) {
     });
     // also update legacy count/legend elements if they exist on the page
     var cc = document.getElementById('zg-count'); if (cc) cc.textContent = d.shown+'/'+d.total_nodes+' nodes · '+d.total_edges+' edges';
-    updateLegend();
+    assignGroups(); updateLegend();
     settle(N.length > 250 ? 95 : 170); alpha = 0; fitView(); fitted = true;
   }
 
@@ -189,7 +229,7 @@ window.KGGraph = function (el, opts) {
     nbr = new Map(); N.forEach(function(n){ nbr.set(n.id, new Set()); });
     d.edges.forEach(function(e){ if (byId[e.src]&&byId[e.dst]) L.push({ a:byId[e.src], b:byId[e.dst] }); });
     L.forEach(function(e){ var s=nbr.get(e.a.id),t=nbr.get(e.b.id); if(s)s.add(e.b.id); if(t)t.add(e.a.id); });
-    settle(60);
+    assignGroups(); updateLegend(); settle(60);
   }
 
   function step() {
@@ -222,12 +262,15 @@ window.KGGraph = function (el, opts) {
     zoom = 1; panX = 0; panY = 0;
     var minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9;
     for (var i=0;i<N.length;i++){ var p=proj(N[i],W,H); if(p[0]<minx)minx=p[0]; if(p[0]>maxx)maxx=p[0]; if(p[1]<miny)miny=p[1]; if(p[1]>maxy)maxy=p[1]; }
+    // reserve the legend's footprint at the bottom so the graph fits ABOVE it (no clash)
+    var reserve = (legEl && legEl.offsetHeight ? legEl.offsetHeight : 22) + 16;
+    var Heff = Math.max(40, H - reserve);
     // card = fit with margin (fully visible, not edge-clipped, lighter); fullscreen fills
-    var fw = TRAVERSABLE ? 0.94 : 0.80, fh = TRAVERSABLE ? 0.92 : 0.76;
-    var z = Math.min(W*fw/Math.max(1,maxx-minx), H*fh/Math.max(1,maxy-miny));
+    var fw = TRAVERSABLE ? 0.94 : 0.80, fh = TRAVERSABLE ? 0.92 : 0.80;
+    var z = Math.min(W*fw/Math.max(1,maxx-minx), Heff*fh/Math.max(1,maxy-miny));
     z = Math.max(0.02, Math.min(6, z));
     var cx=(minx+maxx)/2, cy=(miny+maxy)/2;
-    zoom=z; panX=-(cx-W/2)*z; panY=-(cy-H/2)*z;
+    zoom=z; panX=-(cx-W/2)*z; panY=-(cy-Heff/2)*z;   // vertically centre in the region above the legend
     camTarget = null;
   }
 
@@ -265,9 +308,9 @@ window.KGGraph = function (el, opts) {
       var oz = (pa[2]+pb[2])/2, ea = Math.max(.14, Math.min(.68,(oz-0.05)*7));
       var dimEdge = hasFocus && !(litSet.has(ka.id) && litSet.has(kb.id));
       ctx.globalAlpha = dimEdge ? 0.05 : ea;
-      // solid color by child kind (cheap — a per-edge gradient every frame janks the whole page)
+      // solid color by child's group (cheap — a per-edge gradient every frame janks the whole page)
       var chN = (ka.depth||0) >= (kb.depth||0) ? ka : kb;
-      ctx.strokeStyle = 'rgb('+col(chN.kind)+')';
+      ctx.strokeStyle = 'rgb('+gcol(chN)+')';
       ctx.lineWidth = Math.max(.5, oz*10*zoom);
       ctx.beginPath(); ctx.moveTo(pa[0],pa[1]); ctx.lineTo(pb[0],pb[1]); ctx.stroke();
     }
@@ -280,7 +323,7 @@ window.KGGraph = function (el, opts) {
 
     for (var oi=0; oi<order.length; oi++){
       var o = order[oi], n = o.n, p = o.p;
-      var c = col(n.kind, n.depth);
+      var c = gcol(n);
       var sel = (n.id === selId), hot = (n === hover || sel);
       var dim = hasFocus && !litSet.has(n.id);
       var bk = n.kind, ds = n.depth || 5;
