@@ -16,10 +16,11 @@
   var MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   function z(n) { return (n < 10 ? '0' : '') + n; }
   function tickClock() {
-    var el = document.getElementById('box-clock'); if (!el) return;
     var d = new Date();
-    el.innerHTML = '<span class="t">' + z(d.getHours()) + ':' + z(d.getMinutes()) + ':' + z(d.getSeconds()) + '</span>' +
-      '<span class="d">' + DOW[d.getDay()] + ' · ' + MON[d.getMonth()] + ' ' + z(d.getDate()) + ' ' + d.getFullYear() + '</span>';
+    var el = document.getElementById('box-clock');       // time → top-right
+    if (el) el.innerHTML = '<span class="t">' + z(d.getHours()) + ':' + z(d.getMinutes()) + ':' + z(d.getSeconds()) + '</span>';
+    var de = document.getElementById('box-date');         // date → top-left
+    if (de) de.textContent = DOW[d.getDay()] + ' · ' + MON[d.getMonth()] + ' ' + z(d.getDate()) + ' ' + d.getFullYear();
   }
   tickClock(); setInterval(tickClock, 1000);
 })();
