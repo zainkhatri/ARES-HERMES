@@ -46,7 +46,7 @@ window.KGGraph = function (el, opts) {
   var ctx = cv.getContext('2d'), dpr = 1;
   var N = [], L = [], byId = {}, nbr = new Map();
   var spin = 0, hover = null, mx = -1, my = -1, selId = null;
-  var zoom = 1, userYaw = 0, pitch = 1.38, panX = 0, panY = 0;   // near face-on: radial disk reads as a clean circle with slight depth
+  var zoom = 1, userYaw = 0, pitch = .42, panX = 0, panY = 0;
   var drag = false, pan = false, lx = 0, ly = 0;
   var pdx = 0, pdy = 0;  // pointer delta for click-vs-drag
   var alpha = 1, fitted = false;
@@ -163,7 +163,7 @@ window.KGGraph = function (el, opts) {
     // also update legacy count/legend elements if they exist on the page
     var cc = document.getElementById('zg-count'); if (cc) cc.textContent = d.shown+'/'+d.total_nodes+' nodes · '+d.total_edges+' edges';
     updateLegend();
-    layout();
+    settle(N.length > 250 ? 95 : 170); alpha = 0; fitView(); fitted = true;
   }
 
   function reload() {
@@ -189,7 +189,7 @@ window.KGGraph = function (el, opts) {
     nbr = new Map(); N.forEach(function(n){ nbr.set(n.id, new Set()); });
     d.edges.forEach(function(e){ if (byId[e.src]&&byId[e.dst]) L.push({ a:byId[e.src], b:byId[e.dst] }); });
     L.forEach(function(e){ var s=nbr.get(e.a.id),t=nbr.get(e.b.id); if(s)s.add(e.b.id); if(t)t.add(e.a.id); });
-    updateLegend(); layout();
+    settle(60);
   }
 
   function step() {
@@ -207,60 +207,6 @@ window.KGGraph = function (el, opts) {
   }
 
   function settle(iters){ for (var s=0;s<iters;s++) step(); }
-
-  // Radial-tree layout: depth → concentric ring, each subtree fanned into an
-  // angular wedge sized by its leaf count. Reads as a tilted spinning disk
-  // instead of a force-directed blob. Deterministic, no physics jitter, no recursion.
-  function layout(){
-    if (!N.length) return;
-    var i, children = {}, parentOf = {};
-    for (i=0;i<N.length;i++) children[N[i].id] = [];
-    for (i=0;i<L.length;i++){
-      var a = L[i].a, b = L[i].b;
-      var lo = (a.depth||0) <= (b.depth||0) ? a : b, hi = lo===a ? b : a;
-      if (lo === hi) continue;
-      children[lo.id].push(hi.id);
-      if (parentOf[hi.id] == null) parentOf[hi.id] = lo.id;
-    }
-    var minD = 1e9, maxD = -1e9;
-    for (i=0;i<N.length;i++){ var d = N[i].depth||0; if (d<minD) minD=d; if (d>maxD) maxD=d; }
-    var span = Math.max(1, maxD-minD), ring = 9.5/(span+0.6);
-    // leaf counts — descending depth so children are counted before parents
-    var desc = N.slice().sort(function(p,q){ return (q.depth||0)-(p.depth||0); });
-    var leaf = {};
-    for (i=0;i<desc.length;i++){
-      var ch = children[desc[i].id];
-      if (!ch.length) { leaf[desc[i].id] = 1; }
-      else { var s=0; for (var j=0;j<ch.length;j++) s += leaf[ch[j]]||1; leaf[desc[i].id] = s; }
-    }
-    // wedge weight — sqrt(leaves) so one huge subtree doesn't eat the whole circle
-    function wt(id){ return Math.sqrt(leaf[id]||1); }
-    // roots (no parent) split the full circle by weight
-    var roots = N.filter(function(n){ return parentOf[n.id] == null; });
-    var totalLeaf = 0; roots.forEach(function(r){ totalLeaf += wt(r.id); });
-    totalLeaf = Math.max(1e-6, totalLeaf);
-    var range = {}, acc = 0, multiRoot = roots.length > 1;
-    roots.forEach(function(r){ var w = wt(r.id)/totalLeaf*Math.PI*2; range[r.id] = [acc, acc+w]; acc += w; });
-    // assign child wedges top-down (ascending depth) and place each node
-    var asc = N.slice().sort(function(p,q){ return (p.depth||0)-(q.depth||0); });
-    for (i=0;i<asc.length;i++){
-      var n = asc[i], rg = range[n.id];
-      if (!rg) continue;
-      var ang = (rg[0]+rg[1])/2;
-      var rr = ((n.depth||0)-minD)*ring;
-      if (parentOf[n.id] == null && multiRoot) rr = ring*0.45;
-      n.x = rr*Math.cos(ang); n.z = rr*Math.sin(ang); n.y = 0;
-      var kids = children[n.id], tot = 0, a2 = rg[0], sp2 = rg[1]-rg[0];
-      for (j=0;j<kids.length;j++) tot += wt(kids[j]);
-      tot = Math.max(1e-6, tot);
-      for (j=0;j<kids.length;j++){ var w2 = wt(kids[j])/tot*sp2; range[kids[j]] = [a2, a2+w2]; a2 += w2; }
-    }
-    // orphans (no hierarchy edge) — even outer ring
-    var orphans = N.filter(function(n){ return range[n.id] == null; }), oc = Math.max(1, orphans.length);
-    orphans.forEach(function(n, idx){ var ang = idx/oc*Math.PI*2, rr = (span+1)*ring;
-      n.x = rr*Math.cos(ang); n.z = rr*Math.sin(ang); n.y = 0; });
-    alpha = 0; fitView(); fitted = true;
-  }
 
   function proj(n, W, H){
     var yaw = spin + userYaw, c = Math.cos(yaw), s = Math.sin(yaw);
@@ -351,9 +297,7 @@ window.KGGraph = function (el, opts) {
         ctx.strokeStyle = 'rgba('+c+',.85)'; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(p[0],p[1],Math.max(1.2,r)+4,0,6.29); ctx.stroke();
       }
-      var showLabel = !dim && (hot || (hasFocus&&litSet.has(n.id)) || (TRAVERSABLE
-        ? (n.kind==='project'||n.kind==='box'||n.kind==='dataset'||(n.depth||9)<=4)
-        : (n.kind==='box'||n.kind==='dataset'||(n.depth||9)<=1)));   // card: hubs + hover only (no centre pile-up)
+      var showLabel = !dim && (n.kind==='project'||n.kind==='box'||n.kind==='dataset'||(n.depth||9)<=4||hot||(hasFocus&&litSet.has(n.id)));
       if (showLabel){
         ctx.globalAlpha = hot ? 1 : (dim ? 0 : 0.72);
         ctx.fillStyle = 'rgb('+c+')';
@@ -446,7 +390,7 @@ window.KGGraph = function (el, opts) {
     markInteract();
     var r = cv.getBoundingClientRect(), n = nodeAt(e.clientX-r.left, e.clientY-r.top);
     if (n && api && api.expand){ api.expand(n.id); }
-    else { userYaw=0; pitch=1.12; fitView(); }
+    else { userYaw=0; pitch=.42; fitView(); }
   });
   document.addEventListener('keydown', function(e){
     if (e.key === 'Escape' && TRAVERSABLE && focusId != null){ clearFocus(); }
