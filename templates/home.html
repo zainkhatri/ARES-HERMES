@@ -2525,16 +2525,17 @@ function renderArray(disks) {
     // Peer boxes' storage (from /api/fleet): EROS root + ZEUS mergerfs pool.
     var f = window.__FLEET;
     if (f && f.eros && f.eros.disk_total_gb) {
-        rows.push(arrRow('EROS', f.eros.disk_used_gb + ' GiB', f.eros.disk_total_gb + ' GiB',
+        rows.push(arrRow('EROS', fmtGiB(f.eros.disk_used_gb), fmtGiB(f.eros.disk_total_gb),
             f.eros.disk_pct != null ? f.eros.disk_pct : 0, '#f59e0b', '<span></span>'));
     }
     if (f && f.zeus && f.zeus.store && f.zeus.store.total_gb) {
         var zs = f.zeus.store;
-        rows.push(arrRow('ZEUS', zs.used_gb + ' GiB', zs.total_gb + ' GiB', zs.pct || 0, '#38bdf8', '<span></span>'));
+        rows.push(arrRow('ZEUS', fmtGiB(zs.used_gb), fmtGiB(zs.total_gb), zs.pct || 0, '#38bdf8', '<span></span>'));
     }
     if (count) count.textContent = rows.length + ' volumes';
     list.innerHTML = rows.join('');
 }
+function fmtGiB(g) { g = +g || 0; return g >= 1024 ? (g/1024).toFixed(1) + ' TiB' : Math.round(g) + ' GiB'; }
 function arrRow(name, used, total, pct, color, temp) {
     return '<div class="arr-row">' +
                '<div class="arr-top"><span class="arr-name">' + name + '</span>' +
