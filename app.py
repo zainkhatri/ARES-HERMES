@@ -124,6 +124,18 @@ _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # the on-disk static root must use this, NOT app.static_folder (which is None → crashes).
 _STATIC_DIR = os.path.join(_APP_DIR, "static")
 
+
+@app.context_processor
+def _asset_versions():
+    """Cache-bust shared static assets by mtime. hud.css is served with a 7-day
+    max-age, so without a version query CSS edits do not reach clients until the
+    cache expires (this is why unstyled headers appeared after a hud.css change)."""
+    try:
+        hud_v = int(os.path.getmtime(os.path.join(_STATIC_DIR, "hud.css")))
+    except OSError:
+        hud_v = 0
+    return {"hud_v": hud_v}
+
 # ─── GPU loan flag ───
 # Written by the host's gpu-swap.sh hookscript before VM 200/300 borrows the
 # RTX 3080, removed when the VM stops (the hook restarts this service on both
@@ -878,6 +890,11 @@ def kayla_page():
 @require_auth
 def josh_page():
     return render_template("josh.html")
+
+@app.route("/yc")
+@require_auth
+def yc_page():
+    return render_template("yc.html")
 
 @app.route("/demo")
 @require_auth
