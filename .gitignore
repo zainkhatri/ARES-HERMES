@@ -74,6 +74,7 @@ portfolio.json
 ios_photo_ids.json
 .host_drives.json
 .host_crons.json
+.host_cron_logs/
 .deploy_stamp
 data/
 xcuserdata/

@@ -14,6 +14,7 @@ import subprocess
 import time
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".host_crons.json")
+LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".host_cron_logs")
 
 # systemd timer/unit base name -> friendly label shown on the dashboard.
 # ares-backup-to-hermes.timer (ARES push to ZEUS) was retired 2026-09-09 in favor
@@ -99,6 +100,23 @@ def _status(svc):
     return ok, running
 
 
+def _write_job_log(unit, lines=300):
+    """Persists a bounded journalctl tail per job so the dashboard (LXC,
+    no direct journalctl access) can show 'view logs' -- same host-writes,
+    LXC-reads bind-mount pattern as .host_crons.json itself."""
+    try:
+        r = subprocess.run(["journalctl", "-u", f"{unit}.service", "--no-pager", "-n", str(lines)],
+                           capture_output=True, text=True, timeout=10)
+        content = r.stdout if r.returncode == 0 else ""
+    except Exception:
+        content = ""
+    os.makedirs(LOG_DIR, exist_ok=True)
+    tmp = os.path.join(LOG_DIR, f"{unit}.log.tmp")
+    with open(tmp, "w") as f:
+        f.write(content)
+    os.replace(tmp, os.path.join(LOG_DIR, f"{unit}.log"))
+
+
 def main():
     timers = _timers()
     jobs = []
@@ -108,6 +126,7 @@ def main():
         jobs.append({"name": label, "unit": unit,
                      "last": t.get("last"), "next": t.get("next"),
                      "ok": bool(ok), "running": bool(running)})
+        _write_job_log(unit)
     assert len(jobs) == len(JOBS)
     jobs.insert(0, _zeus_backup_job())
     payload = {"ts": int(time.time()), "jobs": jobs}

@@ -1336,6 +1336,27 @@ function _rel(sec) {
     return d >= 0 ? s + ' ago' : 'in ' + s;
 }
 
+// Per-job log viewer, shared by the Scheduled Jobs panel -- click a job row
+// like a PR to expand its journalctl tail (ops/cron-status.py persists one
+// per job on the host; LXC has no direct journalctl access).
+async function cronShowLog(unit) {
+    var box = document.getElementById('cron-log-' + unit);
+    if (!box) return;
+    if (box.style.display === 'none' || !box.style.display) {
+        box.style.display = '';
+        box.textContent = 'loading…';
+        try {
+            var r = await fetch('/api/cron-log/' + unit);
+            var d = await r.json();
+            box.textContent = r.ok ? (d.log || '(empty log)') : (d.error || ('failed: ' + r.status));
+        } catch (e) {
+            box.textContent = 'failed to load log: ' + e;
+        }
+    } else {
+        box.style.display = 'none';
+    }
+}
+
 // Scheduled-job status (host systemd timers via ops/cron-status.py).
 function renderCrons(jobs) {
     var el = document.getElementById('cron-list');
@@ -1350,9 +1371,14 @@ function renderCrons(jobs) {
         var cls = j.running ? 'run' : (j.ok ? 'ok' : 'bad');
         if (!j.ok && !j.running) bad++;
         var last = j.running ? 'running…' : _rel(j.last);
-        return '<div class="crow"><span class="cdot ' + cls + '"></span>' +
+        var unit = j.unit || '';
+        return '<div class="crow" style="flex-direction:column;align-items:flex-start">' +
+               '<div style="cursor:pointer;width:100%" onclick="cronShowLog(\'' + unit + '\')">' +
+               '<span class="cdot ' + cls + '"></span>' +
                '<span class="cname">' + esc(j.name) + '</span>' +
-               '<span class="cwhen"><b>' + last + '</b> · ' + ((j.next && j.next * 1000 > Date.now()) ? 'next ' + _rel(j.next) : esc(j.sched || '')) + '</span></div>';
+               '<span class="cwhen"><b>' + last + '</b> · ' + ((j.next && j.next * 1000 > Date.now()) ? 'next ' + _rel(j.next) : esc(j.sched || '')) + '</span></div>' +
+               '<div id="cron-log-' + unit + '" style="display:none;white-space:pre-wrap;font-size:10px;max-height:220px;overflow:auto;opacity:.8;width:100%">' +
+               '</div></div>';
     }).join('');
     var m = document.getElementById('jobs-meta');
     if (m) m.textContent = bad ? (bad + ' failed') : (jobs.length + ' ok');

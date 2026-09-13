@@ -656,6 +656,28 @@ def healthz():
     return resp
 
 
+_CRON_LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".host_cron_logs")
+# Allowlist, not a sanitize-and-hope: mirrors ops/cron-status.py's JOBS units
+# exactly, plus zeus-horcrux (which has no local systemd unit/log on ARES).
+_CRON_LOG_UNITS = {"ares-facescan", "ares-elite-picks", "journal-pull", "ares-autofix-watcher", "zeus-horcrux"}
+
+
+@app.route("/api/cron-log/<unit>")
+@require_auth
+def cron_log(unit):
+    if unit not in _CRON_LOG_UNITS:
+        return jsonify({"error": "unknown job"}), 404
+    if unit == "zeus-horcrux":
+        return jsonify({"error": "this job runs on ZEUS, not ARES -- no local log to show"}), 404
+    path = os.path.join(_CRON_LOG_DIR, f"{unit}.log")
+    try:
+        with open(path, errors="replace") as f:
+            lines = f.readlines()
+    except OSError:
+        return jsonify({"error": "no log yet for this job"}), 404
+    return jsonify({"log": "".join(lines[-400:])})
+
+
 _AUTOFIX_APPLY_URL = "http://192.168.20.51:7684"
 _AUTOFIX_TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ops", "autofix", ".apply-token")
 
