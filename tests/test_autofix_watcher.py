@@ -65,11 +65,13 @@ def test_kill_switch_absent_allows_run(monkeypatch, tmp_path):
     monkeypatch.setattr(watcher, "_unit_log_excerpt", lambda unit: "Traceback ValueError: boom")
     monkeypatch.setattr(watcher, "collect_stale_jobs", lambda path: [])
     monkeypatch.setattr(watcher, "collect_alert_files", lambda paths: [])
+    monkeypatch.setattr(watcher.triage, "triage", lambda unit, log: {"escalate": False, "reason": "test: skip"})
     count = watcher.run_once(store, ks_path)
     assert count == 1
     inc = store.load()["incidents"][0]
-    assert inc["status"] == "new"
+    assert inc["status"] == "triaged_skip"
     assert inc["source"] == "systemd_failed"
+    assert inc["diagnosis"]["triage_reason"] == "test: skip"
 
 
 def test_run_once_dedupes_against_pending_incident(monkeypatch, tmp_path):
@@ -81,7 +83,35 @@ def test_run_once_dedupes_against_pending_incident(monkeypatch, tmp_path):
     monkeypatch.setattr(watcher, "_unit_log_excerpt", lambda unit: "Traceback ValueError: boom")
     monkeypatch.setattr(watcher, "collect_stale_jobs", lambda path: [])
     monkeypatch.setattr(watcher, "collect_alert_files", lambda paths: [])
+    monkeypatch.setattr(watcher.triage, "triage", lambda unit, log: {"escalate": True, "reason": "test: escalate"})
+    monkeypatch.setattr(watcher, "_launch_escalation", lambda *a, **k: None)
     first = watcher.run_once(store, ks_path)
     second = watcher.run_once(store, ks_path)
     assert first == 1
-    assert second == 0  # same signature already pending, no re-escalation
+    assert second == 0  # same signature already pending ("escalated"), no re-escalation
+    assert store.load()["incidents"][0]["status"] == "escalated"
+
+
+def test_triage_and_route_escalates_and_launches(monkeypatch, tmp_path):
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    iid = store.new_incident("sig-escalate", "systemd_failed", "some detail")
+    monkeypatch.setattr(watcher.triage, "triage", lambda unit, log: {"escalate": True, "reason": "looks real"})
+    launched = []
+    monkeypatch.setattr(watcher, "_launch_escalation", lambda *a: launched.append(a))
+    watcher._triage_and_route(store, iid, "sig-escalate", "systemd_failed", "some-unit", "some detail")
+    inc = store.find_by_signature("sig-escalate")
+    assert inc["status"] == "escalated"
+    assert inc["diagnosis"]["triage_reason"] == "looks real"
+    assert launched == [(iid, "sig-escalate", "systemd_failed", "some detail")]
+
+
+def test_triage_and_route_skips_without_launching(monkeypatch, tmp_path):
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    iid = store.new_incident("sig-skip", "systemd_failed", "some detail")
+    monkeypatch.setattr(watcher.triage, "triage", lambda unit, log: {"escalate": False, "reason": "transient"})
+    launched = []
+    monkeypatch.setattr(watcher, "_launch_escalation", lambda *a: launched.append(a))
+    watcher._triage_and_route(store, iid, "sig-skip", "systemd_failed", "some-unit", "some detail")
+    inc = store.find_by_signature("sig-skip")
+    assert inc["status"] == "triaged_skip"
+    assert launched == []

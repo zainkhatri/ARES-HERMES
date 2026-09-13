@@ -8,8 +8,10 @@ import subprocess
 
 import dedup
 import incident_store
+import triage
 
 PENDING_STATUSES = {"new", "escalated", "diagnosed", "council_approved"}
+ESCALATE_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "escalate.sh")
 
 
 def _run_systemctl_failed():
@@ -55,6 +57,27 @@ def collect_alert_files(alert_paths):
     return found
 
 
+def _launch_escalation(incident_id, signature, source, detail):
+    """Non-blocking: escalate.sh itself enforces the daily cap, --max-turns,
+    and wall-clock timeout, so it's safe to fire-and-forget here."""
+    detail_file = f"/tmp/ares-autofix-detail-{incident_id}.txt"
+    with open(detail_file, "w") as f:
+        f.write(detail)
+    subprocess.Popen(["bash", ESCALATE_SCRIPT, incident_id, signature, source, detail_file])
+
+
+def _triage_and_route(store, incident_id, signature, source, unit_label, detail):
+    """The only place triage.py and escalate.sh get invoked from -- without
+    this, watcher.py would only ever create incidents stuck at status=new."""
+    result = triage.triage(unit_label, detail[:4000])
+    store.write_diagnosis(incident_id, triage_reason=result["reason"])
+    if result["escalate"]:
+        store.set_status(incident_id, "escalated")
+        _launch_escalation(incident_id, signature, source, detail)
+    else:
+        store.set_status(incident_id, "triaged_skip")
+
+
 def _kill_switch_engaged(path):
     """Fail-closed: a genuinely absent file means not-engaged, but any OTHER
     error checking it (permission denied, I/O error, etc.) means 'treat as
@@ -85,15 +108,20 @@ def run_once(store, kill_switch_path, host_crons_path="/mnt/nvme/PROMETHEUS/PROJ
         existing = store.find_by_signature(signature)
         if existing and existing["status"] in PENDING_STATUSES:
             continue
-        store.new_incident(signature, "systemd_failed", excerpt[-4000:])
+        detail = excerpt[-4000:]
+        iid = store.new_incident(signature, "systemd_failed", detail)
+        _triage_and_route(store, iid, signature, "systemd_failed", unit, detail)
         created += 1
 
     for job in collect_stale_jobs(host_crons_path):
-        signature = dedup.normalize_signature(job.get("unit", job.get("name", "unknown")), "job not ok")
+        unit_label = job.get("unit", job.get("name", "unknown"))
+        signature = dedup.normalize_signature(unit_label, "job not ok")
         existing = store.find_by_signature(signature)
         if existing and existing["status"] in PENDING_STATUSES:
             continue
-        store.new_incident(signature, "dashboard_job", json.dumps(job))
+        detail = json.dumps(job)
+        iid = store.new_incident(signature, "dashboard_job", detail)
+        _triage_and_route(store, iid, signature, "dashboard_job", unit_label, detail)
         created += 1
 
     for alert in collect_alert_files(alert_paths):
@@ -101,7 +129,9 @@ def run_once(store, kill_switch_path, host_crons_path="/mnt/nvme/PROMETHEUS/PROJ
         existing = store.find_by_signature(signature)
         if existing and existing["status"] in PENDING_STATUSES:
             continue
-        store.new_incident(signature, "alert_file", alert["content"][:4000])
+        detail = alert["content"][:4000]
+        iid = store.new_incident(signature, "alert_file", detail)
+        _triage_and_route(store, iid, signature, "alert_file", alert["path"], detail)
         created += 1
 
     return created
