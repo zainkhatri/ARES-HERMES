@@ -667,6 +667,25 @@ def _autofix_token():
         return f.read().strip()
 
 
+_AUTOFIX_LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ops", "autofix", "logs")
+
+
+@app.route("/api/autofix/log/<incident_id>")
+@require_auth
+def autofix_log(incident_id):
+    """Persisted headless-Claude session log for one incident (written by
+    ops/autofix/finalize.py). Bounded read -- these can be long-running
+    sessions with a lot of tool-call output."""
+    safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", incident_id)
+    path = os.path.join(_AUTOFIX_LOG_DIR, f"{safe_id}.log")
+    try:
+        with open(path, errors="replace") as f:
+            lines = f.readlines()
+    except OSError:
+        return jsonify({"error": "no log for this incident"}), 404
+    return jsonify({"log": "".join(lines[-500:])})
+
+
 @app.route("/api/autofix/approve/<incident_id>", methods=["POST"])
 @require_auth
 def autofix_approve(incident_id):
