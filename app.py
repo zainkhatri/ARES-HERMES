@@ -683,6 +683,19 @@ _CRON_LOG_LABELS = {"ares-facescan": "Facial Scan", "ares-elite-picks": "Elite's
                     "zeus-horcrux": "Backup → Zeus"}
 
 
+@app.route("/logs")
+@require_auth
+def logs_index_page():
+    """PR-list-style overview of every autofix incident: title, status,
+    fix summary. Linked from the Scheduled Jobs panel title."""
+    from system.system_info import _read_autofix_incidents
+    incidents = sorted(_read_autofix_incidents(), key=lambda i: i.get("updated_ts", 0), reverse=True)
+    for inc in incidents:
+        ts = inc.get("updated_ts")
+        inc["updated_ts_human"] = datetime.fromtimestamp(ts).strftime("%b %-d, %Y %-I:%M %p") if ts else ""
+    return render_template("logs_index.html", boot=get_system_info(), incidents=incidents)
+
+
 @app.route("/logs/job/<unit>")
 @require_auth
 def job_log_page(unit):
