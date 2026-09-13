@@ -14,10 +14,12 @@ def test_synthetic_failure_creates_incident_and_bad_diff_is_caught(tmp_path):
     orig_run = watcher._run_systemctl_failed
     orig_excerpt = watcher._unit_log_excerpt
     orig_triage = watcher.triage.triage
+    orig_worth = watcher._worth_escalating
     orig_launch = watcher._launch_escalation
     watcher._run_systemctl_failed = lambda: fake_systemctl_output
     watcher._unit_log_excerpt = lambda unit: "Traceback (most recent call last):\nValueError: synthetic failure for testing"
     watcher.triage.triage = lambda unit, log: {"escalate": True, "reason": "synthetic: looks real"}
+    watcher._worth_escalating = lambda *a: (True, "synthetic: confirmed worth it")
     launched = []
     watcher._launch_escalation = lambda *a: launched.append(a)
     try:
@@ -26,6 +28,7 @@ def test_synthetic_failure_creates_incident_and_bad_diff_is_caught(tmp_path):
         watcher._run_systemctl_failed = orig_run
         watcher._unit_log_excerpt = orig_excerpt
         watcher.triage.triage = orig_triage
+        watcher._worth_escalating = orig_worth
         watcher._launch_escalation = orig_launch
 
     assert created == 1

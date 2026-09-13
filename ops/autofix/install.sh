@@ -28,10 +28,10 @@ EOF
 
 cat > /etc/systemd/system/ares-autofix-watcher.timer <<'EOF'
 [Unit]
-Description=Run ares-autofix-watcher every 3 minutes
+Description=Run ares-autofix-watcher once a day
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=3min
+OnCalendar=*-*-* 05:00:00
+Persistent=true
 [Install]
 WantedBy=timers.target
 EOF

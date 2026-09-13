@@ -84,6 +84,7 @@ def test_run_once_dedupes_against_pending_incident(monkeypatch, tmp_path):
     monkeypatch.setattr(watcher, "collect_stale_jobs", lambda path: [])
     monkeypatch.setattr(watcher, "collect_alert_files", lambda paths: [])
     monkeypatch.setattr(watcher.triage, "triage", lambda unit, log: {"escalate": True, "reason": "test: escalate"})
+    monkeypatch.setattr(watcher, "_worth_escalating", lambda *a: (True, "test: worth it"))
     monkeypatch.setattr(watcher, "_launch_escalation", lambda *a, **k: None)
     first = watcher.run_once(store, ks_path)
     second = watcher.run_once(store, ks_path)
@@ -96,13 +97,49 @@ def test_triage_and_route_escalates_and_launches(monkeypatch, tmp_path):
     store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
     iid = store.new_incident("sig-escalate", "systemd_failed", "some detail")
     monkeypatch.setattr(watcher.triage, "triage", lambda unit, log: {"escalate": True, "reason": "looks real"})
+    monkeypatch.setattr(watcher, "_worth_escalating", lambda *a: (True, "confirmed worth it"))
     launched = []
     monkeypatch.setattr(watcher, "_launch_escalation", lambda *a: launched.append(a))
     watcher._triage_and_route(store, iid, "sig-escalate", "systemd_failed", "some-unit", "some detail")
     inc = store.find_by_signature("sig-escalate")
     assert inc["status"] == "escalated"
     assert inc["diagnosis"]["triage_reason"] == "looks real"
+    assert inc["diagnosis"]["pre_escalation_council_verdict"] == "confirmed worth it"
     assert launched == [(iid, "sig-escalate", "systemd_failed", "some detail")]
+
+
+def test_triage_says_escalate_but_council_says_not_worth_it_stays_skipped(monkeypatch, tmp_path):
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    iid = store.new_incident("sig-notworth", "systemd_failed", "some detail")
+    monkeypatch.setattr(watcher.triage, "triage", lambda unit, log: {"escalate": True, "reason": "maybe real"})
+    monkeypatch.setattr(watcher, "_worth_escalating", lambda *a: (False, "likely transient noise"))
+    launched = []
+    monkeypatch.setattr(watcher, "_launch_escalation", lambda *a: launched.append(a))
+    watcher._triage_and_route(store, iid, "sig-notworth", "systemd_failed", "some-unit", "some detail")
+    inc = store.find_by_signature("sig-notworth")
+    assert inc["status"] == "triaged_skip"
+    assert inc["diagnosis"]["pre_escalation_council_verdict"] == "likely transient noise"
+    assert launched == []  # never spawns a headless session when council says not worth it
+
+
+def test_worth_escalating_delegates_to_council_and_wraps_untrusted_data(monkeypatch):
+    captured = {}
+    def fake_ask(prompt, **kw):
+        captured["prompt"] = prompt
+        return True, "yes, worth it"
+    monkeypatch.setattr(watcher.council, "ask", fake_ask)
+    worth_it, verdict = watcher._worth_escalating("ares-fleet", "some detail here", "looks real")
+    assert worth_it is True
+    assert verdict == "yes, worth it"
+    assert "<untrusted_incident>" in captured["prompt"]
+    assert "ares-fleet" in captured["prompt"]
+
+
+def test_worth_escalating_fails_closed_on_council_error(monkeypatch):
+    monkeypatch.setattr(watcher.council, "ask", lambda *a, **k: (False, "council invocation failed, fail-closed: timeout"))
+    worth_it, verdict = watcher._worth_escalating("ares-fleet", "detail", "reason")
+    assert worth_it is False
+    assert "fail-closed" in verdict
 
 
 def test_incident_title_prefers_error_line():
