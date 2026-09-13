@@ -49,11 +49,12 @@ class IncidentStore:
             fcntl.flock(f, fcntl.LOCK_UN)
         os.replace(tmp, self.path)
 
-    def new_incident(self, signature, source, detail):
+    def new_incident(self, signature, source, detail, title=None):
         data = self.load()
         iid = uuid.uuid4().hex[:12]
         data["incidents"].append({
             "id": iid,
+            "title": title or signature,   # human-readable; falls back to the raw hash if none given
             "signature": signature,
             "source": source,
             "detail": detail,

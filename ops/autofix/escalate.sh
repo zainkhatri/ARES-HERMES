@@ -41,8 +41,10 @@ PROMPT_FILE=$(mktemp)
   echo '  diff: the unified diff text of your fix'
   echo '  diff_hash: sha256 hex digest of the diff text'
   echo '  base_snapshot_hash: sha256 hex digest of the target file as it existed before your change'
-  echo '  target_file: absolute path (within this worktree) of the file your diff touches'
-  echo '  reasoning: your diagnosis, in plain text'
+  echo '  target_file: path (relative to the worktree root) of the file your diff touches'
+  echo '  unit_name: the systemd unit name this fix would restart to take effect (no ".service" suffix), or "" if not applicable'
+  echo '  fix_title: a short (under 12 words) human-readable title for what you fixed, e.g. "Fixed numpy truthiness crash in face scan"'
+  echo '  reasoning: your diagnosis, in plain text, starting with a one-sentence summary'
 } > "$PROMPT_FILE"
 
 timeout "$TIMEOUT_SECS" claude -p "$(cat "$PROMPT_FILE")" \
@@ -56,6 +58,8 @@ rm -f "$PROMPT_FILE"
 
 if [ "$RC" -eq 124 ]; then
   echo "escalate.sh: incident $INCIDENT_ID timed out after ${TIMEOUT_SECS}s"
-  exit 124
 fi
-exit "$RC"
+
+# Always finalize -- even on timeout/failure, so the incident gets a
+# terminal status (diagnosis_timeout) instead of sitting at "escalated" forever.
+python3 /mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/ops/autofix/finalize.py "$INCIDENT_ID"

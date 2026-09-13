@@ -78,6 +78,29 @@ def _triage_and_route(store, incident_id, signature, source, unit_label, detail)
         store.set_status(incident_id, "triaged_skip")
 
 
+_ERROR_LINE_RE = None  # set below, avoids importing re at module top for one use
+
+
+def _incident_title(unit_label, excerpt):
+    """Human-readable title for the dashboard -- never the raw dedup hash.
+    Prefers the most specific error line (e.g. 'ValueError: ...') found in
+    the excerpt; falls back to the first non-blank line."""
+    import re
+    global _ERROR_LINE_RE
+    if _ERROR_LINE_RE is None:
+        _ERROR_LINE_RE = re.compile(r"^\s*(\w+(?:Error|Exception)):?\s*(.*)$")
+    best = None
+    for line in excerpt.splitlines():
+        m = _ERROR_LINE_RE.match(line)
+        if m:
+            best = f"{m.group(1)}: {m.group(2)}".strip(": ")
+            break
+    if not best:
+        best = next((l.strip() for l in excerpt.splitlines() if l.strip()), "")
+    best = best[:120]
+    return f"{unit_label} — {best}" if best else unit_label
+
+
 def _kill_switch_engaged(path):
     """Fail-closed: a genuinely absent file means not-engaged, but any OTHER
     error checking it (permission denied, I/O error, etc.) means 'treat as
@@ -109,7 +132,7 @@ def run_once(store, kill_switch_path, host_crons_path="/mnt/nvme/PROMETHEUS/PROJ
         if existing and existing["status"] in PENDING_STATUSES:
             continue
         detail = excerpt[-4000:]
-        iid = store.new_incident(signature, "systemd_failed", detail)
+        iid = store.new_incident(signature, "systemd_failed", detail, title=_incident_title(unit, excerpt))
         _triage_and_route(store, iid, signature, "systemd_failed", unit, detail)
         created += 1
 
@@ -120,7 +143,8 @@ def run_once(store, kill_switch_path, host_crons_path="/mnt/nvme/PROMETHEUS/PROJ
         if existing and existing["status"] in PENDING_STATUSES:
             continue
         detail = json.dumps(job)
-        iid = store.new_incident(signature, "dashboard_job", detail)
+        title = f"{unit_label} — scheduled job not ok"
+        iid = store.new_incident(signature, "dashboard_job", detail, title=title)
         _triage_and_route(store, iid, signature, "dashboard_job", unit_label, detail)
         created += 1
 
@@ -130,7 +154,8 @@ def run_once(store, kill_switch_path, host_crons_path="/mnt/nvme/PROMETHEUS/PROJ
         if existing and existing["status"] in PENDING_STATUSES:
             continue
         detail = alert["content"][:4000]
-        iid = store.new_incident(signature, "alert_file", detail)
+        title = f"{os.path.basename(alert['path'])} — alert"
+        iid = store.new_incident(signature, "alert_file", detail, title=title)
         _triage_and_route(store, iid, signature, "alert_file", alert["path"], detail)
         created += 1
 

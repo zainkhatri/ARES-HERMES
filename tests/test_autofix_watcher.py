@@ -105,6 +105,22 @@ def test_triage_and_route_escalates_and_launches(monkeypatch, tmp_path):
     assert launched == [(iid, "sig-escalate", "systemd_failed", "some detail")]
 
 
+def test_incident_title_prefers_error_line():
+    excerpt = "Photo index: 35888 images\n\nTraceback (most recent call last):\n  File \"x.py\", line 244\nValueError: ambiguous truth value\n"
+    title = watcher._incident_title("ares-facescan", excerpt)
+    assert title == "ares-facescan — ValueError: ambiguous truth value"
+
+
+def test_incident_title_falls_back_to_first_line_when_no_error_pattern():
+    excerpt = "Main process exited, code=exited, status=1/FAILURE\nFailed with result 'exit-code'.\n"
+    title = watcher._incident_title("ares-fleet", excerpt)
+    assert title == "ares-fleet — Main process exited, code=exited, status=1/FAILURE"
+
+
+def test_incident_title_falls_back_to_unit_when_excerpt_empty():
+    assert watcher._incident_title("ares-fleet", "") == "ares-fleet"
+
+
 def test_triage_and_route_skips_without_launching(monkeypatch, tmp_path):
     store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
     iid = store.new_incident("sig-skip", "systemd_failed", "some detail")

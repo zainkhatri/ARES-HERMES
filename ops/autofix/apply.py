@@ -103,7 +103,9 @@ if __name__ == "__main__":
             return jsonify({"error": f"incident status is {incident['status']}, not council_approved"}), 409
 
         unit_name = incident["diagnosis"].get("unit_name", "")
-        live_file_path = incident["diagnosis"].get("target_file", "")
+        # target_file is relative to the repo root (same convention escalate.sh's
+        # prompt uses, since the worktree it was diagnosed in mirrors the repo layout).
+        live_file_path = os.path.join(REPO_ROOT, incident["diagnosis"].get("target_file", ""))
         result_status = apply_and_restart(
             incident, live_file_path, unit_name,
             restart_fn=_systemctl_restart, healthcheck_fn=_systemctl_healthy,

@@ -65,3 +65,15 @@ def test_corrupt_file_raises_instead_of_silently_reinitializing():
 def test_find_by_signature_returns_none_when_missing():
     s = store.IncidentStore(_tmp_path())
     assert s.find_by_signature("nope") is None
+
+
+def test_title_defaults_to_signature_when_not_given():
+    s = store.IncidentStore(_tmp_path())
+    s.new_incident("raw-hash-sig", "systemd_failed", "detail")
+    assert s.find_by_signature("raw-hash-sig")["title"] == "raw-hash-sig"
+
+
+def test_title_uses_given_human_readable_value():
+    s = store.IncidentStore(_tmp_path())
+    s.new_incident("raw-hash-sig2", "systemd_failed", "detail", title="ares-facescan: ValueError")
+    assert s.find_by_signature("raw-hash-sig2")["title"] == "ares-facescan: ValueError"
