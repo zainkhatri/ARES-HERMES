@@ -678,6 +678,34 @@ def cron_log(unit):
     return jsonify({"log": "".join(lines[-400:])})
 
 
+_CRON_LOG_LABELS = {"ares-facescan": "Facial Scan", "ares-elite-picks": "Elite's Stocks",
+                    "journal-pull": "Journal pull", "ares-autofix-watcher": "Autofix watcher",
+                    "zeus-horcrux": "Backup → Zeus"}
+
+
+@app.route("/logs/job/<unit>")
+@require_auth
+def job_log_page(unit):
+    label = _CRON_LOG_LABELS.get(unit, unit)
+    if unit not in _CRON_LOG_UNITS:
+        return render_template("log_view.html", boot=get_system_info(), title=label,
+                                status_pill=None, sections=[{"label": "Log", "content": None,
+                                "empty": "unknown job"}])
+    if unit == "zeus-horcrux":
+        content, empty = None, "this job runs on ZEUS, not ARES -- no local log to show"
+    else:
+        path = os.path.join(_CRON_LOG_DIR, f"{unit}.log")
+        try:
+            with open(path, errors="replace") as f:
+                content = "".join(f.readlines()[-800:])
+            empty = None
+        except OSError:
+            content, empty = None, "no log yet for this job"
+    return render_template("log_view.html", boot=get_system_info(), title=label,
+                            status_pill=None,
+                            sections=[{"label": "journalctl (last 800 lines)", "content": content, "empty": empty}])
+
+
 _AUTOFIX_APPLY_URL = "http://192.168.20.51:7684"
 _AUTOFIX_TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ops", "autofix", ".apply-token")
 
@@ -706,6 +734,60 @@ def autofix_log(incident_id):
     except OSError:
         return jsonify({"error": "no log for this incident"}), 404
     return jsonify({"log": "".join(lines[-500:])})
+
+
+def _diff_lines(diff_text):
+    out = []
+    for line in (diff_text or "").splitlines():
+        if line.startswith("@@"):
+            cls = "hunk"
+        elif line.startswith("+") and not line.startswith("+++"):
+            cls = "add"
+        elif line.startswith("-") and not line.startswith("---"):
+            cls = "del"
+        else:
+            cls = ""
+        out.append({"text": line, "cls": cls})
+    return out
+
+
+@app.route("/logs/incident/<incident_id>")
+@require_auth
+def incident_log_page(incident_id):
+    from system.system_info import _read_autofix_incidents
+    incidents = _read_autofix_incidents()
+    inc = next((i for i in incidents if i["id"] == incident_id), None)
+    if inc is None:
+        return render_template("log_view.html", boot=get_system_info(), title="incident not found",
+                                status_pill=None, sections=[]), 404
+
+    diag = inc.get("diagnosis", {})
+    status = inc.get("status", "new")
+    status_cls = "ok" if status == "resolved" else (
+        "bad" if status in ("council_held", "stale_diff_needs_human", "revert_failed_needs_human", "diagnosis_timeout")
+        else "pending")
+
+    sections = []
+    if diag.get("fix_title") or diag.get("reasoning"):
+        meta = diag.get("council_verdict", "")
+        sections.append({"label": "Diagnosis", "meta": ("council: " + meta) if meta else "",
+                          "content": (diag.get("fix_title", "") + "\n\n" + diag.get("reasoning", "")).strip(),
+                          "empty": "no diagnosis yet"})
+    if diag.get("diff"):
+        sections.append({"label": "Proposed diff", "kind": "diff", "lines": _diff_lines(diag["diff"])})
+
+    safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", incident_id)
+    log_path = os.path.join(_AUTOFIX_LOG_DIR, f"{safe_id}.log")
+    try:
+        with open(log_path, errors="replace") as f:
+            log_content = "".join(f.readlines()[-800:])
+        log_empty = None
+    except OSError:
+        log_content, log_empty = None, "no session log yet"
+    sections.append({"label": "Diagnosis session log", "content": log_content, "empty": log_empty})
+
+    return render_template("log_view.html", boot=get_system_info(), title=inc.get("title", incident_id),
+                            status_pill=status, status_pill_cls=status_cls, sections=sections)
 
 
 @app.route("/api/autofix/approve/<incident_id>", methods=["POST"])

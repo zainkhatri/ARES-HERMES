@@ -1336,28 +1336,8 @@ function _rel(sec) {
     return d >= 0 ? s + ' ago' : 'in ' + s;
 }
 
-// Per-job log viewer, shared by the Scheduled Jobs panel -- click a job row
-// like a PR to expand its journalctl tail (ops/cron-status.py persists one
-// per job on the host; LXC has no direct journalctl access).
-async function cronShowLog(unit) {
-    var box = document.getElementById('cron-log-' + unit);
-    if (!box) return;
-    if (box.style.display === 'none' || !box.style.display) {
-        box.style.display = '';
-        box.textContent = 'loading…';
-        try {
-            var r = await fetch('/api/cron-log/' + unit);
-            var d = await r.json();
-            box.textContent = r.ok ? (d.log || '(empty log)') : (d.error || ('failed: ' + r.status));
-        } catch (e) {
-            box.textContent = 'failed to load log: ' + e;
-        }
-    } else {
-        box.style.display = 'none';
-    }
-}
-
 // Scheduled-job status (host systemd timers via ops/cron-status.py).
+// Click a row like a PR check -> opens a dedicated /logs/job/<unit> page.
 function renderCrons(jobs) {
     var el = document.getElementById('cron-list');
     if (!el) return;
@@ -1372,13 +1352,10 @@ function renderCrons(jobs) {
         if (!j.ok && !j.running) bad++;
         var last = j.running ? 'running…' : _rel(j.last);
         var unit = j.unit || '';
-        return '<div class="crow" style="flex-direction:column;align-items:flex-start">' +
-               '<div style="cursor:pointer;width:100%" onclick="cronShowLog(\'' + unit + '\')">' +
+        return '<div class="crow" style="cursor:pointer" onclick="location.href=\'/logs/job/' + unit + '\'">' +
                '<span class="cdot ' + cls + '"></span>' +
                '<span class="cname">' + esc(j.name) + '</span>' +
-               '<span class="cwhen"><b>' + last + '</b> · ' + ((j.next && j.next * 1000 > Date.now()) ? 'next ' + _rel(j.next) : esc(j.sched || '')) + '</span></div>' +
-               '<div id="cron-log-' + unit + '" style="display:none;white-space:pre-wrap;font-size:10px;max-height:220px;overflow:auto;opacity:.8;width:100%">' +
-               '</div></div>';
+               '<span class="cwhen"><b>' + last + '</b> · ' + ((j.next && j.next * 1000 > Date.now()) ? 'next ' + _rel(j.next) : esc(j.sched || '')) + '</span></div>';
     }).join('');
     var m = document.getElementById('jobs-meta');
     if (m) m.textContent = bad ? (bad + ' failed') : (jobs.length + ' ok');
@@ -1406,24 +1383,6 @@ async function autofixAct(action, id, btn) {
     }
 }
 
-async function autofixShowLog(id, btn) {
-    var box = document.getElementById('autofix-log-' + id);
-    if (!box) return;
-    if (box.style.display === 'none' || !box.style.display) {
-        box.style.display = '';
-        box.textContent = 'loading…';
-        try {
-            var r = await fetch('/api/autofix/log/' + id);
-            var d = await r.json();
-            box.textContent = r.ok ? (d.log || '(empty log)') : ('no log: ' + (d.error || r.status));
-        } catch (e) {
-            box.textContent = 'failed to load log: ' + e;
-        }
-    } else {
-        box.style.display = 'none';
-    }
-}
-
 function renderAutofix(incidents) {
     var panel = document.getElementById('panel-autofix');
     if (!panel) return;
@@ -1436,24 +1395,21 @@ function renderAutofix(incidents) {
         if (AUTOFIX_NEEDS_HUMAN.indexOf(st) !== -1) needsHuman++;
         var cls = st === 'resolved' ? 'ok' : (AUTOFIX_NEEDS_HUMAN.indexOf(st) !== -1 ? 'bad' : 'run');
         var diag = inc.diagnosis || {};
-        var actions = '<button onclick="autofixShowLog(\'' + inc.id + '\',this)">Log</button>';
-        if (AUTOFIX_PENDING_APPROVAL.indexOf(st) !== -1) {
-            actions += ' <button onclick="autofixAct(\'approve\',\'' + inc.id + '\',this)">Approve</button> ' +
-                       '<button onclick="autofixAct(\'reject\',\'' + inc.id + '\',this)">Reject</button>';
-        }
         var summaryLine = diag.fix_title ? ('<b>' + esc(diag.fix_title) + '</b>') : '';
         var reasonLine = diag.triage_reason && !diag.fix_title ? esc(diag.triage_reason) : '';
-        var verdictLine = diag.council_verdict ? ('<div style="font-size:11px;opacity:.75">council: ' + esc(diag.council_verdict) + '</div>') : '';
-        var diffBlock = diag.diff ? '<pre style="white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto">' + esc(diag.diff) + '</pre>' : '';
-        return '<div class="crow" style="flex-direction:column;align-items:flex-start">' +
+        var actions = '';
+        if (AUTOFIX_PENDING_APPROVAL.indexOf(st) !== -1) {
+            actions = '<button onclick="event.stopPropagation();autofixAct(\'approve\',\'' + inc.id + '\',this)">Approve</button> ' +
+                      '<button onclick="event.stopPropagation();autofixAct(\'reject\',\'' + inc.id + '\',this)">Reject</button>';
+        }
+        // Click a row like a PR check -> opens the dedicated /logs/incident/<id> page (diagnosis, diff, session log).
+        return '<div class="crow" style="flex-direction:column;align-items:flex-start;cursor:pointer" onclick="location.href=\'/logs/incident/' + inc.id + '\'">' +
                '<div><span class="cdot ' + cls + '"></span>' +
                '<span class="cname">' + esc(inc.title || inc.signature || inc.id) + '</span>' +
                '<span class="cwhen">' + esc(st) + ' · ' + _rel(inc.updated_ts) + '</span></div>' +
                (summaryLine ? '<div style="font-size:12px">' + summaryLine + '</div>' : '') +
                (reasonLine ? '<div style="font-size:11px;opacity:.8">' + reasonLine + '</div>' : '') +
-               verdictLine + diffBlock +
-               '<div id="autofix-log-' + inc.id + '" style="display:none;white-space:pre-wrap;font-size:10px;max-height:200px;overflow:auto;opacity:.8"></div>' +
-               '<div>' + actions + '</div></div>';
+               (actions ? '<div>' + actions + '</div>' : '') + '</div>';
     }).join('');
     var m = document.getElementById('autofix-meta');
     if (m) m.textContent = needsHuman ? (needsHuman + ' need review') : (incidents.length + ' tracked');
