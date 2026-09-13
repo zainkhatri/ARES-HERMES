@@ -4,6 +4,7 @@
 .env.local
 ops/autofix/.apply-token
 ops/autofix/incidents.json
+ops/autofix/logs/
 .venv
 venv/
 *.pyc
