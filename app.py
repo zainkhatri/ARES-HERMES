@@ -130,11 +130,12 @@ def _asset_versions():
     """Cache-bust shared static assets by mtime. hud.css is served with a 7-day
     max-age, so without a version query CSS edits do not reach clients until the
     cache expires (this is why unstyled headers appeared after a hud.css change)."""
-    try:
-        hud_v = int(os.path.getmtime(os.path.join(_STATIC_DIR, "hud.css")))
-    except OSError:
-        hud_v = 0
-    return {"hud_v": hud_v}
+    def _mt(name):
+        try:
+            return int(os.path.getmtime(os.path.join(_STATIC_DIR, name)))
+        except OSError:
+            return 0
+    return {"hud_v": _mt("hud.css"), "zeusgraph_v": _mt("zeus-graph.js")}
 
 # ─── GPU loan flag ───
 # Written by the host's gpu-swap.sh hookscript before VM 200/300 borrows the
@@ -653,6 +654,49 @@ def healthz():
         resp.headers["Access-Control-Allow-Origin"] = _o
         resp.headers["Vary"] = "Origin"
     return resp
+
+
+_AUTOFIX_APPLY_URL = "http://192.168.20.51:7684"
+_AUTOFIX_TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ops", "autofix", ".apply-token")
+
+
+def _autofix_token():
+    """Reads the apply.py auth token via the shared host<->LXC bind mount --
+    never ares-shell-ctl's token, a separate secret entirely (spec 2026-09-13)."""
+    with open(_AUTOFIX_TOKEN_FILE) as f:
+        return f.read().strip()
+
+
+@app.route("/api/autofix/approve/<incident_id>", methods=["POST"])
+@require_auth
+def autofix_approve(incident_id):
+    import requests as _rq
+    try:
+        token = _autofix_token()
+    except OSError:
+        return jsonify({"error": "autofix apply service not installed"}), 503
+    try:
+        r = _rq.post(f"{_AUTOFIX_APPLY_URL}/apply/{incident_id}",
+                     headers={"Authorization": f"Bearer {token}"}, timeout=60)
+        return jsonify(r.json()), r.status_code
+    except _rq.exceptions.RequestException as e:
+        return jsonify({"error": f"apply service unreachable: {e}"}), 502
+
+
+@app.route("/api/autofix/reject/<incident_id>", methods=["POST"])
+@require_auth
+def autofix_reject(incident_id):
+    import requests as _rq
+    try:
+        token = _autofix_token()
+    except OSError:
+        return jsonify({"error": "autofix apply service not installed"}), 503
+    try:
+        r = _rq.post(f"{_AUTOFIX_APPLY_URL}/reject/{incident_id}",
+                     headers={"Authorization": f"Bearer {token}"}, timeout=15)
+        return jsonify(r.json()), r.status_code
+    except _rq.exceptions.RequestException as e:
+        return jsonify({"error": f"apply service unreachable: {e}"}), 502
 
 
 @app.route("/api/peer")
