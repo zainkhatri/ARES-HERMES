@@ -330,46 +330,6 @@
         .mark .m-ar { color:var(--ares); }
         .mark .m-es { color:#f4f8fd; text-shadow:0 0 16px rgba(244,248,253,.4), 0 0 44px rgba(244,248,253,.18); }
 
-        /* ── EROS slot toggle: click the wordmark to spin ARES → EROS ──────── */
-        .mark.reeling { padding:0; overflow:hidden; cursor:pointer; }
-        .mark .reel { display:flex; flex-direction:column; will-change:transform; transform:translateZ(0); backface-visibility:hidden; }
-        .mark .reel.spin { transition:transform .8s cubic-bezier(.22,.61,.25,1); }   /* smooth ease-out, no overshoot bounce */
-        .mark .reel.spin pre { text-shadow:none !important; }   /* big blurred glyph shadows on a moving layer = jank; drop them mid-spin */
-        .mark .rcell { display:flex; align-items:flex-start; justify-content:center; flex:0 0 auto; padding:6px 0 4px; }
-        .mark .m-eros { color:var(--ares); }
-
-        /* ── theme morph: while .theming is set (~0.5s during a slot switch), every
-              palette-driven colour glides instead of snapping. Scoped to the window
-              so it never affects normal live updates. Canvas (charts/KG) is tweened
-              in JS separately. */
-        html.theming .mod, html.theming .v-tile, html.theming .v-tile-fill, html.theming .op-num,
-        html.theming .mark pre, html.theming .mod-title, html.theming .fbreak-head,
-        html.theming .gauge-load, html.theming .gauge-temp, html.theming .trace-line,
-        html.theming .frow-bar, html.theming .boxsw .bs {
-            transition: background-color .45s ease, border-color .45s ease, color .45s ease,
-                        fill .45s ease, stroke .45s ease, box-shadow .45s ease !important;
-        }
-        @media (prefers-reduced-motion: reduce) { html.theming * { transition: none !important; } }
-        /* panels that appear/disappear between boxes collapse smoothly, not blip */
-        #panel-ops, #panel-array { transition: flex-grow .45s ease, opacity .35s ease; }
-        html[data-view="eros"] #panel-ops,
-        html[data-view="eros"] .mid-floor #panel-array {   /* out-specify .col-mid .mid-floor #panel-array{flex:1.5!important} */
-            flex: 0 1 0 !important; opacity: 0 !important; overflow: hidden; pointer-events: none;
-        }
-        html[data-view="eros"] .mark .m-eros { text-shadow:0 0 16px rgba(196,181,253,.55), 0 0 44px rgba(196,181,253,.25); }
-
-        /* ── EROS lavender / amethyst palette (accent-only; ARES stays red) ── */
-        html[data-view="eros"] {
-            --ares:#c4b5fd; --ares-rgb:196,181,253; --ares-bright:#ddd6fe;
-            --ember:#a78bfa; --ember-dim:rgba(196,181,253,.24);
-            --grid:rgba(196,181,253,.05); --amber:#c4b5fd;
-            --bg-0:#08070d; --bg-1:#0d0a16; --bg-2:#140f22; --bg-3:#1b1430;
-        }
-        html[data-view="eros"] .v-tile-fill { background:var(--ares); }
-        html[data-view="eros"] .v-win { display:none; }        /* EROS has no Windows VM */
-        /* storage bars: cool violet->blue gradient (mirrors ARES's red->amber) */
-        html[data-view="eros"] .frow-fill { background:linear-gradient(90deg, #8b5cf6, #60a5fa); }
-
         /* ---- vitals tiles (markup emitted by loadVitals) -------------------- */
         .vitals { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
         .v-tile { position:relative; padding:11px 13px 12px; border:1px solid var(--ember-dim);
@@ -617,10 +577,6 @@ window.__FLEET_EROS = {{ (fleet_eros|default(none))|tojson }};
 window.__FLEET_TS   = {{ (fleet_ts|default(0))|tojson }};
 // BRAND is the authoritative box identity for this page — hoisted so all gating below can use it.
 var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUpperCase();
-// Cap canvas backing-store resolution. Retina reports dpr 2-3, which makes every
-// canvas paint 4-9x the pixels each frame — the main source of dashboard lag on a
-// MacBook. 1.5 keeps lines/text crisp while cutting fill cost ~44% at dpr2, ~75% at dpr3.
-var RDPR = Math.min(1.5, window.devicePixelRatio || 1);
 </script>
 
 <div class="hud">
@@ -744,7 +700,7 @@ var RDPR = Math.min(1.5, window.devicePixelRatio || 1);
 
         <!-- ── centre: wordmark + vitals ───────────────────────────────── -->
         <div class="col col-mid">
-            <div class="mark" id="mark" title="click the wordmark: slot to EROS">{% if boot and (boot.hostname or '')|upper == 'ZEUS' %}<pre class="m-ar">███████╗███████╗
+            <div class="mark">{% if boot and (boot.hostname or '')|upper == 'ZEUS' %}<pre class="m-ar">███████╗███████╗
 ╚══███╔╝██╔════╝
   ███╔╝ █████╗
  ███╔╝  ██╔══╝
@@ -819,15 +775,6 @@ var RDPR = Math.min(1.5, window.devicePixelRatio || 1);
                 </div>
                 <div class="mod-body cron-list" id="cron-list">
                     <div class="arr-empty">loading…</div>
-                </div>
-            </section>
-            <section class="mod c-tr c-bl" id="panel-autofix" style="display:none">
-                <div class="mod-head">
-                    <span class="mod-title">Autonomous SWE</span>
-                    <span class="mod-meta" id="autofix-meta">—</span>
-                </div>
-                <div class="mod-body cron-list" id="autofix-list">
-                    <div class="arr-empty">no incidents</div>
                 </div>
             </section>
             <section class="mod c-tr c-br" id="panel-gpu">
@@ -1403,51 +1350,6 @@ function renderCrons(jobs) {
     __att.jstale = bad; renderAttention();
 }
 
-var NEEDS_HUMAN = ['council_held', 'stale_diff_needs_human', 'revert_failed_needs_human', 'diagnosis_timeout'];
-var PENDING_APPROVAL = ['council_approved'];
-
-async function autofixAct(action, id, btn) {
-    btn.disabled = true;
-    try {
-        var r = await fetch('/api/autofix/' + action + '/' + id, { method: 'POST' });
-        var d = await r.json();
-        if (!r.ok) { alert('autofix ' + action + ' failed: ' + (d.error || r.status)); btn.disabled = false; return; }
-        pollAll();
-    } catch (e) {
-        alert('autofix ' + action + ' failed: ' + e);
-        btn.disabled = false;
-    }
-}
-
-function renderAutofix(incidents) {
-    var panel = document.getElementById('panel-autofix');
-    if (!panel) return;
-    panel.style.display = (incidents && incidents.length) ? '' : 'none';
-    var el = document.getElementById('autofix-list');
-    if (!incidents || !incidents.length) { el.innerHTML = '<div class="arr-empty">no incidents</div>'; return; }
-    var needsHuman = 0;
-    el.innerHTML = incidents.slice().reverse().map(function(inc) {
-        var st = inc.status || 'new';
-        if (NEEDS_HUMAN.indexOf(st) !== -1) needsHuman++;
-        var cls = st === 'resolved' ? 'ok' : (NEEDS_HUMAN.indexOf(st) !== -1 ? 'bad' : 'run');
-        var diag = inc.diagnosis || {};
-        var actions = '';
-        if (PENDING_APPROVAL.indexOf(st) !== -1) {
-            actions = '<button onclick="autofixAct(\'approve\',\'' + inc.id + '\',this)">Approve</button> ' +
-                      '<button onclick="autofixAct(\'reject\',\'' + inc.id + '\',this)">Reject</button>';
-        }
-        var diffBlock = diag.diff ? '<pre style="white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto">' + esc(diag.diff) + '</pre>' : '';
-        return '<div class="crow" style="flex-direction:column;align-items:flex-start">' +
-               '<div><span class="cdot ' + cls + '"></span>' +
-               '<span class="cname">' + esc(inc.signature || inc.id) + '</span>' +
-               '<span class="cwhen">' + esc(st) + '</span></div>' +
-               (diag.reasoning ? '<div style="font-size:11px;opacity:.8">' + esc(diag.reasoning) + '</div>' : '') +
-               diffBlock + (actions ? '<div>' + actions + '</div>' : '') + '</div>';
-    }).join('');
-    var m = document.getElementById('autofix-meta');
-    if (m) m.textContent = needsHuman ? (needsHuman + ' need review') : (incidents.length + ' tracked');
-}
-
 // Sister-node card: the peer box's health at a glance (via same-origin /api/peer
 // -> peer /healthz). Counts + %, tap to open its dashboard. Hidden if no peer.
 function renderSister(d) {
@@ -1512,7 +1414,7 @@ function radar3d(el,rgb,opts){
   var accent='rgb('+rgb+')';
   var cv=document.createElement('canvas');cv.style.display='block';el.appendChild(cv);
   var ctx=cv.getContext('2d'),W=0,H=0;
-  function resize(){var r=el.getBoundingClientRect(),dpr=RDPR;W=r.width||420;H=r.height||300;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);ctx.lineJoin='round';ctx.lineCap='round';}
+  function resize(){var r=el.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1);W=r.width||420;H=r.height||300;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);ctx.lineJoin='round';ctx.lineCap='round';}
   resize();window.addEventListener('resize',resize);
   var tilt=(opts&&opts.tilt)||.92,spinSpd=(opts&&opts.spin)||.005,maxH=(opts&&opts.maxH)||1.2,Kf=(opts&&opts.k)||.32;
   var spin=0,sweep=0,AX=[],cur=[],avg=[];
@@ -1717,7 +1619,7 @@ setInterval(zeusWake, 1000);
 (function kgraphLive(){
   var el = document.getElementById('zeus-graph'); if (!el) return;
   var cv = document.createElement('canvas'); cv.style.position='absolute'; cv.style.inset='0'; el.insertBefore(cv, el.firstChild);
-  var ctx = cv.getContext('2d'), dpr = RDPR;
+  var ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1);
   var N = [], L = [], byId = {}, spin = 0, hover = null, mx = -1, my = -1;
   var zoom = 1, userYaw = 0, pitch = .42, panX = 0, panY = 0, drag = false, lx = 0, ly = 0;
   var COL = {project:'245,158,11', folder:'56,189,248', 'file-cluster':'34,211,238', vault:'255,90,90',
@@ -1795,15 +1697,12 @@ function _cvSize(cv, dpr){ var r = cv.getBoundingClientRect(); var w = Math.max(
 // ARES CPU load oscilloscope — waveform whose amplitude tracks live SYS_LOAD
 function cpuScope(){
     var cv = document.getElementById('cpu-scope'); if (!cv || cv._on) return; cv._on = 1;
-    var ctx = cv.getContext('2d'), dpr = RDPR, t = 0, last = 0;
-    (function frame(now){
+    var ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1), t = 0;
+    (function frame(){
         if (!document.getElementById('cpu-scope')) { cv._on = 0; return; }
-        requestAnimationFrame(frame);
-        if (now - last < 33) return;   // ~30fps — an oscilloscope reads identically at 30 vs 60, at half the cost
-        last = now;
         var d = _cvSize(cv, dpr), w = d[0], h = d[1];
         var ln = document.getElementById('g-load'); var load = ln ? (parseFloat(ln.textContent) || 0) : 0;
-        var amp = (0.06 + load / 100 * 0.82) * h * 0.5; t += 0.18;
+        var amp = (0.06 + load / 100 * 0.82) * h * 0.5; t += 0.09;
         ctx.clearRect(0, 0, w, h);
         ctx.beginPath();
         for (var x = 0; x <= w; x += 2 * dpr){
@@ -1811,14 +1710,15 @@ function cpuScope(){
             var y = h/2 + Math.sin(ph) * amp * (0.6 + 0.4 * Math.sin(ph*0.5 + t*0.3)) + (Math.random()-0.5) * (load/100) * h * 0.14;
             if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
-        // no per-frame shadowBlur — a full-stroke canvas shadow every frame is a top perf cost for a purely decorative glow
-        ctx.strokeStyle = 'rgba(' + (window.COL ? COL.rgb : '245,64,45') + ',0.9)'; ctx.lineWidth = 1.4 * dpr; ctx.stroke();
+        ctx.strokeStyle = 'rgba(245,64,45,0.85)'; ctx.lineWidth = 1.4 * dpr;
+        ctx.shadowColor = 'rgba(245,64,45,0.55)'; ctx.shadowBlur = 4 * dpr; ctx.stroke(); ctx.shadowBlur = 0;
+        requestAnimationFrame(frame);
     })();
 }
 // ZEUS rotating 3D point-sphere "data core"
 function zeusCore(){
     var cv = document.getElementById('zeus-core'); if (!cv || cv._on) return; cv._on = 1;
-    var ctx = cv.getContext('2d'), dpr = RDPR, ang = 0, pts = [];
+    var ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1), ang = 0, pts = [];
     for (var i = 1; i < 10; i++){ var th = Math.PI * i / 10; for (var j = 0; j < 16; j++){ var pph = 2 * Math.PI * j / 16; pts.push([Math.sin(th)*Math.cos(pph), Math.cos(th), Math.sin(th)*Math.sin(pph)]); } }
     var ct = Math.cos(0.5), st = Math.sin(0.5);
     (function frame(){
@@ -1844,122 +1744,11 @@ async function pollFleet() {
             window.__FLEET = d;
             if (window.__LAST_DISKS) renderArray(window.__LAST_DISKS);   // re-render so EROS/ZEUS storage rows appear when fleet lands
             renderEros(d); renderBackups(d);
-            if (window.EROS_MODE && d.eros) { _vtick = 0; applyVitals(erosPayload(d.eros)); erosFixups(); }   // keep the slotted EROS view fresh (fleet refreshes every 15s)
             if (BRAND !== 'ARES' && d.ts) { window.__FLEET_TS = d.ts; updateFleetFreshness(); }
         }
     } catch (e) {}
     finally { _fleetBusy = false; }
 }
-
-// ── EROS slot view ─────────────────────────────────────────────────────────
-// Reshape the fleet.json `eros` block into the /api/system-info shape so the
-// existing applyVitals() pipeline repaints the whole dashboard with EROS
-// numbers — no parallel render code. "Show EROS equivalents only": fields EROS
-// has no sensor for (CPU package temp) resolve to em-dash; ARES-only concepts
-// (MergerFS pool, per-folder GiB) collapse to EROS's single disk + folder names.
-function _fmtBytes(b) {
-    var g = b / 1073741824;
-    if (g >= 1024) return (g / 1024).toFixed(1) + ' TiB';
-    if (g >= 10)   return g.toFixed(0) + ' GiB';
-    if (g >= 1)    return g.toFixed(1) + ' GiB';
-    if (b <= 0)    return '';
-    return (b / 1048576).toFixed(0) + ' MiB';
-}
-function erosPayload(e) {
-    var g = e.gpu || {};
-    // ponytail: fleet reports gpu.mem_total in MiB (8192 = 8G) but mem_used as a
-    // small GiB figure. Normalize used → MiB. Calibration knob if the collector
-    // ever switches units: flip the <64 threshold.
-    var vusedMib = (g.mem_used != null) ? (g.mem_used < 64 ? g.mem_used * 1024 : g.mem_used) : 0;
-    return {
-        hostname: 'EROS',
-        uptime: e.uptime || '—',
-        kernel: '',
-        cpu: (e.cpu_model || 'CPU') + ' · ' + (e.cores || 0) + ' threads',
-        cpu_percent: (e.cpu_pct != null) ? e.cpu_pct : 0,
-        cpu_temp: null,   // EROS collector exposes no package-temp sensor -> temp tile omitted
-        memory_percent: (e.mem_total_gb ? Math.round(e.mem_used_gb / e.mem_total_gb * 100) : 0),
-        memory_used: (e.mem_used_gb != null ? e.mem_used_gb.toFixed(1) : '—') + ' GiB',
-        memory_total: (e.mem_total_gb != null ? e.mem_total_gb.toFixed(1) : '—') + ' GiB',
-        gpu: (g.mem_total != null)
-            ? { online:true, name:'EROS GPU', where:'eros', util_pct:(g.util || 0),
-                temp_c:(g.temp != null ? g.temp : 0), power_w:(g.power != null ? g.power : 0),
-                vram_used_mib:vusedMib, vram_total_mib:g.mem_total }
-            : { online:false },
-        // No injected disk: a PROMETHEUS row would be relabeled "ARES" by renderArray
-        // and duplicate the fleet's own EROS row (with raw "GB" units, not fmtGiB).
-        // EROS storage is shown by the "Where it lives" folders panel; the array map
-        // keeps rendering the live fleet (EROS/ZEUS) rows.
-        // ponytail: this drops the POOL tile on EROS; add a dedicated disk tile here
-        // if a storage-usage gauge is wanted in the EROS view.
-        disks: [],
-        // storage rows: real per-folder sizes from the fleet collector (du on EROS).
-        // Handles both shapes: {name,bytes} (new) and bare "name" strings (old cache).
-        folders: ((e.mount && e.mount.folders) || []).map(function(f){
-            if (typeof f === 'string') return { name:f, size:0, display:'' };
-            var b = f.bytes || 0;
-            return { name:f.name, size:b, display:_fmtBytes(b) };
-        }).sort(function(a, b){ return b.size - a.size; }),
-        crons: [],        // no cron collector on EROS -> hides the jobs panel
-        containers: [],
-        caps: window.__CAPS   // keep the ARES caps so panels stay visible (applyCaps is one-shot)
-    };
-}
-
-// EROS-specific display corrections applied after applyVitals().
-function erosFixups() {
-    var tag = document.querySelector('.v-tile[data-k="pool"] .v-tile-tag');
-    if (tag) tag.textContent = 'disk';   // not MergerFS on EROS
-}
-
-// ── theme colour morph ──────────────────────────────────────────────────────
-// Charts + the knowledge graph are canvas — CSS can't transition them, so we
-// interpolate their colours frame-by-frame warm<->cool over ~0.5s. DOM elements
-// glide via the scoped `.theming` transition. No overlay; the components morph.
-function _hexRGB(h){ h=h.replace('#',''); return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; }
-function _rgbHex(a){ return '#'+a.map(function(x){ x=Math.max(0,Math.min(255,Math.round(x))); return ('0'+x.toString(16)).slice(-2); }).join(''); }
-function _lerpHex(h1,h2,t){ var a=_hexRGB(h1),b=_hexRGB(h2); return _rgbHex([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]); }
-function _lerpRGBs(s1,s2,t){ var a=s1.split(',').map(Number),b=s2.split(',').map(Number); return [Math.round(a[0]+(b[0]-a[0])*t),Math.round(a[1]+(b[1]-a[1])*t),Math.round(a[2]+(b[2]-a[2])*t)].join(','); }
-var _morphRAF = 0;
-function morphTheme(cool) {
-    var root = document.documentElement;
-    var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var W = COL_WARM, C = COL_COOL, DUR = reduce ? 0 : 520;
-    root.classList.add('theming');
-    if (_morphRAF) cancelAnimationFrame(_morphRAF);
-    var start = performance.now();
-    (function step(now) {
-        var p = DUR ? Math.min(1, (now - start) / DUR) : 1;
-        var ep = p < .5 ? 2*p*p : 1 - Math.pow(-2*p+2, 2)/2;   // easeInOutQuad
-        var e = cool ? ep : 1 - ep;                             // 0 = warm .. 1 = cool
-        COL.ares   = _lerpHex(W.ares,   C.ares,   e);
-        COL.bright = _lerpHex(W.bright, C.bright, e);
-        COL.amber  = _lerpHex(W.amber,  C.amber,  e);
-        COL.rgb    = _lerpRGBs(W.rgb,   C.rgb,    e);
-        _chartColors();          // just set colours; the 30fps chart loop repaints (no redraw storm)
-        if (window.__KGCARD && window.__KGCARD.setThemeMix) window.__KGCARD.setThemeMix(e);   // KG loop repaints
-        if (window.__KGFULL && window.__KGFULL.setThemeMix) window.__KGFULL.setThemeMix(e);
-        if (p < 1) _morphRAF = requestAnimationFrame(step);
-        else { _morphRAF = 0; setTimeout(function(){ root.classList.remove('theming'); }, 80); }
-    })(performance.now());
-}
-
-function enterEros() {
-    window.EROS_MODE = true;
-    document.documentElement.setAttribute('data-view', 'eros');   // palette vars flip; .theming glides the DOM
-    morphTheme(true);                                             // charts + KG tween to cool
-    var d = window.__FLEET;
-    if (d && d.eros) { _vtick = 0; applyVitals(erosPayload(d.eros)); erosFixups(); }
-    else pollFleet();   // fleet not landed yet — fetch now instead of waiting up to 15s
-}
-
-function exitEros() {
-    window.EROS_MODE = false;
-    document.documentElement.removeAttribute('data-view');
-    morphTheme(false);                                            // charts + KG tween to warm
-    _vtick = 0; loadVitals();   // repaint ARES (heavy path forced)
-}
-
 // Fleet freshness badge for non-ARES boxes — shows how old the fleet.json data is.
 function updateFleetFreshness() {
     var el = document.getElementById('fleet-fresh-badge');
@@ -2246,7 +2035,6 @@ function winTile() {
 var _vitalsBusy = false;
 var _vtick = 0;
 async function loadVitals() {
-    if (window.EROS_MODE) return;   // slotted to EROS — don't overwrite with ARES numbers
     if (_vitalsBusy) return;   // skip tick if previous poll still running
     if (document.hidden) return;   // perf: don't poll/redraw while the tab is hidden
     _vitalsBusy = true;
@@ -2289,11 +2077,10 @@ function applyVitals(i) {
             document.getElementById('v-host-tag').textContent = i.hostname || 'ARES';
 
             var _BR = document.documentElement.getAttribute('data-brand');
-            var TC = (window.EROS_MODE || _BR === 'EROS')
-                // EROS cool spread: violet -> purple -> lavender -> blue -> indigo
-                ? {temp:'#a78bfa', cpu:'#8b5cf6', mem:'#c4b5fd', gpu:'#60a5fa', pool:'#818cf8'}
-                : (_BR === 'ZEUS')
+            var TC = (_BR === 'ZEUS')
                 ? {temp:'#38bdf8', cpu:'#6366f1', mem:'#a855f7', gpu:'#818cf8', pool:'#7c3aed'}
+                : (_BR === 'EROS')
+                ? {temp:'#f59e0b', cpu:'#f59e0b', mem:'#fb923c', gpu:'#fbbf24', pool:'#d97706'}
                 : {temp:'#fb923c', cpu:'#ef4444', mem:'#f43f5e', gpu:'#eab308', pool:'#ea580c'};
             var tiles = [];
             if (i.cpu_temp != null) {
@@ -2324,7 +2111,6 @@ function applyVitals(i) {
             } else {
                 renderCrons([]);   // hides panel-jobs on EROS/ZEUS
             }
-            renderAutofix(i.autofix_incidents || []);   // ARES only; [] elsewhere hides the panel
             var fb = document.getElementById('foot-brand'); if (fb) fb.textContent = i.hostname || 'ARES';
             requestAnimationFrame(function () { fitScale(); });   // cheap: refits only if content overflowed
         }
@@ -2433,109 +2219,6 @@ if (BRAND === 'ARES') {
 setInterval(pollOutreach, 60000);   // ZEUS outreach stats (no-op unless docker cap)
 pollFleet();
 setInterval(pollFleet, 15000);   // EROS vitals + ARES/ZEUS backups (host-collected file)
-
-// ── Wordmark slot machine: click ARES to spin the reel and land on EROS ─────
-// The reel is [ARES, ZEUS, EROS] repeated; a toggle spins strictly downward by
-// at least one full rotation, then snaps back a whole period (identical art) to
-// keep headroom — a classic infinite-reel. Landing on EROS calls enterEros().
-(function () {
-    if (BRAND !== 'ARES') return;
-    var mark = document.getElementById('mark');
-    if (!mark) return;
-
-    var A_AR = `<pre class="m-ar"> █████╗ ██████╗
-██╔══██╗██╔══██╗
-███████║██████╔╝
-██╔══██║██╔══██╗
-██║  ██║██║  ██║
-╚═╝  ╚═╝╚═╝  ╚═╝</pre><pre class="m-es">███████╗███████╗
-██╔════╝██╔════╝
-█████╗  ███████╗
-██╔══╝  ╚════██║
-███████╗███████║
-╚══════╝╚══════╝</pre>`;
-    var Z_ZE = `<pre class="m-ar">███████╗███████╗
-╚══███╔╝██╔════╝
-  ███╔╝ █████╗
- ███╔╝  ██╔══╝
-███████╗███████╗
-╚══════╝╚══════╝</pre><pre class="m-es">██╗   ██╗███████╗
-██║   ██║██╔════╝
-██║   ██║███████╗
-██║   ██║╚════██║
-╚██████╔╝███████║
- ╚═════╝ ╚══════╝</pre>`;
-    // EROS split like ARES (AR+ES): "ER" takes the box accent, "OS" is white.
-    var E_RO = `<pre class="m-ar">███████╗██████╗
-██╔════╝██╔══██╗
-█████╗  ██████╔╝
-██╔══╝  ██╔══██╗
-███████╗██║  ██║
-╚══════╝╚═╝  ╚═╝</pre><pre class="m-es"> ██████╗ ███████╗
-██╔═══██╗██╔════╝
-██║   ██║███████╗
-██║   ██║╚════██║
-╚██████╔╝███████║
- ╚═════╝ ╚══════╝</pre>`;
-    var ART = { ares:A_AR, zeus:Z_ZE, eros:E_RO };
-    var SEQ = ['ares', 'zeus', 'eros'], REPEAT = 6;
-    var cells = [];
-    for (var r = 0; r < REPEAT; r++) for (var s = 0; s < SEQ.length; s++) cells.push(SEQ[s]);
-
-    var reel = document.createElement('div');
-    reel.className = 'reel';
-    reel.innerHTML = cells.map(function (b) { return '<div class="rcell">' + ART[b] + '</div>'; }).join('');
-    mark.classList.add('reeling');
-    mark.innerHTML = '';
-    mark.appendChild(reel);
-
-    var cellH = reel.children[0].offsetHeight;
-    mark.style.height = cellH + 'px';
-    var pos = 0, cur = 'ares', busy = false;
-
-    function put(idx, animate) {
-        if (!animate) { reel.style.transition = 'none'; }
-        reel.style.transform = 'translateY(' + (-idx * cellH) + 'px)';
-        if (!animate) { reel.offsetHeight; reel.style.transition = ''; }   // flush the no-transition snap
-    }
-    function nextIdx(box, from) {
-        var i = from + 1;
-        while (i < cells.length && !(cells[i] === box && i - from >= SEQ.length)) i++;
-        return i;
-    }
-    function spinTo(box) {
-        if (busy || box === cur) return;
-        if (!cellH) { cellH = reel.children[0].offsetHeight; mark.style.height = cellH + 'px'; }
-        if (!cellH) return;   // still no layout (0 height) — don't latch busy; retry on next click
-        busy = true;
-        var idx = nextIdx(box, pos);
-        if (idx >= cells.length) {           // ran off the end — reset to top region, retry
-            pos = pos % SEQ.length; put(pos, false); idx = nextIdx(box, pos);
-        }
-        reel.classList.add('spin');
-        requestAnimationFrame(function () { requestAnimationFrame(function () { put(idx, true); }); });
-        var settled = false;
-        var done = function () {
-            if (settled) return;             // transitionend + fallback both fire once, guard the second
-            settled = true;
-            clearTimeout(fallback);
-            reel.removeEventListener('transitionend', done);
-            reel.classList.remove('spin');
-            pos = idx; cur = box;
-            // keep >= 2 full periods of headroom so nextIdx never runs off the end
-            if (pos > cells.length - 2 * SEQ.length) { pos -= (REPEAT - 1) * SEQ.length; put(pos, false); }
-            busy = false;
-            if (box === 'eros') enterEros(); else exitEros();
-        };
-        reel.addEventListener('transitionend', done);
-        var fallback = setTimeout(done, 1200);   // safety net if transitionend never fires
-    }
-
-    mark.addEventListener('click', function () { spinTo(cur === 'ares' ? 'eros' : 'ares'); });
-    window.addEventListener('resize', function () {
-        cellH = reel.children[0].offsetHeight; mark.style.height = cellH + 'px'; put(pos, false);
-    });
-})();
 
 // === Instruments =========================================================
 // Everything below is driven by fields /api/system-info actually returns.
@@ -2695,31 +2378,6 @@ var _cssRoot = getComputedStyle(document.documentElement);
 function _cssv(n, d) { return ((_cssRoot.getPropertyValue(n) || '').trim()) || d; }
 var COL = { ares: _cssv('--ares', '#f5402d'), bright: _cssv('--ares-bright', '#ff7a45'),
             amber: _cssv('--amber', '#f59e0b'), rgb: _cssv('--ares-rgb', '245,64,45') };
-// Warm (ARES) vs cool (EROS) chart palettes. Charts + grid read COL live; the slot
-// toggle mutates COL between these and redraws so the graphs re-theme with the box.
-var COL_WARM = { ares: COL.ares, bright: COL.bright, amber: COL.amber, rgb: COL.rgb };
-var COL_COOL = { ares: '#8b5cf6', bright: '#c4b5fd', amber: '#60a5fa', rgb: '139,92,246' };
-// Re-derive each chart's series colours from the current COL, then repaint.
-// Update chart series colours from COL. Cheap (string assigns only) — the always-on
-// _chartLoop (30fps) repaints them, so the morph never has to force a redraw itself.
-function _chartColors() {
-    var map = {
-        'cv-cpu':   [{ stroke: COL.ares,   fill: 'rgba(' + COL.rgb + ',.14)' }],
-        'cv-mem':   [{ stroke: COL.bright, fill: 'rgba(' + COL.rgb + ',.13)' }],
-        'cv-gpu':   [{ stroke: COL.amber,  fill: 'rgba(' + COL.rgb + ',.10)' }],
-        'cv-therm': [{ stroke: COL.ares }, { stroke: COL.amber }],
-        'cv-net':   [{ stroke: COL.ares,   fill: 'rgba(' + COL.rgb + ',.14)' }, { stroke: COL.amber }]
-    };
-    for (var ci = 0; ci < CHARTS.length; ci++) {
-        var c = CHARTS[ci], m = c.cv && map[c.cv.id];
-        if (!m) continue;
-        for (var si = 0; si < c.series.length && si < m.length; si++) {
-            c.series[si].stroke = m[si].stroke;
-            if ('fill' in m[si]) c.series[si].fill = m[si].fill;
-        }
-    }
-}
-function themeCharts() { _chartColors(); if (typeof drawCharts === 'function') drawCharts(); }
 
 var CHARTS = [];          // {cv, series:[{key,stroke,fill}], grid, minSpan, thermScale}
 var _disp = {};           // key -> series eased toward HIST[key]
@@ -2997,7 +2655,7 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
   <div id="ares-kg-full-g" style="position:absolute;inset:0"></div>
 </div>
 
-<script src="/static/zeus-graph.js?v={{ zeusgraph_v }}"></script>
+<script src="/static/zeus-graph.js"></script>
 <script>
 (function () {
   if (!window.KGGraph) return;
@@ -3006,14 +2664,12 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
   var ACCENT = BRAND === 'ZEUS' ? '56,189,248' : BRAND === 'EROS' ? '245,158,11' : '239,68,68';
   // compact card: node detail shows in the on-canvas popup; ⤢ opens fullscreen
   var card = window.KGGraph(document.getElementById('ares-kg'), { box: KGBOX, accent: ACCENT, limit: 420, detailInline: true });
-  window.__KGCARD = card;   // slot toggle calls .retheme() to switch warm/cool
   var full = null, ov = document.getElementById('ares-kg-full');
   function openFull() {
     ov.style.display = 'block';
     if (!full) {
       full = window.KGGraph(document.getElementById('ares-kg-full-g'), { box: KGBOX, accent: ACCENT, limit: 900, traversable: true });
       window.__kgFull = full;  // expose for headless test injection
-      window.__KGFULL = full;  // slot toggle re-themes this too
     } else { full.reload(); }
   }
   // node click on the card shows its summary panel (handled inside KGGraph); ⤢ opens fullscreen
