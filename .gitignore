@@ -2,6 +2,8 @@
 .env
 .env.*
 .env.local
+ops/autofix/.apply-token
+ops/autofix/incidents.json
 .venv
 venv/
 *.pyc
@@ -86,6 +88,7 @@ vault_video_cache/
 blurhashes.json
 templates/josh.html
 templates/kriti.html
+templates/yc.html
 templates/se_course.html
 templates/sigma_demo.html
 templates/adam.html
