@@ -760,6 +760,42 @@ def autofix_log(incident_id):
     return jsonify({"log": "".join(lines[-500:])})
 
 
+def _paragraphize(text, sentences_per_para=2):
+    """Diagnosis reasoning often comes back from the LLM as one dense
+    run-on paragraph (no blank lines). Group every N sentences into a
+    paragraph so it actually reads as prose instead of a wall of text."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    if "\n\n" in text:  # already has real paragraph breaks -- respect them
+        return [p.strip() for p in text.split("\n\n") if p.strip()]
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    return [" ".join(sentences[i:i + sentences_per_para]) for i in range(0, len(sentences), sentences_per_para)]
+
+
+def _parse_manual_steps(text):
+    """Splits 'Run on EROS...: \\n 1. Label: command' into a real list --
+    returns (intro: str, items: list[{"label", "command"}]). Each item's
+    first colon separates the human label from the actual command, if any.
+    Falls back to a single unlabeled item if nothing looks numbered."""
+    lines = [l.strip() for l in (text or "").splitlines() if l.strip()]
+    intro, raw_items = "", []
+    for line in lines:
+        m = re.match(r"^\d+[.)]\s*(.+)$", line)
+        if m:
+            raw_items.append(m.group(1))
+        elif not raw_items:
+            intro = (intro + " " + line).strip()
+    if not raw_items and lines:
+        raw_items = lines
+        intro = ""
+    items = []
+    for raw in raw_items:
+        m = re.match(r"^([^:]{1,60}):\s*(.+)$", raw)
+        items.append({"label": m.group(1), "command": m.group(2)} if m else {"label": "", "command": raw})
+    return intro, items
+
+
 def _diff_lines(diff_text):
     out = []
     for line in (diff_text or "").splitlines():
@@ -800,16 +836,17 @@ def incident_log_page(incident_id):
 
     # Prose (reasoning) gets real paragraphs, not a monospace wall of text --
     # code/diff/log stay monospace since that content actually is code.
-    reasoning_paragraphs = [p.strip() for p in (diag.get("reasoning") or "").split("\n") if p.strip()]
+    reasoning_paragraphs = _paragraphize(diag.get("reasoning"))
 
     code_section = None
     if diag.get("diff"):
         code_section = {"label": "Proposed diff", "kind": "diff", "lines": _diff_lines(diag["diff"])}
     elif diag.get("manual_steps"):
         box = diag.get("box", "")
+        intro, items = _parse_manual_steps(diag["manual_steps"])
         code_section = {"label": f"Manual steps ({box})" if box else "Manual steps",
                          "meta": "no auto-apply for this one -- run it yourself" if status != "council_approved" else "",
-                         "content": diag["manual_steps"]}
+                         "kind": "steps", "intro": intro, "items": items}
 
     safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", incident_id)
     log_path = os.path.join(_AUTOFIX_LOG_DIR, f"{safe_id}.log")

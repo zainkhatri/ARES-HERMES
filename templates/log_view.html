@@ -74,6 +74,16 @@
   details.log-details pre.logbox { margin-top:10px; }
 
   .empty-card { border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.35); padding:22px; font-family:'JetBrains Mono',monospace; }
+
+  .steps-list { list-style:none; counter-reset:step; margin:0; padding:0; max-width:78ch; }
+  .steps-list li { counter-increment:step; position:relative; padding:14px 0 14px 40px; border-bottom:1px solid var(--ember-dim); }
+  .steps-list li:last-child { border-bottom:none; }
+  .steps-list li::before { content:counter(step); position:absolute; left:0; top:14px; width:26px; height:26px;
+    border:1px solid var(--ares-bright); color:var(--ares-bright); font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; }
+  .step-label { font-family:'Bricolage Grotesque',sans-serif; font-weight:600; font-size:14.5px; color:var(--text-1); display:block; margin-bottom:6px; }
+  .steps-list code { font-family:'JetBrains Mono',monospace; font-size:12.5px; color:#5fd97a; background:rgba(63,185,80,.08);
+    padding:3px 8px; border:1px solid rgba(63,185,80,.25); display:inline-block; }
   .empty { color:var(--text-3); font-style:italic; font-size:13px; }
 
   /* --- Job-log mode (simpler, no verdict/action concept) --- */
@@ -155,6 +165,13 @@
     {% if code_section.kind == 'diff' %}
       <pre class="logbox diff">{% for line in code_section.lines %}<span class="{{ line.cls }}">{{ line.text }}</span>
 {% endfor %}</pre>
+    {% elif code_section.kind == 'steps' %}
+      {% if code_section.intro %}<div class="prose" style="margin-bottom:14px">{{ code_section.intro }}</div>{% endif %}
+      <ol class="steps-list">
+        {% for item in code_section.items %}
+        <li>{% if item.label %}<span class="step-label">{{ item.label }}</span>{% endif %}<code>{{ item.command }}</code></li>
+        {% endfor %}
+      </ol>
     {% else %}
       <pre class="logbox">{{ code_section.content }}</pre>
     {% endif %}
