@@ -1,57 +1,56 @@
 <!doctype html>
-<html data-brand="{{ boot.hostname or 'ARES' }}">
+<html data-brand="ARES">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ title }} — logs</title>
+{% set page_title = title + ' · ARES' %}
+{% include "_hud_head.html" %}
 <style>
-  :root { --bg:#0d1117; --fg:#c9d1d9; --dim:#8b949e; --border:#30363d; --ok:#3fb950; --bad:#f85149; --accent:#58a6ff; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
-  header { padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; position:sticky; top:0; background:var(--bg); z-index:2; }
-  header a.back { color:var(--dim); text-decoration:none; font-size:13px; }
-  header a.back:hover { color:var(--fg); }
-  h1 { font-size:15px; margin:0; font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .status-pill { font-size:11px; padding:2px 8px; border-radius:10px; border:1px solid var(--border); }
-  .status-pill.ok { color:var(--ok); border-color:var(--ok); }
-  .status-pill.bad { color:var(--bad); border-color:var(--bad); }
-  .status-pill.pending { color:var(--accent); border-color:var(--accent); }
-  main { max-width:1000px; margin:0 auto; padding:16px 20px 60px; }
-  .section { margin-bottom:18px; }
-  .section-title { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); margin-bottom:6px; }
-  .card { border:1px solid var(--border); border-radius:6px; background:#0a0d12; padding:12px 14px; }
-  .meta-row { font-size:12px; color:var(--dim); margin-bottom:2px; }
-  pre.log { margin:0; padding:12px 14px; background:#0a0d12; border:1px solid var(--border); border-radius:6px;
-            font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; line-height:1.5;
-            white-space:pre-wrap; word-break:break-word; max-height:70vh; overflow:auto; }
-  pre.log .err { color:var(--bad); }
-  pre.log .add { color:var(--ok); }
-  pre.log .del { color:var(--bad); }
-  pre.log .hunk { color:var(--accent); }
-  .empty { color:var(--dim); font-style:italic; padding:10px 0; }
+  body { padding-top:0 !important; }
+  .wrap { max-width:1040px; margin:0 auto; padding:0 6px 40px; }
+  .section { margin-bottom:20px; }
+  .section:last-child { margin-bottom:0; }
+  .section-title { font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-3); margin-bottom:8px; }
+  .meta-row { font-size:12px; color:var(--text-3); margin-bottom:6px; }
+  pre.logbox { margin:0; padding:14px; background:rgba(var(--panel-rgb),.5); border:1px solid var(--ember-dim);
+               font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.55;
+               white-space:pre-wrap; word-break:break-word; max-height:70vh; overflow:auto; color:var(--text-2); }
+  pre.logbox .add { color:#3fb950; }
+  pre.logbox .del { color:#f85149; }
+  pre.logbox .hunk { color:var(--ares-bright); }
+  .empty-card { border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.35); padding:16px; }
+  .empty { color:var(--text-3); font-style:italic; }
+  .status-pill { font-size:10px; letter-spacing:.1em; text-transform:uppercase; padding:3px 10px; border:1px solid var(--ember-dim); white-space:nowrap; }
+  .status-pill.ok { color:#3fb950; border-color:#3fb950; }
+  .status-pill.bad { color:#f85149; border-color:#f85149; }
+  .status-pill.pending { color:var(--ares-bright); border-color:var(--ares-bright); }
 </style>
 </head>
 <body>
-<header>
-  <a class="back" href="/">&larr; dashboard</a>
-  <h1>{{ title }}</h1>
-  {% if status_pill %}<span class="status-pill {{ status_pill_cls }}">{{ status_pill }}</span>{% endif %}
-</header>
-<main>
-  {% for section in sections %}
-  <div class="section">
-    <div class="section-title">{{ section.label }}</div>
-    {% if section.meta %}<div class="meta-row">{{ section.meta }}</div>{% endif %}
-    {% if section.kind == 'diff' %}
-      <pre class="log" id="log-body">{% for line in section.lines %}<span class="{{ line.cls }}">{{ line.text }}</span>
+<div class="hud-shell">
+{% with page_name='LOGS' %}{% include "_hud_nav.html" %}{% endwith %}
+<div class="wrap">
+  <section class="mod c-tl c-br">
+    <div class="mod-head">
+      <span class="mod-title">{{ title }}</span>
+      {% if status_pill %}<span class="status-pill {{ status_pill_cls }}">{{ status_pill }}</span>{% endif %}
+    </div>
+    <div class="mod-body">
+      {% for section in sections %}
+      <div class="section">
+        <div class="section-title">{{ section.label }}</div>
+        {% if section.meta %}<div class="meta-row">{{ section.meta }}</div>{% endif %}
+        {% if section.kind == 'diff' %}
+          <pre class="logbox">{% for line in section.lines %}<span class="{{ line.cls }}">{{ line.text }}</span>
 {% endfor %}</pre>
-    {% elif section.content %}
-      <pre class="log">{{ section.content }}</pre>
-    {% else %}
-      <div class="card"><div class="empty">{{ section.empty or 'nothing here yet' }}</div></div>
-    {% endif %}
-  </div>
-  {% endfor %}
-</main>
+        {% elif section.content %}
+          <pre class="logbox">{{ section.content }}</pre>
+        {% else %}
+          <div class="empty-card"><div class="empty">{{ section.empty or 'nothing here yet' }}</div></div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+</div>
 </body>
 </html>
