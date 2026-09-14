@@ -8,69 +8,85 @@
   .wrap { max-width:1100px; margin:0 auto; padding:0 16px 60px; }
 
   /* --- Header: status + title, the first thing you read --- */
-  .pr-header { display:flex; align-items:center; gap:14px; padding:22px 4px 18px; flex-wrap:wrap; }
-  .pr-header .dot { width:16px; height:16px; border-radius:50%; flex:0 0 auto; }
-  .pr-header .dot.ok { background:#3fb950; box-shadow:0 0 14px #3fb950; }
-  .pr-header .dot.bad { background:#f85149; box-shadow:0 0 14px #f85149; }
-  .pr-header .dot.pending { background:var(--ares-bright); box-shadow:0 0 14px var(--ares-bright); }
-  .pr-header .status-word { font-size:15px; font-weight:800; letter-spacing:.04em; }
+  .pr-header { display:flex; align-items:center; gap:12px; padding:26px 4px 14px; flex-wrap:wrap; }
+  .pr-header .dot { width:15px; height:15px; border-radius:50%; flex:0 0 auto; animation:pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.55; } }
+  .pr-header .dot.ok { background:#3fb950; box-shadow:0 0 16px #3fb950; animation:none; }
+  .pr-header .dot.bad { background:#f85149; box-shadow:0 0 16px #f85149; }
+  .pr-header .dot.pending { background:var(--ares-bright); box-shadow:0 0 16px var(--ares-bright); }
+  .pr-header .status-word { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
   .pr-header .status-word.ok { color:#3fb950; } .pr-header .status-word.bad { color:#f85149; } .pr-header .status-word.pending { color:var(--ares-bright); }
-  .pr-title { font-size:22px; font-weight:800; line-height:1.3; margin:0 0 16px; color:var(--text-1); }
-  .pr-meta { display:flex; gap:18px; font-size:13px; color:var(--text-3); margin-bottom:22px; flex-wrap:wrap; }
-  .pr-meta b { color:var(--text-2); }
+
+  .pr-title { font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:clamp(24px,3.4vw,34px);
+    line-height:1.15; letter-spacing:-.01em; margin:0 0 14px; color:var(--text-1);
+    text-shadow:0 0 30px rgba(var(--ares-rgb),.28); }
+  .pr-meta { display:flex; gap:22px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-3); margin-bottom:28px; flex-wrap:wrap; }
+  .pr-meta b { color:var(--text-2); font-weight:600; }
 
   /* --- The one-line summary: what actually got decided --- */
-  .pr-summary { font-size:17px; font-weight:700; color:var(--text-1); padding:16px 20px;
-    background:rgba(var(--panel-rgb),.5); border:1px solid var(--ember-dim); border-left:4px solid var(--ares); margin-bottom:18px; }
+  .pr-summary { font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:19px; line-height:1.4; color:var(--text-1);
+    padding:18px 22px; background:rgba(var(--panel-rgb),.55); border:1px solid var(--ember-dim); border-left:3px solid var(--ares);
+    box-shadow:inset 0 0 24px rgba(var(--ares-rgb),.05); margin-bottom:20px; max-width:78ch; }
 
   /* --- Council verdict: promoted to the top, this is what was asked for --- */
-  .verdict-card { padding:16px 20px; border:1px solid var(--ares-bright); background:rgba(var(--ares-rgb),.06); margin-bottom:22px; }
-  .verdict-card .verdict-label { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ares-bright); font-weight:700; margin-bottom:6px; }
-  .verdict-card .verdict-text { font-size:14px; color:var(--text-1); line-height:1.6; }
+  .verdict-card { padding:18px 22px; border:1px solid var(--ares-bright); background:rgba(var(--ares-rgb),.07);
+    box-shadow:0 0 30px -12px var(--ares-bright); margin-bottom:24px; max-width:78ch; }
+  .verdict-card .verdict-label { font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ares-bright); font-weight:700; margin-bottom:8px; }
+  .verdict-card .verdict-text { font-family:'Bricolage Grotesque',sans-serif; font-size:15px; color:var(--text-1); line-height:1.6; }
 
   /* --- Action bar: big, unmissable, right under the verdict --- */
-  .action-bar { display:flex; gap:12px; margin-bottom:28px; }
-  .action-bar button { flex:1; font-family:inherit; font-size:15px; font-weight:800; letter-spacing:.02em;
-    padding:16px 20px; border:none; cursor:pointer; }
-  .action-bar button.apply { background:#3fb950; color:#04120a; }
-  .action-bar button.apply:hover { background:#5fd97a; }
-  .action-bar button.reject-btn { background:transparent; border:1px solid #f85149; color:#f85149; flex:0 0 160px; }
+  .action-bar { display:flex; gap:12px; margin-bottom:32px; max-width:78ch; }
+  .action-bar button { flex:1; font-family:'Bricolage Grotesque',sans-serif; font-size:15px; font-weight:800; letter-spacing:.01em;
+    padding:17px 20px; border:none; cursor:pointer; transition:transform .12s ease, box-shadow .12s ease; }
+  .action-bar button.apply { background:#3fb950; color:#04120a; box-shadow:0 6px 20px -8px rgba(63,185,80,.6); }
+  .action-bar button.apply:hover { transform:translateY(-1px); box-shadow:0 10px 26px -8px rgba(63,185,80,.75); }
+  .action-bar button.apply:active { transform:translateY(0); }
+  .action-bar button.reject-btn { background:transparent; border:1px solid #f85149; color:#f85149; flex:0 0 150px; }
   .action-bar button.reject-btn:hover { background:rgba(248,81,73,.1); }
-  .action-bar button:disabled { opacity:.5; cursor:default; }
+  .action-bar button:disabled { opacity:.5; cursor:default; transform:none; }
 
   /* --- Body sections --- */
-  .section { margin-bottom:26px; }
-  .section-title { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-3); margin-bottom:10px; font-weight:700; }
-  .prose { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:15px; line-height:1.75; color:var(--text-2); }
-  .prose p { margin:0 0 12px; }
+  .section { margin-bottom:30px; }
+  .section-title { font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--text-3); margin-bottom:12px; font-weight:700; }
+  .prose { font-family:'Bricolage Grotesque',sans-serif; font-size:16px; line-height:1.75; color:var(--text-2); max-width:70ch; }
+  .prose p { margin:0 0 14px; }
   .prose p:last-child { margin-bottom:0; }
 
-  pre.logbox { margin:0; padding:16px; background:rgba(var(--panel-rgb),.5); border:1px solid var(--ember-dim);
-               font-family:'JetBrains Mono',monospace; font-size:13px; line-height:1.65;
+  pre.logbox { margin:0; padding:18px; background:rgba(var(--panel-rgb),.5); border:1px solid var(--ember-dim);
+               font-family:'JetBrains Mono',monospace; font-size:13px; line-height:1.7;
                white-space:pre-wrap; word-break:break-word; max-height:60vh; overflow:auto; color:var(--text-2); }
   pre.logbox.diff { padding:0; font-size:12.5px; }
-  pre.logbox.diff span { display:block; padding:2px 16px; }
+  pre.logbox.diff span { display:block; padding:2px 18px; }
   pre.logbox .add { background:rgba(63,185,80,.14); color:#5fd97a; }
   pre.logbox .del { background:rgba(248,81,73,.14); color:#ff8a82; }
   pre.logbox .hunk { color:var(--ares-bright); background:rgba(var(--ares-rgb),.08); font-weight:600; }
-  .meta-row { font-size:12px; color:var(--text-3); margin-bottom:8px; }
+  .meta-row { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-3); margin-bottom:10px; }
 
   /* --- Session log: collapsed by default, it's the least important thing to skim --- */
-  details.log-details summary { cursor:pointer; font-size:12px; letter-spacing:.16em; text-transform:uppercase;
-    color:var(--text-3); font-weight:700; padding:10px 0; list-style:none; }
+  details.log-details summary { cursor:pointer; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--text-3); font-weight:700; padding:12px 0; list-style:none; }
+  details.log-details summary:hover { color:var(--ares-bright); }
   details.log-details summary::-webkit-details-marker { display:none; }
   details.log-details summary::before { content:'▸ '; }
   details.log-details[open] summary::before { content:'▾ '; }
-  details.log-details pre.logbox { margin-top:8px; }
+  details.log-details pre.logbox { margin-top:10px; }
 
-  .empty-card { border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.35); padding:20px; }
-  .empty { color:var(--text-3); font-style:italic; }
+  .empty-card { border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.35); padding:22px; font-family:'JetBrains Mono',monospace; }
+  .empty { color:var(--text-3); font-style:italic; font-size:13px; }
 
   /* --- Job-log mode (simpler, no verdict/action concept) --- */
-  .job-header { display:flex; gap:24px; padding:14px 18px; border-bottom:1px solid var(--ember-dim); flex-wrap:wrap; margin-bottom:22px; }
+  .job-header { display:flex; gap:28px; padding:16px 20px; border-bottom:1px solid var(--ember-dim); flex-wrap:wrap; margin-bottom:24px; }
   .job-header .side-card { border:none; background:none; padding:0; }
-  .side-label { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); margin-bottom:4px; }
-  .side-value { font-size:13px; color:var(--text-1); }
+  .side-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); margin-bottom:5px; }
+  .side-value { font-family:'Bricolage Grotesque',sans-serif; font-weight:600; font-size:15px; color:var(--text-1); }
+
+  /* entrance */
+  .wrap > * { animation: rise .4s ease-out backwards; }
+  .pr-header { animation-delay:0s; } .pr-title { animation-delay:.03s; } .pr-meta { animation-delay:.05s; }
+  .pr-summary { animation-delay:.08s; } .verdict-card { animation-delay:.11s; } .action-bar { animation-delay:.14s; }
+  @keyframes rise { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
 </style>
 </head>
 <body>
@@ -107,7 +123,7 @@
     <span class="status-word {{ status_pill_cls }}">{{ status_pill }}</span>
   </div>
   <h1 class="pr-title">{{ title }}</h1>
-  <div class="pr-meta"><span>Box: <b>{{ box }}</b></span><span>Updated: <b>{{ when }}</b></span></div>
+  <div class="pr-meta"><span>BOX <b>{{ box }}</b></span><span>UPDATED <b>{{ when }}</b></span></div>
 
   {% if fix_title %}<div class="pr-summary">{{ fix_title }}</div>{% endif %}
 
