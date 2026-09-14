@@ -85,7 +85,9 @@ def panel_review(context):
             "Write your verdict as ONE plain-English sentence a non-engineer could understand. "
             'Respond with ONLY a JSON object: {"approve": true|false, "verdict": "one sentence"}'
         )
-        parsed = _ask_json(prompt)
+        # Reviewers that explore the KG routinely blow past 300s -- observed
+        # 3/8 timeouts on the first live panel run. Generous cap, still bounded.
+        parsed = _ask_json(prompt, max_turns=12, timeout=600)
         if parsed is None:
             votes.append({"persona": member["persona"], "icon": member["icon"],
                            "approve": False, "verdict": "review failed -- counted as a rejection to be safe"})
