@@ -22,6 +22,13 @@
   .status-pill.ok { color:#3fb950; border-color:#3fb950; }
   .status-pill.bad { color:#f85149; border-color:#f85149; }
   .status-pill.pending { color:var(--ares-bright); border-color:var(--ares-bright); }
+  .approve-bar { display:flex; gap:10px; padding:14px; border-top:1px solid var(--ember-dim); }
+  .approve-bar button { font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.05em;
+    padding:8px 16px; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.5); color:var(--text-1); cursor:pointer; }
+  .approve-bar button.approve { border-color:#3fb950; color:#3fb950; }
+  .approve-bar button.reject { border-color:#f85149; color:#f85149; }
+  .approve-bar button:hover { background:rgba(var(--ares-rgb),.1); }
+  .approve-bar button:disabled { opacity:.5; cursor:default; }
 </style>
 </head>
 <body>
@@ -49,8 +56,31 @@
       </div>
       {% endfor %}
     </div>
+    {% if show_approve_reject %}
+    <div class="approve-bar">
+      <button class="approve" onclick="autofixAct('approve','{{ incident_id }}',this)">Approve</button>
+      <button class="reject" onclick="autofixAct('reject','{{ incident_id }}',this)">Reject</button>
+    </div>
+    {% endif %}
   </section>
 </div>
 </div>
+{% if show_approve_reject %}
+<script>
+async function autofixAct(action, id, btn) {
+    var bar = btn.closest('.approve-bar');
+    Array.from(bar.querySelectorAll('button')).forEach(function(b){ b.disabled = true; });
+    try {
+        var r = await fetch('/api/autofix/' + action + '/' + id, { method: 'POST' });
+        var d = await r.json();
+        if (!r.ok) { alert('autofix ' + action + ' failed: ' + (d.error || r.status)); location.reload(); return; }
+        location.reload();
+    } catch (e) {
+        alert('autofix ' + action + ' failed: ' + e);
+        location.reload();
+    }
+}
+</script>
+{% endif %}
 </body>
 </html>

@@ -805,7 +805,8 @@ def incident_log_page(incident_id):
     sections.append({"label": "Diagnosis session log", "content": log_content, "empty": log_empty})
 
     return render_template("log_view.html", boot=get_system_info(), title=inc.get("title", incident_id),
-                            status_pill=status, status_pill_cls=status_cls, sections=sections)
+                            status_pill=status, status_pill_cls=status_cls, sections=sections,
+                            show_approve_reject=(status == "council_approved"), incident_id=incident_id)
 
 
 @app.route("/api/autofix/approve/<incident_id>", methods=["POST"])

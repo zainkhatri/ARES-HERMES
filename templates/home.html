@@ -777,15 +777,6 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
                     <div class="arr-empty">loading…</div>
                 </div>
             </section>
-            <section class="mod c-tr c-bl" id="panel-autofix" style="display:none">
-                <div class="mod-head">
-                    <span class="mod-title">Autonomous SWE</span>
-                    <span class="mod-meta" id="autofix-meta">—</span>
-                </div>
-                <div class="mod-body cron-list" id="autofix-list">
-                    <div class="arr-empty">no incidents</div>
-                </div>
-            </section>
             <section class="mod c-tr c-br" id="panel-gpu">
                 <div class="mod-head">
                     <span class="mod-title">GPU relay</span>
@@ -1360,59 +1351,6 @@ function renderCrons(jobs) {
     var m = document.getElementById('jobs-meta');
     if (m) m.textContent = bad ? (bad + ' failed') : (jobs.length + ' ok');
     __att.jstale = bad; renderAttention();
-}
-
-// Autonomous SWE panel: incidents the ares-autofix-watcher pipeline found,
-// diagnosed, and (mandatorily) ran through /llm-council before ever
-// reaching here. Approve/Reject are the only actions that ever touch a
-// real file or restart a real service (via the standalone apply.py host
-// service) -- everything upstream of that is read-only from this page.
-var AUTOFIX_NEEDS_HUMAN = ['council_held', 'stale_diff_needs_human', 'revert_failed_needs_human', 'diagnosis_timeout'];
-var AUTOFIX_PENDING_APPROVAL = ['council_approved'];
-
-async function autofixAct(action, id, btn) {
-    btn.disabled = true;
-    try {
-        var r = await fetch('/api/autofix/' + action + '/' + id, { method: 'POST' });
-        var d = await r.json();
-        if (!r.ok) { alert('autofix ' + action + ' failed: ' + (d.error || r.status)); btn.disabled = false; return; }
-        if (window.loadVitals) loadVitals();
-    } catch (e) {
-        alert('autofix ' + action + ' failed: ' + e);
-        btn.disabled = false;
-    }
-}
-
-function renderAutofix(incidents) {
-    var panel = document.getElementById('panel-autofix');
-    if (!panel) return;
-    panel.style.display = (incidents && incidents.length) ? '' : 'none';
-    var el = document.getElementById('autofix-list');
-    if (!incidents || !incidents.length) { el.innerHTML = '<div class="arr-empty">no incidents</div>'; return; }
-    var needsHuman = 0;
-    el.innerHTML = incidents.slice().reverse().map(function(inc) {
-        var st = inc.status || 'new';
-        if (AUTOFIX_NEEDS_HUMAN.indexOf(st) !== -1) needsHuman++;
-        var cls = st === 'resolved' ? 'ok' : (AUTOFIX_NEEDS_HUMAN.indexOf(st) !== -1 ? 'bad' : 'run');
-        var diag = inc.diagnosis || {};
-        var summaryLine = diag.fix_title ? ('<b>' + esc(diag.fix_title) + '</b>') : '';
-        var reasonLine = diag.triage_reason && !diag.fix_title ? esc(diag.triage_reason) : '';
-        var actions = '';
-        if (AUTOFIX_PENDING_APPROVAL.indexOf(st) !== -1) {
-            actions = '<button onclick="event.stopPropagation();autofixAct(\'approve\',\'' + inc.id + '\',this)">Approve</button> ' +
-                      '<button onclick="event.stopPropagation();autofixAct(\'reject\',\'' + inc.id + '\',this)">Reject</button>';
-        }
-        // Click a row like a PR check -> opens the dedicated /logs/incident/<id> page (diagnosis, diff, session log).
-        return '<div class="crow" style="flex-direction:column;align-items:flex-start;cursor:pointer" onclick="location.href=\'/logs/incident/' + inc.id + '\'">' +
-               '<div><span class="cdot ' + cls + '"></span>' +
-               '<span class="cname">' + esc(inc.title || inc.signature || inc.id) + '</span>' +
-               '<span class="cwhen">' + esc(st) + ' · ' + _rel(inc.updated_ts) + '</span></div>' +
-               (summaryLine ? '<div style="font-size:12px">' + summaryLine + '</div>' : '') +
-               (reasonLine ? '<div style="font-size:11px;opacity:.8">' + reasonLine + '</div>' : '') +
-               (actions ? '<div>' + actions + '</div>' : '') + '</div>';
-    }).join('');
-    var m = document.getElementById('autofix-meta');
-    if (m) m.textContent = needsHuman ? (needsHuman + ' need review') : (incidents.length + ' tracked');
 }
 
 // Sister-node card: the peer box's health at a glance (via same-origin /api/peer
@@ -2176,7 +2114,6 @@ function applyVitals(i) {
             } else {
                 renderCrons([]);   // hides panel-jobs on EROS/ZEUS
             }
-            renderAutofix(i.autofix_incidents || []);   // ARES only; [] elsewhere hides the panel
             var fb = document.getElementById('foot-brand'); if (fb) fb.textContent = i.hostname || 'ARES';
             requestAnimationFrame(function () { fitScale(); });   // cheap: refits only if content overflowed
         }
