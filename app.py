@@ -692,7 +692,7 @@ def logs_index_page():
     incidents = sorted(_read_autofix_incidents(), key=lambda i: i.get("updated_ts", 0), reverse=True)
     for inc in incidents:
         ts = inc.get("updated_ts")
-        inc["updated_ts_human"] = datetime.fromtimestamp(ts).strftime("%b %-d, %Y %-I:%M %p") if ts else ""
+        inc["updated_ts_human"] = datetime.fromtimestamp(ts, tz=_GALLERY_TZ).strftime("%b %-d, %Y %-I:%M %p") if ts else ""
     return render_template("logs_index.html", boot=get_system_info(), incidents=incidents)
 
 
