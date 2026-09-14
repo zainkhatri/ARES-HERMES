@@ -1338,9 +1338,12 @@ function renderCrons(jobs) {
     if (panel) panel.style.display = (jobs && jobs.length) ? '' : 'none';
     if (!jobs || !jobs.length) { el.innerHTML = '<div class="arr-empty">no jobs</div>'; return; }
     var bad = 0;
-    el.innerHTML = jobs.map(function(j) {
+    jobs.forEach(function(j) { if (!j.ok && !j.running) bad++; });
+    // Panel is a fixed-size HUD tile, not a scrolling list -- cap visible rows
+    // so a growing job count (autofix watcher/audit added on top of the
+    // original 4) doesn't blow out the layout. Meta count still reflects all jobs.
+    el.innerHTML = jobs.slice(0, 4).map(function(j) {
         var cls = j.running ? 'run' : (j.ok ? 'ok' : 'bad');
-        if (!j.ok && !j.running) bad++;
         var last = j.running ? 'running…' : _rel(j.last);
         var unit = j.unit || '';
         return '<div class="crow" style="cursor:pointer" onclick="location.href=\'/logs/job/' + unit + '\'">' +
