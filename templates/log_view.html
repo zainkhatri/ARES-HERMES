@@ -5,140 +5,153 @@
 {% include "_hud_head.html" %}
 <style>
   body { padding-top:0 !important; }
-  .wrap { max-width:1100px; margin:0 auto; padding:0 16px 60px; }
+  .wrap { max-width:1100px; width:100%; margin:0 auto; padding:40px 16px 80px; }
 
-  /* --- Header: status + title, the first thing you read --- */
-  .pr-header { display:flex; align-items:center; gap:12px; padding:26px 4px 14px; flex-wrap:wrap; }
-  .pr-header .dot { width:15px; height:15px; border-radius:50%; flex:0 0 auto; animation:pulse 2.4s ease-in-out infinite; }
+  /* sticky module header carries the merge action (variant B) */
+  .mhead { position:sticky; top:0; z-index:50; background:var(--bg-1); }
+  .mhead-right { margin-left:auto; display:flex; align-items:center; gap:16px; }
+  .mhead-meta { display:flex; flex-direction:column; text-align:right; }
+  .mhead-meta .k { font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:#3fb950; font-weight:700; }
+  .mhead-meta .v { font-size:11px; font-weight:700; color:var(--text-1); }
+  @media (max-width:640px){ .mhead-meta { display:none; } }
+  .btn-merge { background:#3fb950; color:var(--bg-0); font:inherit; font-weight:800; text-transform:uppercase;
+    letter-spacing:.05em; padding:12px 24px; font-size:13px; border:none; cursor:pointer;
+    box-shadow:0 0 20px -5px #3fb950; transition:all .2s var(--ease-out); }
+  .btn-merge:hover { filter:brightness(1.1); transform:translateY(-1px); }
+  .btn-reject { background:transparent; color:#f85149; font:inherit; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; padding:12px 18px; font-size:12px; border:1px solid #f85149; cursor:pointer; transition:all .2s var(--ease-out); }
+  .btn-reject:hover { background:rgba(248,81,73,.1); }
+  .btn-merge:disabled, .btn-reject:disabled { opacity:.5; cursor:default; transform:none; }
+
+  /* status + title header */
+  .status-row { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+  .dot { width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
+  .dot.ok { background:#3fb950; box-shadow:0 0 12px #3fb950; }
+  .dot.bad { background:#f85149; box-shadow:0 0 12px #f85149; }
+  .dot.pending { background:var(--ares-bright); box-shadow:0 0 12px var(--ares-bright); animation:pulse 2.4s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.55; } }
-  .pr-header .dot.ok { background:#3fb950; box-shadow:0 0 16px #3fb950; animation:none; }
-  .pr-header .dot.bad { background:#f85149; box-shadow:0 0 16px #f85149; }
-  .pr-header .dot.pending { background:var(--ares-bright); box-shadow:0 0 16px var(--ares-bright); }
-  .pr-header .status-word { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
-  .pr-header .status-word.ok { color:#3fb950; } .pr-header .status-word.bad { color:#f85149; } .pr-header .status-word.pending { color:var(--ares-bright); }
+  .status-word { font-size:12px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
+  .status-word.ok { color:#3fb950; } .status-word.bad { color:#f85149; } .status-word.pending { color:var(--ares-bright); }
+  .pr-title { font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:clamp(28px,4vw,42px);
+    line-height:1.1; letter-spacing:-.02em; color:var(--text-1); margin:0 0 8px;
+    text-shadow:0 0 30px rgba(var(--ares-rgb),.2); }
+  .pr-subtitle { font-size:12px; color:var(--text-3); font-weight:700; letter-spacing:.14em; text-transform:uppercase; margin-bottom:24px; }
+  .meta-strip { display:flex; gap:40px; border-top:1px solid rgba(255,255,255,.05); border-bottom:1px solid rgba(255,255,255,.05);
+    padding:16px 0; margin-bottom:48px; flex-wrap:wrap; }
+  .meta-strip .k { font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.18em; margin-bottom:4px; }
+  .meta-strip .v { font-size:13px; font-weight:700; color:var(--text-1); }
+  .meta-strip .v.consensus-ok { color:#3fb950; }
+  .meta-strip .v.consensus-bad { color:#f85149; }
 
-  .pr-title { font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:clamp(24px,3.4vw,34px);
-    line-height:1.15; letter-spacing:-.01em; margin:0 0 14px; color:var(--text-1);
-    text-shadow:0 0 30px rgba(var(--ares-rgb),.28); }
-  .pr-meta { display:flex; gap:22px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-3); margin-bottom:28px; flex-wrap:wrap; }
-  .pr-meta b { color:var(--text-2); font-weight:600; }
+  /* section titles with rule */
+  .section { margin-bottom:48px; }
+  .section-title { font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--text-3);
+    margin-bottom:16px; font-weight:700; display:flex; align-items:center; gap:8px; }
+  .section-title::after { content:''; height:1px; flex:1; background:var(--ember-dim); }
 
-  /* --- The one-line summary: what actually got decided --- */
-  .pr-summary { font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:19px; line-height:1.4; color:var(--text-1);
-    padding:18px 22px; background:rgba(var(--panel-rgb),.55); border:1px solid var(--ember-dim); border-left:3px solid var(--ares);
-    box-shadow:inset 0 0 24px rgba(var(--ares-rgb),.05); margin-bottom:20px; max-width:78ch; }
+  /* executive summary */
+  .exec-summary { padding:24px; border-left:4px solid var(--ares); }
+  .exec-summary p { font-family:'Bricolage Grotesque',sans-serif; font-size:20px; font-weight:600;
+    line-height:1.55; color:var(--text-1); margin:0; }
 
-  /* --- Council verdict (legacy single-verdict incidents) --- */
-  .verdict-card { padding:18px 22px; border:1px solid var(--ares-bright); background:rgba(var(--ares-rgb),.07);
-    box-shadow:0 0 30px -12px var(--ares-bright); margin-bottom:24px; max-width:78ch; }
-  .verdict-card .verdict-label { font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase;
-    color:var(--ares-bright); font-weight:700; margin-bottom:8px; }
-  .verdict-card .verdict-text { font-family:'Bricolage Grotesque',sans-serif; font-size:15px; color:var(--text-1); line-height:1.6; }
-
-  .pr-subtitle { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-3); margin:-8px 0 14px; }
-
-  /* --- Council panel: 4 member cards --- */
-  .council-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:12px; }
-  .council-card { padding:18px 16px; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.5); text-align:center; }
-  .council-card.yes { border-color:rgba(63,185,80,.5); }
-  .council-card.no { border-color:rgba(248,81,73,.6); box-shadow:0 0 20px -10px #f85149; }
-  .council-icon { font-size:30px; line-height:1; margin-bottom:8px; }
-  .council-name { font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-2); font-weight:700; margin-bottom:8px; }
-  .council-vote { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:800; letter-spacing:.06em; margin-bottom:10px; }
-  .council-vote.yes { color:#3fb950; }
-  .council-vote.no { color:#f85149; }
-  .council-take { font-family:'Bricolage Grotesque',sans-serif; font-size:13.5px; line-height:1.55; color:var(--text-2); text-align:left; }
-
-  /* --- Merge summary: what happens + pros/cons --- */
-  .merge-summary { border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.45); padding:20px 22px; max-width:88ch; }
-  .merge-what { font-family:'Bricolage Grotesque',sans-serif; font-size:16px; font-weight:600; color:var(--text-1); line-height:1.6; margin-bottom:16px; }
-  .pros-cons { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  @media (max-width:640px) { .pros-cons { grid-template-columns:1fr; } }
-  .pc-col { padding:14px 16px; border:1px solid var(--ember-dim); }
-  .pc-col.pros { border-color:rgba(63,185,80,.35); background:rgba(63,185,80,.05); }
-  .pc-col.cons { border-color:rgba(248,81,73,.35); background:rgba(248,81,73,.05); }
-  .pc-head { font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; font-weight:700; margin-bottom:8px; }
-  .pc-col.pros .pc-head { color:#3fb950; }
-  .pc-col.cons .pc-head { color:#f85149; }
-  .pc-col ul { margin:0; padding-left:18px; font-family:'Bricolage Grotesque',sans-serif; font-size:14px; line-height:1.7; color:var(--text-2); }
-
-  /* --- Action bar: big, unmissable, right under the verdict --- */
-  .action-bar { display:flex; gap:12px; margin-bottom:32px; max-width:78ch; }
-  .action-bar button { flex:1; font-family:'Bricolage Grotesque',sans-serif; font-size:15px; font-weight:800; letter-spacing:.01em;
-    padding:17px 20px; border:none; cursor:pointer; transition:transform .12s ease, box-shadow .12s ease; }
-  .action-bar button.apply { background:#3fb950; color:#04120a; box-shadow:0 6px 20px -8px rgba(63,185,80,.6); }
-  .action-bar button.apply:hover { transform:translateY(-1px); box-shadow:0 10px 26px -8px rgba(63,185,80,.75); }
-  .action-bar button.apply:active { transform:translateY(0); }
-  .action-bar button.reject-btn { background:transparent; border:1px solid #f85149; color:#f85149; flex:0 0 150px; }
-  .action-bar button.reject-btn:hover { background:rgba(248,81,73,.1); }
-  .action-bar button:disabled { opacity:.5; cursor:default; transform:none; }
-
-  /* --- Body sections --- */
-  .section { margin-bottom:30px; }
-  .section-title { font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.18em; text-transform:uppercase;
-    color:var(--text-3); margin-bottom:12px; font-weight:700; }
-  .prose { font-family:'Bricolage Grotesque',sans-serif; font-size:16px; line-height:1.75; color:var(--text-2); max-width:70ch; }
-  .prose p { margin:0 0 14px; }
+  /* prose */
+  .prose { font-family:'Bricolage Grotesque',sans-serif; color:var(--text-2); font-size:16px; line-height:1.8; max-width:75ch; }
+  .prose p { margin:0 0 24px; }
   .prose p:last-child { margin-bottom:0; }
 
+  /* council cards */
+  .council-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
+  .council-card { padding:24px 20px; display:flex; flex-direction:column; gap:12px; }
+  .council-card.yes { border-color:rgba(63,185,80,.4); }
+  .council-card.no { border-color:rgba(248,81,73,.4); }
+  .council-top { display:flex; justify-content:space-between; align-items:flex-start; }
+  .council-icon { font-size:24px; line-height:1; }
+  .council-vote-badge { font-size:10px; font-weight:800; padding:4px 8px; border:1px solid currentColor; letter-spacing:.08em; }
+  .council-vote-badge.yes { color:#3fb950; } .council-vote-badge.no { color:#f85149; }
+  .council-name { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-2); font-weight:700; }
+  .council-take { font-family:'Bricolage Grotesque',sans-serif; font-size:13.5px; line-height:1.55; color:var(--text-2); }
+  .council-take.failed { font-style:italic; opacity:.6; }
+
+  /* impact matrix */
+  .impact-what { font-family:'Bricolage Grotesque',sans-serif; font-size:16px; font-weight:600; color:var(--text-1);
+    line-height:1.6; padding:20px 24px 0; }
+  .impact-grid { padding:24px; display:grid; grid-template-columns:1fr 1fr; gap:32px; }
+  @media (max-width:640px){ .impact-grid { grid-template-columns:1fr; } }
+  .impact-head { font-size:11px; font-weight:700; letter-spacing:.2em; text-transform:uppercase; margin-bottom:16px; }
+  .impact-head.gains { color:#3fb950; } .impact-head.risks { color:#f85149; }
+  .impact-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px; }
+  .impact-list li { font-family:'Bricolage Grotesque',sans-serif; font-size:14px; line-height:1.55; color:var(--text-2);
+    display:flex; gap:10px; }
+  .impact-list li::before { flex:0 0 auto; font-family:'JetBrains Mono',monospace; font-weight:700; }
+  .impact-list.gains li::before { content:'✓'; color:rgba(63,185,80,.6); }
+  .impact-list.risks li::before { content:'✗'; color:rgba(248,81,73,.6); }
+
+  /* execution sequence */
+  .seq-note { font-size:12px; color:var(--text-3); margin-bottom:16px; font-style:italic; }
+  .steps-list { list-style:none; margin:0; padding:0; }
+  .steps-list li { padding:24px; display:flex; gap:24px; align-items:flex-start; border-bottom:1px solid var(--ember-dim); }
+  .steps-list li:last-child { border-bottom:none; }
+  .step-number { width:28px; height:28px; border:1px solid var(--ares-bright); color:var(--ares-bright);
+    font-weight:700; display:flex; align-items:center; justify-content:center; font-size:12px; flex:0 0 auto; }
+  .step-label { font-family:'Bricolage Grotesque',sans-serif; font-size:15px; font-weight:700; color:var(--text-1);
+    display:block; margin-bottom:8px; }
+  .steps-list code { font-family:'JetBrains Mono',monospace; font-size:12.5px; color:#5fd97a;
+    background:rgba(63,185,80,.05); border:1px solid rgba(63,185,80,.2); padding:8px 12px; display:inline-block; }
+
+  /* diff */
   pre.logbox { margin:0; padding:18px; background:rgba(var(--panel-rgb),.5); border:1px solid var(--ember-dim);
-               font-family:'JetBrains Mono',monospace; font-size:13px; line-height:1.7;
-               white-space:pre-wrap; word-break:break-word; max-height:60vh; overflow:auto; color:var(--text-2); }
+    font-family:'JetBrains Mono',monospace; font-size:13px; line-height:1.65;
+    white-space:pre-wrap; word-break:break-word; max-height:60vh; overflow:auto; color:var(--text-2); }
   pre.logbox.diff { padding:0; font-size:12.5px; }
   pre.logbox.diff span { display:block; padding:2px 18px; }
   pre.logbox .add { background:rgba(63,185,80,.14); color:#5fd97a; }
   pre.logbox .del { background:rgba(248,81,73,.14); color:#ff8a82; }
   pre.logbox .hunk { color:var(--ares-bright); background:rgba(var(--ares-rgb),.08); font-weight:600; }
-  .meta-row { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-3); margin-bottom:10px; }
 
-  /* --- Session log: collapsed by default, it's the least important thing to skim --- */
-  details.log-details summary { cursor:pointer; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.18em;
-    text-transform:uppercase; color:var(--text-3); font-weight:700; padding:12px 0; list-style:none; }
-  details.log-details summary:hover { color:var(--ares-bright); }
+  /* raw log disclosure */
+  details.log-details { margin-top:60px; }
+  details.log-details summary { cursor:pointer; display:flex; align-items:center; gap:8px; list-style:none;
+    color:var(--text-3); font-size:13px; transition:color .2s; }
+  details.log-details summary:hover { color:var(--text-1); }
   details.log-details summary::-webkit-details-marker { display:none; }
-  details.log-details summary::before { content:'▸ '; }
-  details.log-details[open] summary::before { content:'▾ '; }
-  details.log-details pre.logbox { margin-top:10px; }
+  details.log-details summary::before { content:'▸'; }
+  details.log-details[open] summary::before { content:'▾'; }
+  details.log-details .mod { padding:24px; margin-top:16px; }
+  details.log-details pre { font-size:12px; color:var(--text-2); line-height:1.6; white-space:pre-wrap; word-break:break-word;
+    margin:0; max-height:60vh; overflow:auto; }
 
-  .empty-card { border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.35); padding:22px; font-family:'JetBrains Mono',monospace; }
-
-  .steps-list { list-style:none; counter-reset:step; margin:0; padding:0; max-width:78ch; }
-  .steps-list li { counter-increment:step; position:relative; padding:14px 0 14px 40px; border-bottom:1px solid var(--ember-dim); }
-  .steps-list li:last-child { border-bottom:none; }
-  .steps-list li::before { content:counter(step); position:absolute; left:0; top:14px; width:26px; height:26px;
-    border:1px solid var(--ares-bright); color:var(--ares-bright); font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700;
-    display:flex; align-items:center; justify-content:center; }
-  .step-label { font-family:'Bricolage Grotesque',sans-serif; font-weight:600; font-size:14.5px; color:var(--text-1); display:block; margin-bottom:6px; }
-  .steps-list code { font-family:'JetBrains Mono',monospace; font-size:12.5px; color:#5fd97a; background:rgba(63,185,80,.08);
-    padding:3px 8px; border:1px solid rgba(63,185,80,.25); display:inline-block; }
+  .empty-card { border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.35); padding:22px; }
   .empty { color:var(--text-3); font-style:italic; font-size:13px; }
 
-  /* --- Job-log mode (simpler, no verdict/action concept) --- */
-  .job-header { display:flex; gap:28px; padding:16px 20px; border-bottom:1px solid var(--ember-dim); flex-wrap:wrap; margin-bottom:24px; }
-  .job-header .side-card { border:none; background:none; padding:0; }
-  .side-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); margin-bottom:5px; }
-  .side-value { font-family:'Bricolage Grotesque',sans-serif; font-weight:600; font-size:15px; color:var(--text-1); }
+  /* stagger entrance */
+  @keyframes rise { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  .stagger > * { animation:rise .5s cubic-bezier(.16,1,.3,1) both; }
+  .stagger > *:nth-child(1) { animation-delay:.05s; }
+  .stagger > *:nth-child(2) { animation-delay:.1s; }
+  .stagger > *:nth-child(3) { animation-delay:.15s; }
+  .stagger > *:nth-child(4) { animation-delay:.2s; }
+  .stagger > *:nth-child(5) { animation-delay:.25s; }
+  .stagger > *:nth-child(6) { animation-delay:.3s; }
 
-  /* entrance */
-  .wrap > * { animation: rise .4s ease-out backwards; }
-  .pr-header { animation-delay:0s; } .pr-title { animation-delay:.03s; } .pr-meta { animation-delay:.05s; }
-  .pr-summary { animation-delay:.08s; } .verdict-card { animation-delay:.11s; } .action-bar { animation-delay:.14s; }
-  @keyframes rise { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  /* job-log mode */
+  .job-header { display:flex; gap:28px; padding:16px 20px; border-bottom:1px solid var(--ember-dim); flex-wrap:wrap; margin-bottom:24px; }
+  .side-label { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); margin-bottom:5px; }
+  .side-value { font-family:'Bricolage Grotesque',sans-serif; font-weight:600; font-size:15px; color:var(--text-1); }
 </style>
 </head>
 <body>
 <div class="hud-shell">
+
+{% if sections is defined %}
+{# ---------- Job-log mode: simple, no verdict/action ---------- #}
 {% with page_name='LOGS' %}{% include "_hud_nav.html" %}{% endwith %}
 <div class="wrap">
-
-  {% if sections is defined %}
-  {# ---------- Job-log mode: simple, no verdict/action ---------- #}
   <section class="mod c-tl c-br">
     <div class="mod-head"><span class="mod-title">{{ title }}</span></div>
     {% if job_header %}
     <div class="job-header">
       {% for item in job_header %}
-      <div class="side-card"><div class="side-label">{{ item.label }}</div><div class="side-value">{{ item.value }}</div></div>
+      <div><div class="side-label">{{ item.label }}</div><div class="side-value">{{ item.value }}</div></div>
       {% endfor %}
     </div>
     {% endif %}
@@ -152,95 +165,141 @@
       {% endfor %}
     </div>
   </section>
+</div>
 
-  {% else %}
-  {# ---------- Incident mode: skim-and-approve layout ---------- #}
-  <div class="pr-header">
-    <span class="dot {{ status_pill_cls }}"></span>
-    <span class="status-word {{ status_pill_cls }}">{{ status_pill }}</span>
+{% else %}
+{# ---------- Incident mode: mission-control review (variant B) ---------- #}
+{% set approvals = council_votes | selectattr('approve') | list | length if council_votes else 0 %}
+<header class="mhead">
+  <a class="mhead-home" href="/"><span class="ar">←</span> HOME</a>
+  <div class="mark-ascii" aria-label="LOGS">
+<pre class="m-ar">██╗      ██████╗
+██║     ██╔═══██╗
+██║     ██║   ██║
+██║     ██║   ██║
+███████╗╚██████╔╝
+╚══════╝ ╚═════╝ </pre><pre class="m-es"> ██████╗ ███████╗
+██╔════╝ ██╔════╝
+██║  ███╗███████╗
+██║   ██║╚════██║
+╚██████╔╝███████║
+ ╚═════╝ ╚══════╝</pre>
   </div>
-  <h1 class="pr-title">{{ title }}</h1>
-  {% if subtitle %}<div class="pr-subtitle">{{ subtitle }}</div>{% endif %}
-  <div class="pr-meta"><span>BOX <b>{{ box }}</b></span><span>UPDATED <b>{{ when }}</b></span></div>
+  <div class="mhead-right">
+    {% if council_votes %}
+    <div class="mhead-meta">
+      <span class="k">Council</span>
+      <span class="v">{{ approvals }}/{{ council_votes | length }} approve</span>
+    </div>
+    {% endif %}
+    {% if show_approve_reject %}
+    <button class="btn-reject" onclick="autofixAct('reject','{{ incident_id }}',this)">Reject</button>
+    <button class="btn-merge" onclick="autofixAct('approve','{{ incident_id }}',this)">Confirm Merge</button>
+    {% endif %}
+  </div>
+</header>
+
+<main class="wrap stagger">
+  <div>
+    <div class="status-row">
+      <span class="dot {{ status_pill_cls }}"></span>
+      <span class="status-word {{ status_pill_cls }}">{{ status_pill }}</span>
+    </div>
+    <h1 class="pr-title">{{ title }}</h1>
+    {% if subtitle %}<div class="pr-subtitle">{{ subtitle }}</div>{% endif %}
+    <div class="meta-strip">
+      <div><div class="k">Origin host</div><div class="v">BOX: {{ box }}</div></div>
+      <div><div class="k">Updated</div><div class="v">{{ when }}</div></div>
+      {% if council_votes %}
+      <div><div class="k">Consensus</div>
+        <div class="v {{ 'consensus-ok' if approvals * 4 >= council_votes|length * 3 else 'consensus-bad' }}">{{ approvals }}/{{ council_votes|length }} council approve</div></div>
+      {% endif %}
+    </div>
+  </div>
 
   {% if what_it_does %}
   <div class="section">
-    <div class="section-title">What this fix does</div>
-    <div class="pr-summary">{{ what_it_does }}</div>
+    <div class="section-title">Executive summary</div>
+    <div class="mod c-tl c-bl exec-summary"><p>{{ what_it_does }}</p></div>
   </div>
   {% endif %}
 
   {% if why_paragraphs %}
   <div class="section">
-    <div class="section-title">Why we're doing it</div>
+    <div class="section-title">Investigation &amp; analysis</div>
     <div class="prose">{% for p in why_paragraphs %}<p>{{ p }}</p>{% endfor %}</div>
   </div>
   {% endif %}
 
   <div class="section">
-    <div class="section-title">Council review</div>
+    <div class="section-title">Council deliberation</div>
     {% if council_votes %}
     <div class="council-grid">
       {% for v in council_votes %}
-      <div class="council-card {{ 'yes' if v.approve else 'no' }}">
-        <div class="council-icon">{{ v.icon }}</div>
+      <div class="mod c-tl c-tr c-bl c-br council-card {{ 'yes' if v.approve else 'no' }}">
+        <div class="council-top">
+          <span class="council-icon">{{ v.icon }}</span>
+          <span class="council-vote-badge {{ 'yes' if v.approve else 'no' }}">{{ '✓ APPROVE' if v.approve else '✗ REJECT' }}</span>
+        </div>
         <div class="council-name">{{ v.persona }}</div>
-        <div class="council-vote {{ 'yes' if v.approve else 'no' }}">{{ '✓ APPROVE' if v.approve else '✗ REJECT' }}</div>
-        <div class="council-take">{{ v.verdict }}</div>
+        <div class="council-take {{ 'failed' if 'review failed' in v.verdict }}">{{ v.verdict }}</div>
       </div>
       {% endfor %}
     </div>
     {% elif council_verdict %}
-    {# legacy incidents reviewed before the panel existed: single merged verdict #}
-    <div class="verdict-card">
-      <div class="verdict-label">Council verdict</div>
-      <div class="verdict-text">{{ council_verdict }}</div>
+    <div class="mod c-tl c-br" style="padding:20px 24px">
+      <div class="prose">{{ council_verdict }}</div>
     </div>
     {% else %}
     <div class="empty-card"><div class="empty">not yet reviewed</div></div>
     {% endif %}
   </div>
 
-  {% if council_summary and council_summary.what_happens %}
+  {% if council_summary and (council_summary.what_happens or council_summary.pros or council_summary.cons) %}
   <div class="section">
-    <div class="section-title">If you merge this</div>
-    <div class="merge-summary">
-      <div class="merge-what">{{ council_summary.what_happens }}</div>
-      <div class="pros-cons">
+    <div class="section-title">Operational impact</div>
+    <div class="mod c-tl c-tr c-bl c-br">
+      {% if council_summary.what_happens %}<div class="impact-what">{{ council_summary.what_happens }}</div>{% endif %}
+      <div class="impact-grid">
         {% if council_summary.pros %}
-        <div class="pc-col pros"><div class="pc-head">Pros</div>
-          <ul>{% for p in council_summary.pros %}<li>{{ p }}</li>{% endfor %}</ul></div>
+        <div>
+          <div class="impact-head gains">Expected gains</div>
+          <ul class="impact-list gains">{% for p in council_summary.pros %}<li>{{ p }}</li>{% endfor %}</ul>
+        </div>
         {% endif %}
         {% if council_summary.cons %}
-        <div class="pc-col cons"><div class="pc-head">Cons</div>
-          <ul>{% for c in council_summary.cons %}<li>{{ c }}</li>{% endfor %}</ul></div>
+        <div>
+          <div class="impact-head risks">Residual risks</div>
+          <ul class="impact-list risks">{% for c in council_summary.cons %}<li>{{ c }}</li>{% endfor %}</ul>
+        </div>
         {% endif %}
       </div>
     </div>
   </div>
   {% endif %}
 
-  {% if show_approve_reject %}
-  <div class="action-bar">
-    <button class="apply" onclick="autofixAct('approve','{{ incident_id }}',this)">Merge</button>
-    <button class="reject-btn" onclick="autofixAct('reject','{{ incident_id }}',this)">Reject</button>
-  </div>
-  {% endif %}
-
   {% if code_section %}
   <div class="section">
-    <div class="section-title">{{ code_section.label }}</div>
-    {% if code_section.meta %}<div class="meta-row">{{ code_section.meta }}</div>{% endif %}
+    <div class="section-title">{{ 'Execution sequence' if code_section.kind == 'steps' else code_section.label }}</div>
+    {% if code_section.meta %}<div class="seq-note">{{ code_section.meta }}</div>{% endif %}
     {% if code_section.kind == 'diff' %}
       <pre class="logbox diff">{% for line in code_section.lines %}<span class="{{ line.cls }}">{{ line.text }}</span>
 {% endfor %}</pre>
     {% elif code_section.kind == 'steps' %}
-      {% if code_section.intro %}<div class="prose" style="margin-bottom:14px">{{ code_section.intro }}</div>{% endif %}
-      <ol class="steps-list">
-        {% for item in code_section.step_list %}
-        <li>{% if item.label %}<span class="step-label">{{ item.label }}</span>{% endif %}<code>{{ item.command }}</code></li>
-        {% endfor %}
-      </ol>
+      {% if code_section.intro %}<div class="prose" style="margin-bottom:16px">{{ code_section.intro }}</div>{% endif %}
+      <div class="mod c-tl c-tr c-bl c-br">
+        <ul class="steps-list">
+          {% for item in code_section.step_list %}
+          <li>
+            <div class="step-number">{{ '%02d' % loop.index }}</div>
+            <div style="flex:1">
+              {% if item.label %}<span class="step-label">{{ item.label }}</span>{% endif %}
+              <code>{{ item.command }}</code>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
     {% else %}
       <pre class="logbox">{{ code_section.content }}</pre>
     {% endif %}
@@ -248,18 +307,19 @@
   {% endif %}
 
   <details class="log-details">
-    <summary>Full diagnosis session log</summary>
-    {% if log_content %}<pre class="logbox">{{ log_content }}</pre>
-    {% else %}<div class="empty-card"><div class="empty">no session log yet</div></div>{% endif %}
+    <summary>Raw diagnostic trace</summary>
+    <div class="mod c-tl c-tr c-bl c-br">
+      {% if log_content %}<pre>{{ log_content }}</pre>
+      {% else %}<div class="empty">no session log yet</div>{% endif %}
+    </div>
   </details>
-  {% endif %}
-</div>
+</main>
+{% endif %}
 </div>
 {% if show_approve_reject %}
 <script>
 async function autofixAct(action, id, btn) {
-    var bar = btn.closest('.action-bar');
-    Array.from(bar.querySelectorAll('button')).forEach(function(b){ b.disabled = true; });
+    document.querySelectorAll('.btn-merge, .btn-reject').forEach(function(b){ b.disabled = true; });
     try {
         var r = await fetch('/api/autofix/' + action + '/' + id, { method: 'POST' });
         var d = await r.json();
