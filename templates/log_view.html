@@ -168,7 +168,7 @@
     {% elif code_section.kind == 'steps' %}
       {% if code_section.intro %}<div class="prose" style="margin-bottom:14px">{{ code_section.intro }}</div>{% endif %}
       <ol class="steps-list">
-        {% for item in code_section.items %}
+        {% for item in code_section.step_list %}
         <li>{% if item.label %}<span class="step-label">{{ item.label }}</span>{% endif %}<code>{{ item.command }}</code></li>
         {% endfor %}
       </ol>

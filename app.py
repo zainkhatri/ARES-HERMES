@@ -843,10 +843,10 @@ def incident_log_page(incident_id):
         code_section = {"label": "Proposed diff", "kind": "diff", "lines": _diff_lines(diag["diff"])}
     elif diag.get("manual_steps"):
         box = diag.get("box", "")
-        intro, items = _parse_manual_steps(diag["manual_steps"])
+        intro, step_list = _parse_manual_steps(diag["manual_steps"])
         code_section = {"label": f"Manual steps ({box})" if box else "Manual steps",
                          "meta": "no auto-apply for this one -- run it yourself" if status != "council_approved" else "",
-                         "kind": "steps", "intro": intro, "items": items}
+                         "kind": "steps", "intro": intro, "step_list": step_list}
 
     safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", incident_id)
     log_path = os.path.join(_AUTOFIX_LOG_DIR, f"{safe_id}.log")
