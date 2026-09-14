@@ -659,7 +659,7 @@ def healthz():
 _CRON_LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".host_cron_logs")
 # Allowlist, not a sanitize-and-hope: mirrors ops/cron-status.py's JOBS units
 # exactly, plus zeus-horcrux (which has no local systemd unit/log on ARES).
-_CRON_LOG_UNITS = {"ares-facescan", "ares-elite-picks", "journal-pull", "ares-autofix-watcher", "zeus-horcrux"}
+_CRON_LOG_UNITS = {"ares-facescan", "ares-elite-picks", "journal-pull", "ares-autofix-watcher", "ares-autofix-audit", "zeus-horcrux"}
 
 
 @app.route("/api/cron-log/<unit>")
@@ -680,7 +680,7 @@ def cron_log(unit):
 
 _CRON_LOG_LABELS = {"ares-facescan": "Facial Scan", "ares-elite-picks": "Elite's Stocks",
                     "journal-pull": "Journal pull", "ares-autofix-watcher": "Autofix watcher",
-                    "zeus-horcrux": "Backup → Zeus"}
+                    "ares-autofix-audit": "Autofix audit", "zeus-horcrux": "Backup → Zeus"}
 
 
 @app.route("/logs")
@@ -788,6 +788,11 @@ def incident_log_page(incident_id):
                           "empty": "no diagnosis yet"})
     if diag.get("diff"):
         sections.append({"label": "Proposed diff", "kind": "diff", "lines": _diff_lines(diag["diff"])})
+    elif diag.get("manual_steps"):
+        box = diag.get("box", "")
+        sections.append({"label": f"Manual steps ({box})" if box else "Manual steps",
+                          "meta": "no auto-apply for this one -- run it yourself",
+                          "content": diag["manual_steps"]})
 
     safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", incident_id)
     log_path = os.path.join(_AUTOFIX_LOG_DIR, f"{safe_id}.log")

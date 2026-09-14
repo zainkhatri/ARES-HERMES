@@ -67,6 +67,13 @@ def test_find_by_signature_returns_none_when_missing():
     assert s.find_by_signature("nope") is None
 
 
+def test_recommendation_ready_is_a_valid_status():
+    s = store.IncidentStore(_tmp_path())
+    iid = s.new_incident("sig-audit", "audit", "detail")
+    s.set_status(iid, "recommendation_ready")
+    assert s.find_by_signature("sig-audit")["status"] == "recommendation_ready"
+
+
 def test_title_defaults_to_signature_when_not_given():
     s = store.IncidentStore(_tmp_path())
     s.new_incident("raw-hash-sig", "systemd_failed", "detail")

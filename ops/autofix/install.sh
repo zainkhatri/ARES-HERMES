@@ -36,6 +36,26 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
+cat > /etc/systemd/system/ares-autofix-audit.service <<'EOF'
+[Unit]
+Description=ARES autonomous-fixer daily fleet audit (ARES+EROS+ZEUS proactive audit)
+[Service]
+Type=oneshot
+TimeoutStartSec=6000
+WorkingDirectory=/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD
+ExecStart=/usr/bin/python3 /mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/ops/autofix/audit.py
+EOF
+
+cat > /etc/systemd/system/ares-autofix-audit.timer <<'EOF'
+[Unit]
+Description=Run ares-autofix-audit once a day
+[Timer]
+OnCalendar=*-*-* 06:00:00
+Persistent=true
+[Install]
+WantedBy=timers.target
+EOF
+
 cat > /etc/systemd/system/ares-autofix-apply.service <<'EOF'
 [Unit]
 Description=ARES autonomous-fixer privileged apply service (own auth, own port)

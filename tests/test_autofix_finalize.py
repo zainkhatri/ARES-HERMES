@@ -107,3 +107,52 @@ def test_fix_title_falls_back_to_reasoning_first_sentence(tmp_path, monkeypatch)
                        result_path=str(result_path), tmp_log_path=str(tmp_path / "no-log.log"))
     inc = store.find_by_signature("sig6")
     assert inc["diagnosis"]["fix_title"] == "Fixed the off-by-one error"
+
+
+def test_no_diff_but_manual_steps_reaches_recommendation_council(tmp_path, monkeypatch):
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    iid = store.new_incident("sig-audit1", "audit", "detail")
+    result_path = tmp_path / "result.json"
+    result_path.write_text(json.dumps({
+        "diff": "", "box": "EROS",
+        "reasoning": "ibt-db has no automated backup verification",
+        "manual_steps": "Add a weekly pg_restore dry-run cron on EROS",
+        "fix_title": "Add backup verification for ibt-db",
+    }))
+    captured = {}
+    def fake_review(reasoning, manual_steps, box):
+        captured["box"] = box
+        return True, "sound and safe recommendation"
+    monkeypatch.setattr(finalize, "_council_review_recommendation", fake_review)
+    status = finalize.finalize(iid, store_path=str(tmp_path / "incidents.json"),
+                                result_path=str(result_path), tmp_log_path=str(tmp_path / "no-log.log"))
+    assert status == "recommendation_ready"
+    assert captured["box"] == "EROS"
+    inc = store.find_by_signature("sig-audit1")
+    assert inc["diagnosis"]["manual_steps"] == "Add a weekly pg_restore dry-run cron on EROS"
+    assert inc["diagnosis"]["council_verdict"] == "sound and safe recommendation"
+
+
+def test_no_diff_and_recommendation_held_by_council(tmp_path, monkeypatch):
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    iid = store.new_incident("sig-audit2", "audit", "detail")
+    result_path = tmp_path / "result.json"
+    result_path.write_text(json.dumps({
+        "diff": "", "box": "EROS",
+        "reasoning": "questionable suggestion",
+        "manual_steps": "touch FCSF tenant config directly",
+    }))
+    monkeypatch.setattr(finalize, "_council_review_recommendation", lambda *a: (False, "risks FAI/FCSF isolation"))
+    status = finalize.finalize(iid, store_path=str(tmp_path / "incidents.json"),
+                                result_path=str(result_path), tmp_log_path=str(tmp_path / "no-log.log"))
+    assert status == "council_held"
+
+
+def test_no_diff_and_no_manual_steps_is_diagnosis_timeout(tmp_path):
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    iid = store.new_incident("sig-audit3", "audit", "detail")
+    result_path = tmp_path / "result.json"
+    result_path.write_text(json.dumps({"diff": "", "manual_steps": "", "reasoning": "found nothing actionable"}))
+    status = finalize.finalize(iid, store_path=str(tmp_path / "incidents.json"),
+                                result_path=str(result_path), tmp_log_path=str(tmp_path / "no-log.log"))
+    assert status == "diagnosis_timeout"

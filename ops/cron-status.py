@@ -24,6 +24,7 @@ JOBS = [
     ("ares-elite-picks",      "Elite's Stocks"),
     ("journal-pull",          "Journal pull"),
     ("ares-autofix-watcher",  "Autofix watcher"),
+    ("ares-autofix-audit",    "Autofix audit"),
 ]
 
 ZEUS_STAMP = "/mnt/nvme/PROMETHEUS/INFRA/status/zeus-backup-stamp"
