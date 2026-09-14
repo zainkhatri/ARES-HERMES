@@ -858,10 +858,16 @@ def incident_log_page(incident_id):
 
     when = datetime.fromtimestamp(inc["updated_ts"], tz=_GALLERY_TZ).strftime("%b %-d, %Y %-I:%M %p") if inc.get("updated_ts") else "—"
 
-    # Skim layout: the fix title is the page headline; "what this fix does" is
-    # the first reasoning paragraph; "why" is the rest.
-    what_it_does = reasoning_paragraphs[0] if reasoning_paragraphs else ""
-    why_paragraphs = reasoning_paragraphs[1:]
+    # Skim layout: the fix title is the page headline. "What this fix does"
+    # prefers the council synthesis's jargon-free explanation; the raw
+    # technical reasoning all lands under "Why we're doing it".
+    summary = diag.get("council_summary") or {}
+    if summary.get("simple_explanation"):
+        what_it_does = summary["simple_explanation"]
+        why_paragraphs = reasoning_paragraphs
+    else:
+        what_it_does = reasoning_paragraphs[0] if reasoning_paragraphs else ""
+        why_paragraphs = reasoning_paragraphs[1:]
 
     return render_template("log_view.html", boot=get_system_info(),
                             title=diag.get("fix_title") or inc.get("title", incident_id),
