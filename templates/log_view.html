@@ -5,124 +5,158 @@
 {% include "_hud_head.html" %}
 <style>
   body { padding-top:0 !important; }
-  .wrap { max-width:1600px; margin:0 auto; padding:0 16px 40px; }
-  .pr-grid { display:grid; grid-template-columns: 1fr; gap:20px; align-items:start; }
-  .pr-grid.has-sidebar { grid-template-columns: minmax(0,1fr) 320px; }
-  @media (max-width: 980px) { .pr-grid.has-sidebar { grid-template-columns: 1fr; } .sidebar { position:static !important; } }
+  .wrap { max-width:1100px; margin:0 auto; padding:0 16px 60px; }
 
-  .main-col .mod-head { padding:16px 18px; }
-  .main-col .mod-title { font-size:16px; }
-  .main-col .mod-body { padding:18px; }
+  /* --- Header: status + title, the first thing you read --- */
+  .pr-header { display:flex; align-items:center; gap:14px; padding:22px 4px 18px; flex-wrap:wrap; }
+  .pr-header .dot { width:16px; height:16px; border-radius:50%; flex:0 0 auto; }
+  .pr-header .dot.ok { background:#3fb950; box-shadow:0 0 14px #3fb950; }
+  .pr-header .dot.bad { background:#f85149; box-shadow:0 0 14px #f85149; }
+  .pr-header .dot.pending { background:var(--ares-bright); box-shadow:0 0 14px var(--ares-bright); }
+  .pr-header .status-word { font-size:15px; font-weight:800; letter-spacing:.04em; }
+  .pr-header .status-word.ok { color:#3fb950; } .pr-header .status-word.bad { color:#f85149; } .pr-header .status-word.pending { color:var(--ares-bright); }
+  .pr-title { font-size:22px; font-weight:800; line-height:1.3; margin:0 0 16px; color:var(--text-1); }
+  .pr-meta { display:flex; gap:18px; font-size:13px; color:var(--text-3); margin-bottom:22px; flex-wrap:wrap; }
+  .pr-meta b { color:var(--text-2); }
 
+  /* --- The one-line summary: what actually got decided --- */
+  .pr-summary { font-size:17px; font-weight:700; color:var(--text-1); padding:16px 20px;
+    background:rgba(var(--panel-rgb),.5); border:1px solid var(--ember-dim); border-left:4px solid var(--ares); margin-bottom:18px; }
+
+  /* --- Council verdict: promoted to the top, this is what was asked for --- */
+  .verdict-card { padding:16px 20px; border:1px solid var(--ares-bright); background:rgba(var(--ares-rgb),.06); margin-bottom:22px; }
+  .verdict-card .verdict-label { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ares-bright); font-weight:700; margin-bottom:6px; }
+  .verdict-card .verdict-text { font-size:14px; color:var(--text-1); line-height:1.6; }
+
+  /* --- Action bar: big, unmissable, right under the verdict --- */
+  .action-bar { display:flex; gap:12px; margin-bottom:28px; }
+  .action-bar button { flex:1; font-family:inherit; font-size:15px; font-weight:800; letter-spacing:.02em;
+    padding:16px 20px; border:none; cursor:pointer; }
+  .action-bar button.apply { background:#3fb950; color:#04120a; }
+  .action-bar button.apply:hover { background:#5fd97a; }
+  .action-bar button.reject-btn { background:transparent; border:1px solid #f85149; color:#f85149; flex:0 0 160px; }
+  .action-bar button.reject-btn:hover { background:rgba(248,81,73,.1); }
+  .action-bar button:disabled { opacity:.5; cursor:default; }
+
+  /* --- Body sections --- */
   .section { margin-bottom:26px; }
-  .section:last-child { margin-bottom:0; }
-  .section-title { font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--text-3); margin-bottom:10px; font-weight:700; }
-  .meta-row { font-size:13px; color:var(--text-3); margin-bottom:8px; }
+  .section-title { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-3); margin-bottom:10px; font-weight:700; }
+  .prose { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:15px; line-height:1.75; color:var(--text-2); }
+  .prose p { margin:0 0 12px; }
+  .prose p:last-child { margin-bottom:0; }
 
   pre.logbox { margin:0; padding:16px; background:rgba(var(--panel-rgb),.5); border:1px solid var(--ember-dim);
-               font-family:'JetBrains Mono',monospace; font-size:13px; line-height:1.6;
-               white-space:pre-wrap; word-break:break-word; max-height:70vh; overflow:auto; color:var(--text-2); }
+               font-family:'JetBrains Mono',monospace; font-size:13px; line-height:1.65;
+               white-space:pre-wrap; word-break:break-word; max-height:60vh; overflow:auto; color:var(--text-2); }
   pre.logbox.diff { padding:0; font-size:12.5px; }
-  pre.logbox.diff span { display:block; padding:1px 16px; }
+  pre.logbox.diff span { display:block; padding:2px 16px; }
   pre.logbox .add { background:rgba(63,185,80,.14); color:#5fd97a; }
   pre.logbox .del { background:rgba(248,81,73,.14); color:#ff8a82; }
   pre.logbox .hunk { color:var(--ares-bright); background:rgba(var(--ares-rgb),.08); font-weight:600; }
+  .meta-row { font-size:12px; color:var(--text-3); margin-bottom:8px; }
+
+  /* --- Session log: collapsed by default, it's the least important thing to skim --- */
+  details.log-details summary { cursor:pointer; font-size:12px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--text-3); font-weight:700; padding:10px 0; list-style:none; }
+  details.log-details summary::-webkit-details-marker { display:none; }
+  details.log-details summary::before { content:'▸ '; }
+  details.log-details[open] summary::before { content:'▾ '; }
+  details.log-details pre.logbox { margin-top:8px; }
 
   .empty-card { border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.35); padding:20px; }
   .empty { color:var(--text-3); font-style:italic; }
 
-  /* --- Sidebar: status is the whole point, make it unmissable --- */
-  .sidebar { position:sticky; top:16px; display:flex; flex-direction:column; gap:14px; }
-  .status-block { padding:16px; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.5); text-align:center; }
-  .status-block .dot { width:14px; height:14px; border-radius:50%; margin:0 auto 8px; }
-  .status-block .label { font-size:14px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
-  .status-block.ok { border-color:#3fb950; } .status-block.ok .dot { background:#3fb950; box-shadow:0 0 12px #3fb950; } .status-block.ok .label { color:#3fb950; }
-  .status-block.bad { border-color:#f85149; } .status-block.bad .dot { background:#f85149; box-shadow:0 0 12px #f85149; } .status-block.bad .label { color:#f85149; }
-  .status-block.pending { border-color:var(--ares-bright); } .status-block.pending .dot { background:var(--ares-bright); box-shadow:0 0 12px var(--ares-bright); } .status-block.pending .label { color:var(--ares-bright); }
-
-  .side-card { padding:14px 16px; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.35); }
-  .side-card .side-label { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); margin-bottom:4px; }
-  .side-card .side-value { font-size:13px; color:var(--text-1); }
-  .side-card.verdict { border-color:var(--ares-bright); }
-  .side-card.verdict .side-value { color:var(--text-2); line-height:1.5; }
-
-  .approve-bar { display:flex; flex-direction:column; gap:8px; }
-  .approve-bar button { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; letter-spacing:.05em;
-    padding:12px 16px; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.5); color:var(--text-1); cursor:pointer; }
-  .approve-bar button.approve { border-color:#3fb950; color:#3fb950; }
-  .approve-bar button.reject { border-color:#f85149; color:#f85149; }
-  .approve-bar button:hover { background:rgba(var(--ares-rgb),.1); }
-  .approve-bar button:disabled { opacity:.5; cursor:default; }
-
-  /* --- Job-log header strip (no sidebar, just a quick-glance bar) --- */
-  .job-header { display:flex; gap:24px; padding:14px 18px; border-bottom:1px solid var(--ember-dim); flex-wrap:wrap; }
+  /* --- Job-log mode (simpler, no verdict/action concept) --- */
+  .job-header { display:flex; gap:24px; padding:14px 18px; border-bottom:1px solid var(--ember-dim); flex-wrap:wrap; margin-bottom:22px; }
   .job-header .side-card { border:none; background:none; padding:0; }
+  .side-label { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); margin-bottom:4px; }
+  .side-value { font-size:13px; color:var(--text-1); }
 </style>
 </head>
 <body>
 <div class="hud-shell">
 {% with page_name='LOGS' %}{% include "_hud_nav.html" %}{% endwith %}
 <div class="wrap">
-  <div class="pr-grid {{ 'has-sidebar' if sidebar }}">
-    <section class="mod c-tl c-br main-col">
-      <div class="mod-head">
-        <span class="mod-title">{{ title }}</span>
-        {% if not sidebar and status_pill %}<span class="side-label">{{ status_pill }}</span>{% endif %}
-      </div>
-      {% if job_header %}
-      <div class="job-header">
-        {% for item in job_header %}
-        <div class="side-card"><div class="side-label">{{ item.label }}</div><div class="side-value">{{ item.value }}</div></div>
-        {% endfor %}
-      </div>
-      {% endif %}
-      <div class="mod-body">
-        {% for section in sections %}
-        <div class="section">
-          <div class="section-title">{{ section.label }}</div>
-          {% if section.meta %}<div class="meta-row">{{ section.meta }}</div>{% endif %}
-          {% if section.kind == 'diff' %}
-            <pre class="logbox diff">{% for line in section.lines %}<span class="{{ line.cls }}">{{ line.text }}</span>
-{% endfor %}</pre>
-          {% elif section.content %}
-            <pre class="logbox">{{ section.content }}</pre>
-          {% else %}
-            <div class="empty-card"><div class="empty">{{ section.empty or 'nothing here yet' }}</div></div>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </div>
-    </section>
 
-    {% if sidebar %}
-    <aside class="sidebar">
-      {% if status_pill %}
-      <div class="status-block {{ status_pill_cls }}">
-        <div class="dot"></div>
-        <div class="label">{{ status_pill }}</div>
-      </div>
-      {% endif %}
-      {% for item in sidebar %}
-      <div class="side-card {{ item.cls or '' }}">
-        <div class="side-label">{{ item.label }}</div>
-        <div class="side-value">{{ item.value }}</div>
+  {% if sections is defined %}
+  {# ---------- Job-log mode: simple, no verdict/action ---------- #}
+  <section class="mod c-tl c-br">
+    <div class="mod-head"><span class="mod-title">{{ title }}</span></div>
+    {% if job_header %}
+    <div class="job-header">
+      {% for item in job_header %}
+      <div class="side-card"><div class="side-label">{{ item.label }}</div><div class="side-value">{{ item.value }}</div></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="mod-body">
+      {% for section in sections %}
+      <div class="section">
+        <div class="section-title">{{ section.label }}</div>
+        {% if section.content %}<pre class="logbox">{{ section.content }}</pre>
+        {% else %}<div class="empty-card"><div class="empty">{{ section.empty or 'nothing here yet' }}</div></div>{% endif %}
       </div>
       {% endfor %}
-      {% if show_approve_reject %}
-      <div class="approve-bar">
-        <button class="approve" onclick="autofixAct('approve','{{ incident_id }}',this)">Approve</button>
-        <button class="reject" onclick="autofixAct('reject','{{ incident_id }}',this)">Reject</button>
-      </div>
-      {% endif %}
-    </aside>
+    </div>
+  </section>
+
+  {% else %}
+  {# ---------- Incident mode: skim-and-approve layout ---------- #}
+  <div class="pr-header">
+    <span class="dot {{ status_pill_cls }}"></span>
+    <span class="status-word {{ status_pill_cls }}">{{ status_pill }}</span>
+  </div>
+  <h1 class="pr-title">{{ title }}</h1>
+  <div class="pr-meta"><span>Box: <b>{{ box }}</b></span><span>Updated: <b>{{ when }}</b></span></div>
+
+  {% if fix_title %}<div class="pr-summary">{{ fix_title }}</div>{% endif %}
+
+  {% if council_verdict %}
+  <div class="verdict-card">
+    <div class="verdict-label">What council thinks</div>
+    <div class="verdict-text">{{ council_verdict }}</div>
+  </div>
+  {% endif %}
+
+  {% if show_approve_reject %}
+  <div class="action-bar">
+    <button class="apply" onclick="autofixAct('approve','{{ incident_id }}',this)">Apply this fix</button>
+    <button class="reject-btn" onclick="autofixAct('reject','{{ incident_id }}',this)">Reject</button>
+  </div>
+  {% endif %}
+
+  {% if reasoning_paragraphs %}
+  <div class="section">
+    <div class="section-title">Why</div>
+    <div class="prose">{% for p in reasoning_paragraphs %}<p>{{ p }}</p>{% endfor %}</div>
+  </div>
+  {% endif %}
+
+  {% if code_section %}
+  <div class="section">
+    <div class="section-title">{{ code_section.label }}</div>
+    {% if code_section.meta %}<div class="meta-row">{{ code_section.meta }}</div>{% endif %}
+    {% if code_section.kind == 'diff' %}
+      <pre class="logbox diff">{% for line in code_section.lines %}<span class="{{ line.cls }}">{{ line.text }}</span>
+{% endfor %}</pre>
+    {% else %}
+      <pre class="logbox">{{ code_section.content }}</pre>
     {% endif %}
   </div>
+  {% endif %}
+
+  <details class="log-details">
+    <summary>Full diagnosis session log</summary>
+    {% if log_content %}<pre class="logbox">{{ log_content }}</pre>
+    {% else %}<div class="empty-card"><div class="empty">no session log yet</div></div>{% endif %}
+  </details>
+  {% endif %}
 </div>
 </div>
 {% if show_approve_reject %}
 <script>
 async function autofixAct(action, id, btn) {
-    var bar = btn.closest('.approve-bar');
+    var bar = btn.closest('.action-bar');
     Array.from(bar.querySelectorAll('button')).forEach(function(b){ b.disabled = true; });
     try {
         var r = await fetch('/api/autofix/' + action + '/' + id, { method: 'POST' });
