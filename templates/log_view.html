@@ -5,64 +5,118 @@
 {% include "_hud_head.html" %}
 <style>
   body { padding-top:0 !important; }
-  .wrap { max-width:1040px; margin:0 auto; padding:0 6px 40px; }
-  .section { margin-bottom:20px; }
+  .wrap { max-width:1600px; margin:0 auto; padding:0 16px 40px; }
+  .pr-grid { display:grid; grid-template-columns: 1fr; gap:20px; align-items:start; }
+  .pr-grid.has-sidebar { grid-template-columns: minmax(0,1fr) 320px; }
+  @media (max-width: 980px) { .pr-grid.has-sidebar { grid-template-columns: 1fr; } .sidebar { position:static !important; } }
+
+  .main-col .mod-head { padding:16px 18px; }
+  .main-col .mod-title { font-size:16px; }
+  .main-col .mod-body { padding:18px; }
+
+  .section { margin-bottom:26px; }
   .section:last-child { margin-bottom:0; }
-  .section-title { font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-3); margin-bottom:8px; }
-  .meta-row { font-size:12px; color:var(--text-3); margin-bottom:6px; }
-  pre.logbox { margin:0; padding:14px; background:rgba(var(--panel-rgb),.5); border:1px solid var(--ember-dim);
-               font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.55;
+  .section-title { font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--text-3); margin-bottom:10px; font-weight:700; }
+  .meta-row { font-size:13px; color:var(--text-3); margin-bottom:8px; }
+
+  pre.logbox { margin:0; padding:16px; background:rgba(var(--panel-rgb),.5); border:1px solid var(--ember-dim);
+               font-family:'JetBrains Mono',monospace; font-size:13px; line-height:1.6;
                white-space:pre-wrap; word-break:break-word; max-height:70vh; overflow:auto; color:var(--text-2); }
-  pre.logbox .add { color:#3fb950; }
-  pre.logbox .del { color:#f85149; }
-  pre.logbox .hunk { color:var(--ares-bright); }
-  .empty-card { border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.35); padding:16px; }
+  pre.logbox.diff { padding:0; font-size:12.5px; }
+  pre.logbox.diff span { display:block; padding:1px 16px; }
+  pre.logbox .add { background:rgba(63,185,80,.14); color:#5fd97a; }
+  pre.logbox .del { background:rgba(248,81,73,.14); color:#ff8a82; }
+  pre.logbox .hunk { color:var(--ares-bright); background:rgba(var(--ares-rgb),.08); font-weight:600; }
+
+  .empty-card { border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.35); padding:20px; }
   .empty { color:var(--text-3); font-style:italic; }
-  .status-pill { font-size:10px; letter-spacing:.1em; text-transform:uppercase; padding:3px 10px; border:1px solid var(--ember-dim); white-space:nowrap; }
-  .status-pill.ok { color:#3fb950; border-color:#3fb950; }
-  .status-pill.bad { color:#f85149; border-color:#f85149; }
-  .status-pill.pending { color:var(--ares-bright); border-color:var(--ares-bright); }
-  .approve-bar { display:flex; gap:10px; padding:14px; border-top:1px solid var(--ember-dim); }
-  .approve-bar button { font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.05em;
-    padding:8px 16px; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.5); color:var(--text-1); cursor:pointer; }
+
+  /* --- Sidebar: status is the whole point, make it unmissable --- */
+  .sidebar { position:sticky; top:16px; display:flex; flex-direction:column; gap:14px; }
+  .status-block { padding:16px; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.5); text-align:center; }
+  .status-block .dot { width:14px; height:14px; border-radius:50%; margin:0 auto 8px; }
+  .status-block .label { font-size:14px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+  .status-block.ok { border-color:#3fb950; } .status-block.ok .dot { background:#3fb950; box-shadow:0 0 12px #3fb950; } .status-block.ok .label { color:#3fb950; }
+  .status-block.bad { border-color:#f85149; } .status-block.bad .dot { background:#f85149; box-shadow:0 0 12px #f85149; } .status-block.bad .label { color:#f85149; }
+  .status-block.pending { border-color:var(--ares-bright); } .status-block.pending .dot { background:var(--ares-bright); box-shadow:0 0 12px var(--ares-bright); } .status-block.pending .label { color:var(--ares-bright); }
+
+  .side-card { padding:14px 16px; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.35); }
+  .side-card .side-label { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); margin-bottom:4px; }
+  .side-card .side-value { font-size:13px; color:var(--text-1); }
+  .side-card.verdict { border-color:var(--ares-bright); }
+  .side-card.verdict .side-value { color:var(--text-2); line-height:1.5; }
+
+  .approve-bar { display:flex; flex-direction:column; gap:8px; }
+  .approve-bar button { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; letter-spacing:.05em;
+    padding:12px 16px; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.5); color:var(--text-1); cursor:pointer; }
   .approve-bar button.approve { border-color:#3fb950; color:#3fb950; }
   .approve-bar button.reject { border-color:#f85149; color:#f85149; }
   .approve-bar button:hover { background:rgba(var(--ares-rgb),.1); }
   .approve-bar button:disabled { opacity:.5; cursor:default; }
+
+  /* --- Job-log header strip (no sidebar, just a quick-glance bar) --- */
+  .job-header { display:flex; gap:24px; padding:14px 18px; border-bottom:1px solid var(--ember-dim); flex-wrap:wrap; }
+  .job-header .side-card { border:none; background:none; padding:0; }
 </style>
 </head>
 <body>
 <div class="hud-shell">
 {% with page_name='LOGS' %}{% include "_hud_nav.html" %}{% endwith %}
 <div class="wrap">
-  <section class="mod c-tl c-br">
-    <div class="mod-head">
-      <span class="mod-title">{{ title }}</span>
-      {% if status_pill %}<span class="status-pill {{ status_pill_cls }}">{{ status_pill }}</span>{% endif %}
-    </div>
-    <div class="mod-body">
-      {% for section in sections %}
-      <div class="section">
-        <div class="section-title">{{ section.label }}</div>
-        {% if section.meta %}<div class="meta-row">{{ section.meta }}</div>{% endif %}
-        {% if section.kind == 'diff' %}
-          <pre class="logbox">{% for line in section.lines %}<span class="{{ line.cls }}">{{ line.text }}</span>
+  <div class="pr-grid {{ 'has-sidebar' if sidebar }}">
+    <section class="mod c-tl c-br main-col">
+      <div class="mod-head">
+        <span class="mod-title">{{ title }}</span>
+        {% if not sidebar and status_pill %}<span class="side-label">{{ status_pill }}</span>{% endif %}
+      </div>
+      {% if job_header %}
+      <div class="job-header">
+        {% for item in job_header %}
+        <div class="side-card"><div class="side-label">{{ item.label }}</div><div class="side-value">{{ item.value }}</div></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div class="mod-body">
+        {% for section in sections %}
+        <div class="section">
+          <div class="section-title">{{ section.label }}</div>
+          {% if section.meta %}<div class="meta-row">{{ section.meta }}</div>{% endif %}
+          {% if section.kind == 'diff' %}
+            <pre class="logbox diff">{% for line in section.lines %}<span class="{{ line.cls }}">{{ line.text }}</span>
 {% endfor %}</pre>
-        {% elif section.content %}
-          <pre class="logbox">{{ section.content }}</pre>
-        {% else %}
-          <div class="empty-card"><div class="empty">{{ section.empty or 'nothing here yet' }}</div></div>
-        {% endif %}
+          {% elif section.content %}
+            <pre class="logbox">{{ section.content }}</pre>
+          {% else %}
+            <div class="empty-card"><div class="empty">{{ section.empty or 'nothing here yet' }}</div></div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    {% if sidebar %}
+    <aside class="sidebar">
+      {% if status_pill %}
+      <div class="status-block {{ status_pill_cls }}">
+        <div class="dot"></div>
+        <div class="label">{{ status_pill }}</div>
+      </div>
+      {% endif %}
+      {% for item in sidebar %}
+      <div class="side-card {{ item.cls or '' }}">
+        <div class="side-label">{{ item.label }}</div>
+        <div class="side-value">{{ item.value }}</div>
       </div>
       {% endfor %}
-    </div>
-    {% if show_approve_reject %}
-    <div class="approve-bar">
-      <button class="approve" onclick="autofixAct('approve','{{ incident_id }}',this)">Approve</button>
-      <button class="reject" onclick="autofixAct('reject','{{ incident_id }}',this)">Reject</button>
-    </div>
+      {% if show_approve_reject %}
+      <div class="approve-bar">
+        <button class="approve" onclick="autofixAct('approve','{{ incident_id }}',this)">Approve</button>
+        <button class="reject" onclick="autofixAct('reject','{{ incident_id }}',this)">Reject</button>
+      </div>
+      {% endif %}
+    </aside>
     {% endif %}
-  </section>
+  </div>
 </div>
 </div>
 {% if show_approve_reject %}

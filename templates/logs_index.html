@@ -5,17 +5,17 @@
 {% include "_hud_head.html" %}
 <style>
   body { padding-top:0 !important; }
-  .wrap { max-width:1040px; margin:0 auto; padding:0 6px 40px; }
+  .wrap { max-width:1600px; margin:0 auto; padding:0 16px 40px; }
   .row { display:block; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.45);
-         padding:12px 14px; margin-bottom:8px; text-decoration:none; color:inherit; transition:border-color .15s, background .15s; }
+         padding:18px 22px; margin-bottom:10px; text-decoration:none; color:inherit; transition:border-color .15s, background .15s; }
   .row:hover { border-color:var(--ares); background:rgba(var(--panel-rgb),.7); }
-  .row-top { display:flex; align-items:center; gap:8px; }
-  .dot { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
-  .dot.ok { background:#3fb950; } .dot.bad { background:#f85149; } .dot.pending { background:var(--ares-bright); }
-  .row-title { font-weight:600; font-size:13px; color:var(--text-1); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .row-status { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); }
-  .row-summary { font-size:12px; color:var(--text-2); margin-top:5px; padding-left:17px; }
-  .row-when { font-size:11px; color:var(--text-3); margin-top:2px; padding-left:17px; }
+  .row-top { display:flex; align-items:center; gap:12px; }
+  .dot { width:12px; height:12px; border-radius:50%; flex:0 0 auto; }
+  .dot.ok { background:#3fb950; box-shadow:0 0 10px #3fb950; } .dot.bad { background:#f85149; box-shadow:0 0 10px #f85149; } .dot.pending { background:var(--ares-bright); box-shadow:0 0 10px var(--ares-bright); }
+  .row-title { font-weight:700; font-size:16px; color:var(--text-1); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row-status { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); font-weight:700; }
+  .row-summary { font-size:14px; color:var(--text-2); margin-top:8px; padding-left:24px; }
+  .row-when { font-size:12px; color:var(--text-3); margin-top:4px; padding-left:24px; }
   .empty { color:var(--text-3); font-style:italic; text-align:center; padding:60px 0; }
 </style>
 </head>

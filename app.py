@@ -699,6 +699,7 @@ def logs_index_page():
 @app.route("/logs/job/<unit>")
 @require_auth
 def job_log_page(unit):
+    from system.system_info import _read_host_crons
     label = _CRON_LOG_LABELS.get(unit, unit)
     if unit not in _CRON_LOG_UNITS:
         return render_template("log_view.html", boot=get_system_info(), title=label,
@@ -714,8 +715,18 @@ def job_log_page(unit):
             empty = None
         except OSError:
             content, empty = None, "no log yet for this job"
+
+    job = next((j for j in _read_host_crons() if j.get("unit") == unit), None)
+    job_header = None
+    if job:
+        job_header = [
+            {"label": "Status", "value": "OK" if job.get("ok") else "FAILED"},
+            {"label": "Last run", "value": datetime.fromtimestamp(job["last"], tz=_GALLERY_TZ).strftime("%b %-d, %-I:%M %p") if job.get("last") else "—"},
+            {"label": "Next run", "value": datetime.fromtimestamp(job["next"], tz=_GALLERY_TZ).strftime("%b %-d, %-I:%M %p") if job.get("next") else "—"},
+        ]
+
     return render_template("log_view.html", boot=get_system_info(), title=label,
-                            status_pill=None,
+                            status_pill=None, job_header=job_header,
                             sections=[{"label": "journalctl (last 800 lines)", "content": content, "empty": empty}])
 
 
@@ -804,8 +815,16 @@ def incident_log_page(incident_id):
         log_content, log_empty = None, "no session log yet"
     sections.append({"label": "Diagnosis session log", "content": log_content, "empty": log_empty})
 
+    when = datetime.fromtimestamp(inc["updated_ts"], tz=_GALLERY_TZ).strftime("%b %-d, %Y %-I:%M %p") if inc.get("updated_ts") else "—"
+    sidebar = [
+        {"label": "Box", "value": diag.get("box", "ARES")},
+        {"label": "Updated", "value": when},
+    ]
+    if diag.get("council_verdict"):
+        sidebar.append({"label": "Council verdict", "value": diag["council_verdict"], "cls": "verdict"})
+
     return render_template("log_view.html", boot=get_system_info(), title=inc.get("title", incident_id),
-                            status_pill=status, status_pill_cls=status_cls, sections=sections,
+                            status_pill=status, status_pill_cls=status_cls, sections=sections, sidebar=sidebar,
                             show_approve_reject=(status == "council_approved"), incident_id=incident_id)
 
 
