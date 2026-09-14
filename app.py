@@ -858,10 +858,20 @@ def incident_log_page(incident_id):
 
     when = datetime.fromtimestamp(inc["updated_ts"], tz=_GALLERY_TZ).strftime("%b %-d, %Y %-I:%M %p") if inc.get("updated_ts") else "—"
 
-    return render_template("log_view.html", boot=get_system_info(), title=inc.get("title", incident_id),
+    # Skim layout: the fix title is the page headline; "what this fix does" is
+    # the first reasoning paragraph; "why" is the rest.
+    what_it_does = reasoning_paragraphs[0] if reasoning_paragraphs else ""
+    why_paragraphs = reasoning_paragraphs[1:]
+
+    return render_template("log_view.html", boot=get_system_info(),
+                            title=diag.get("fix_title") or inc.get("title", incident_id),
+                            subtitle=inc.get("title", "") if diag.get("fix_title") else "",
                             status_pill=status_label, status_pill_cls=status_cls,
-                            fix_title=diag.get("fix_title", ""), council_verdict=diag.get("council_verdict", ""),
-                            reasoning_paragraphs=reasoning_paragraphs, code_section=code_section, log_content=log_content,
+                            what_it_does=what_it_does, why_paragraphs=why_paragraphs,
+                            council_votes=diag.get("council_votes", []),
+                            council_summary=diag.get("council_summary", {}),
+                            council_verdict=diag.get("council_verdict", ""),
+                            code_section=code_section, log_content=log_content,
                             box=diag.get("box", "ARES"), when=when,
                             show_approve_reject=(status == "council_approved"), incident_id=incident_id)
 
