@@ -32,16 +32,21 @@ def _extract_json(stdout):
     lines = [l for l in stdout.strip().splitlines() if l.strip() and not l.strip().startswith("```")]
     for line in reversed(lines):
         try:
-            return json.loads(line)
+            parsed = json.loads(line)
         except ValueError:
             continue
+        if isinstance(parsed, dict):
+            return parsed
     text = "\n".join(lines)
     start, end = text.rfind("{"), text.rfind("}")
     while start != -1:
         try:
-            return json.loads(text[start:end + 1])
+            parsed = json.loads(text[start:end + 1])
+            if isinstance(parsed, dict):
+                return parsed
         except ValueError:
-            start = text.rfind("{", 0, start)
+            pass
+        start = text.rfind("{", 0, start)
     raise ValueError("no JSON object found in council output")
 
 

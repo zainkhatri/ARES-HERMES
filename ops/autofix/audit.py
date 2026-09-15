@@ -133,7 +133,14 @@ def run_once(store, kill_switch_path="/root/ares-autofix-disabled", run_id=None,
         with open(per_finding_result, "w") as f:
             json.dump(finding, f)
 
-        finalize.finalize(iid, result_path=per_finding_result, tmp_log_path=log_path)
+        # one bad finding must not kill the rest of the run (observed 9/14:
+        # a council parse crash aborted the whole audit mid-loop)
+        try:
+            finalize.finalize(iid, result_path=per_finding_result, tmp_log_path=log_path)
+        except Exception as e:
+            print(f"audit: finalize failed for {iid}: {e}")
+            store.set_status(iid, "diagnosis_timeout")
+            continue
         processed += 1
 
     return processed

@@ -122,3 +122,12 @@ def test_ask_parses_multiline_json_with_prose(monkeypatch):
     approved, verdict = council.ask("prompt")
     assert approved is False
     assert verdict == "multiline"
+
+
+def test_ask_skips_bare_json_string_lines(monkeypatch):
+    # a trailing quoted sentence is valid JSON but not a dict -- must not crash
+    out = '{"approve": true, "verdict": "real"}\n"I have spoken."'
+    monkeypatch.setattr(council.subprocess, "run", lambda *a, **k: _FakeCompleted(out))
+    approved, verdict = council.ask("prompt")
+    assert approved is True
+    assert verdict == "real"
