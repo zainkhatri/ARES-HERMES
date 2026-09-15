@@ -32,60 +32,77 @@ def test_ask_fails_closed_on_unparseable_output(monkeypatch):
     assert "fail-closed" in verdict
 
 
+def _fake_ask_factory(opening_votes, final_votes, synthesis=None):
+    """Builds a fake _ask_json aware of the two-round court shape:
+    round-1 prompts ask for an 'OPENING opinion', round-2 for 'DELIBERATE',
+    synthesis for 'what_happens'."""
+    state = {"open": 0, "final": 0}
+    def fake_ask(prompt, **kw):
+        if "what_happens" in prompt:
+            return synthesis if synthesis is not None else {"simple_explanation": "s", "what_happens": "w", "pros": [], "cons": []}
+        if "OPENING opinion" in prompt:
+            i = state["open"]; state["open"] += 1
+            v = opening_votes[i]
+            return None if v is None else {"approve": v, "opinion": f"opening {i}"}
+        if "DELIBERATE" in prompt:
+            i = state["final"]; state["final"] += 1
+            v = final_votes[i]
+            return None if v is None else {"approve": v, "verdict": f"final {i}", "reply": f"I address you, member {i}"}
+        raise AssertionError("unexpected prompt")
+    return fake_ask
+
+
 def test_panel_review_all_approve(monkeypatch):
-    monkeypatch.setattr(council, "_ask_json", lambda prompt, **kw:
-        {"what_happens": "mail flows again", "pros": ["alerts work"], "cons": ["none"]}
-        if "what_happens" in prompt else {"approve": True, "verdict": "fine by me"})
+    monkeypatch.setattr(council, "_ask_json", _fake_ask_factory([True]*4, [True]*4,
+        synthesis={"simple_explanation": "s", "what_happens": "mail flows again", "pros": ["alerts work"], "cons": ["none"]}))
     result = council.panel_review("<untrusted>ctx</untrusted>")
     assert result["approved"] is True
     assert len(result["votes"]) == 4
     assert {v["persona"] for v in result["votes"]} == {"Security", "Correctness", "Blast-Radius", "Pragmatist"}
     assert all(v["approve"] for v in result["votes"])
     assert result["summary"]["what_happens"] == "mail flows again"
+    # discussion transcript: 4 openings + 4 replies, replies address the bench
+    assert len(result["discussion"]) == 8
+    assert [d["round"] for d in result["discussion"]] == [1, 1, 1, 1, 2, 2, 2, 2]
 
 
-def test_panel_review_3_of_4_threshold(monkeypatch):
-    calls = {"n": 0}
-    def fake_ask(prompt, **kw):
-        if "what_happens" in prompt:
-            return {"what_happens": "w", "pros": [], "cons": []}
-        calls["n"] += 1
-        return {"approve": calls["n"] != 1, "verdict": "v"}  # first persona rejects, rest approve
-    monkeypatch.setattr(council, "_ask_json", fake_ask)
+def test_panel_review_final_votes_decide_3_of_4(monkeypatch):
+    # opening 1 rejects but changes mind in deliberation -> final 4/4
+    monkeypatch.setattr(council, "_ask_json", _fake_ask_factory([False, True, True, True], [True]*4))
     result = council.panel_review("ctx")
-    assert result["approved"] is True  # 3 of 4 approve -> passes
+    assert result["approved"] is True
 
 
-def test_panel_review_2_rejections_hold(monkeypatch):
-    calls = {"n": 0}
-    def fake_ask(prompt, **kw):
-        if "what_happens" in prompt:
-            return {"what_happens": "w", "pros": [], "cons": []}
-        calls["n"] += 1
-        return {"approve": calls["n"] > 2, "verdict": "v"}  # first two reject
-    monkeypatch.setattr(council, "_ask_json", fake_ask)
+def test_panel_review_2_final_rejections_hold(monkeypatch):
+    monkeypatch.setattr(council, "_ask_json", _fake_ask_factory([True]*4, [False, False, True, True]))
     result = council.panel_review("ctx")
-    assert result["approved"] is False
+    assert result["approved"] is False  # 2/4 final < 3-of-4 threshold
 
 
 def test_panel_review_persona_error_counts_as_rejection(monkeypatch):
-    def fake_ask(prompt, **kw):
-        if "what_happens" in prompt:
-            return {"what_happens": "w", "pros": [], "cons": []}
-        return None  # every persona call errors
-    monkeypatch.setattr(council, "_ask_json", fake_ask)
+    monkeypatch.setattr(council, "_ask_json", _fake_ask_factory([None]*4, [True]*4))
     result = council.panel_review("ctx")
     assert result["approved"] is False
     assert all(not v["approve"] for v in result["votes"])
     assert all("review failed" in v["verdict"] for v in result["votes"])
 
 
+def test_panel_review_round2_error_keeps_round1_vote(monkeypatch):
+    # openings all approve; every deliberation call fails -> final votes stay approve
+    monkeypatch.setattr(council, "_ask_json", _fake_ask_factory([True]*4, [None]*4))
+    result = council.panel_review("ctx")
+    assert result["approved"] is True
+    assert all(v["approve"] for v in result["votes"])
+    assert any("stood by their opening" in d["text"] for d in result["discussion"] if d["round"] == 2)
+
+
 def test_panel_review_synthesis_failure_keeps_votes(monkeypatch):
-    def fake_ask(prompt, **kw):
+    fake = _fake_ask_factory([True]*4, [True]*4)
+    def fake_with_bad_synth(prompt, **kw):
         if "what_happens" in prompt:
-            return None  # synthesis fails
-        return {"approve": True, "verdict": "v"}
-    monkeypatch.setattr(council, "_ask_json", fake_ask)
+            return None
+        return fake(prompt, **kw)
+    monkeypatch.setattr(council, "_ask_json", fake_with_bad_synth)
     result = council.panel_review("ctx")
     assert result["approved"] is True
     assert result["summary"] == {}

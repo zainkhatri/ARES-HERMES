@@ -188,7 +188,8 @@ def finalize(incident_id, store_path=None, result_path=None, tmp_log_path=None):
 
         panel = _council_review_recommendation(reasoning, manual_steps, box, commands)
         store.write_diagnosis(incident_id, council_verdict=panel["verdict"],
-                               council_votes=panel["votes"], council_summary=panel["summary"])
+                               council_votes=panel["votes"], council_discussion=panel.get("discussion", []),
+                               council_summary=panel["summary"])
         if not panel["approved"]:
             store.set_status(incident_id, "council_held")
             return "council_held"
@@ -206,7 +207,8 @@ def finalize(incident_id, store_path=None, result_path=None, tmp_log_path=None):
 
     panel = _council_review(diff, reasoning, target_file)
     store.write_diagnosis(incident_id, council_verdict=panel["verdict"],
-                           council_votes=panel["votes"], council_summary=panel["summary"])
+                           council_votes=panel["votes"], council_discussion=panel.get("discussion", []),
+                               council_summary=panel["summary"])
     if not panel["approved"]:
         store.set_status(incident_id, "council_held")
         return "council_held"

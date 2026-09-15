@@ -900,6 +900,7 @@ def incident_log_page(incident_id):
                             status_pill=status_label, status_pill_cls=status_cls,
                             what_it_does=what_it_does, why_paragraphs=why_paragraphs,
                             council_votes=diag.get("council_votes", []),
+                            council_discussion=diag.get("council_discussion", []),
                             council_summary=diag.get("council_summary", {}),
                             council_verdict=diag.get("council_verdict", ""),
                             code_section=code_section, log_content=log_content,
