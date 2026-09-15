@@ -58,13 +58,16 @@
         .court-card { position: relative; border: 2px solid var(--gold); background: #1a0f0d;
             display: flex; flex-direction: column; align-items: center; padding: 24px 20px; transition: transform 0.3s cubic-bezier(.16,1,.3,1); }
         .court-card:hover { transform: translateY(-6px); }
-        .avatar { width: 100%; height: 200px; border: 1px solid var(--gold);
+        .avatar { position: relative; width: 100%; height: 200px; border: 1px solid var(--gold);
             background: #050302; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         .avatar img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+        .avatar::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.22) 0 2px, transparent 2px 4px); }
         .court-title { font-family: 'Bricolage Grotesque'; font-size: 24px; font-weight: 800; color: var(--gold);
             text-transform: uppercase; margin-top: 18px; letter-spacing: 0.02em; text-align: center; line-height: 1.1; }
         .court-persona { font-family: 'JetBrains Mono'; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.2em; margin-top: 4px; }
-        .court-vote { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 14px; letter-spacing: 0.1em; margin-top: 16px; padding: 6px 16px; border: 2px solid currentColor; }
+        .court-vote { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 15px; letter-spacing: 0.14em; margin-top: 16px; padding: 6px 18px;
+            border: 3px double currentColor; transform: rotate(-6deg); text-shadow: 0 0 12px currentColor; }
         .court-vote.yes { color: var(--green); } .court-vote.no { color: var(--red); }
         .court-take { font-family: 'Bricolage Grotesque'; font-size: 15px; color: var(--text-2); line-height: 1.5; margin-top: 16px; text-align: center; }
 
@@ -81,6 +84,27 @@
 
         @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .animate-court > * { animation: slideIn 0.6s cubic-bezier(.16,1,.3,1) both; }
+
+        /* --- select-screen choreography (first view per incident only) --- */
+        @keyframes crtIn { 0% { opacity: 0; transform: scale(1.04); filter: brightness(3) contrast(2); }
+            18% { opacity: 1; } 30% { opacity: 0.4; } 42% { opacity: 1; filter: brightness(1.6) contrast(1.3); }
+            100% { opacity: 1; transform: scale(1); filter: none; } }
+        @keyframes stampIn { 0% { opacity: 0; transform: rotate(-6deg) scale(3.2); }
+            55% { opacity: 1; transform: rotate(-6deg) scale(0.88); }
+            75% { transform: rotate(-6deg) scale(1.08); } 100% { opacity: 1; transform: rotate(-6deg) scale(1); } }
+        @keyframes cardKick { 0%, 100% { transform: translate(0,0); } 30% { transform: translate(2px,-2px); } 60% { transform: translate(-2px,1px); } }
+        @keyframes slamIn { 0% { opacity: 0; transform: scale(2.4); } 55% { opacity: 1; transform: scale(0.94); }
+            75% { transform: scale(1.04); } 100% { opacity: 1; transform: scale(1); } }
+        body.choreo .court-card { animation: crtIn 0.55s steps(6) both; animation-delay: calc(var(--i) * 0.4s); }
+        body.choreo .court-vote { animation: stampIn 0.3s cubic-bezier(.2,2,.4,1) both; animation-delay: calc(var(--i) * 0.4s + 0.55s); }
+        body.choreo .court-card .avatar { animation: cardKick 0.22s linear both; animation-delay: calc(var(--i) * 0.4s + 0.62s); }
+        body.choreo .verdict-banner { animation: slamIn 0.45s cubic-bezier(.2,1.6,.4,1) both; animation-delay: var(--verdict-delay, 2s); }
+        body.choreo .court-take { opacity: 0; }
+        body.choreo .court-take.typed { opacity: 1; }
+        @media (prefers-reduced-motion: reduce) {
+            body.choreo .court-card, body.choreo .court-vote, body.choreo .court-card .avatar, body.choreo .verdict-banner { animation: none; }
+            body.choreo .court-take { opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -150,7 +174,7 @@
                 {% if council_votes %}
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {% for v in council_votes %}
-                    <div class="court-card mod c-tl c-tr c-bl c-br">
+                    <div class="court-card mod c-tl c-tr c-bl c-br" style="--i: {{ loop.index0 }}">
                         <div class="avatar">{{ avatar(v.persona) }}</div>
                         <h3 class="court-title">{{ v.title or titles.get(v.persona, v.persona) }}</h3>
                         <span class="court-persona">{{ v.persona }}</span>
@@ -168,7 +192,7 @@
 
             <!-- Verdict -->
             {% if total %}
-            <div class="verdict-banner mb-16" style="border-color: {{ 'rgba(63,185,80,0.3)' if cleared else 'rgba(248,81,73,0.3)' }}">
+            <div class="verdict-banner mb-16" style="border-color: {{ 'rgba(63,185,80,0.3)' if cleared else 'rgba(248,81,73,0.3)' }}; --verdict-delay: {{ total * 0.4 + 0.7 }}s">
                 <div class="verdict-num" style="color: {{ '#3fb950' if cleared else '#f85149' }}">{{ approvals }} / {{ total }}</div>
                 <div class="verdict-sub" style="color: {{ 'rgba(63,185,80,0.7)' if cleared else 'rgba(248,81,73,0.7)' }}">{{ 'Cleared to Merge' if cleared else 'The Council Holds' }}</div>
             </div>
@@ -183,6 +207,35 @@
             {% endif %}
         </main>
     </div>
+<script>
+(function () {
+    var cards = document.querySelectorAll('.court-card');
+    if (!cards.length) return;
+    var key = 'courtSeen:{{ incident_id }}';
+    var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (sessionStorage.getItem(key) || reduced) {
+        document.querySelectorAll('.court-take').forEach(function (t) { t.classList.add('typed'); });
+        return;
+    }
+    sessionStorage.setItem(key, '1');
+    document.body.classList.add('choreo');
+    cards.forEach(function (card, i) {
+        var take = card.querySelector('.court-take');
+        if (!take) return;
+        var full = take.textContent;
+        take.textContent = '';
+        take.classList.add('typed');
+        setTimeout(function () {
+            var pos = 0;
+            var iv = setInterval(function () {
+                pos += 3;
+                take.textContent = full.slice(0, pos);
+                if (pos >= full.length) { take.textContent = full; clearInterval(iv); }
+            }, 24);
+        }, i * 400 + 700);
+    });
+})();
+</script>
 {% if show_approve_reject %}
 <script>
 async function autofixAct(action, id, btn) {
