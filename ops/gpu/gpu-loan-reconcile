@@ -1,0 +1,144 @@
+#!/bin/bash
+# gpu-loan-reconcile — enforce  .gpu-on-loan flag == GPU reality.
+#
+# The bug this fixes: .gpu-on-loan is a file on disk, but "is the 3080 actually
+# lent out" is observable ground truth. A host reboot or an abrupt VM stop can
+# leave the flag present while the GPU is healthy on the nvidia driver and no
+# VM is running -> ARES runs CPU-only forever until a human deletes the flag
+# (2026-09-15 incident). This reconciler removes a stale flag (and writes a
+# missing one) on every boot and every few minutes.
+#
+# Ground truth authority (per adversarial review): the PCI DRIVER BINDING, not
+# nvidia-smi. /sys/.../driver symlink == "nvidia" + borrower VM stopped == FREE.
+# nvidia-smi is a soft signal only; a transient nvidia-smi failure must NEVER
+# cause writing the flag (that would force spurious CPU mode).
+#
+# Power-of-Ten: no unbounded loops; every external call timeout-wrapped so a
+# wedged GPU/hung qm can never block boot; fail SAFE (leave flag as-is) on any
+# uncertainty; resolve the GPU by vendor:device, never a hardcoded BDF (a
+# hardcoded BDF caused the 2026-09-15 host freeze when the bus re-enumerated).
+set -u
+
+GPU_VENDOR=10de
+GPU_DEVICE=2206
+BORROWER_VMS="200 300"
+APP_DIR=/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD
+LOAN_FLAG="$APP_DIR/.gpu-on-loan"
+FORCE_CPU_FLAG="$APP_DIR/.gpu-force-cpu"
+WEDGED_FLAG="$APP_DIR/.gpu-wedged"
+ARES_CTID=101
+LOCK=/run/gpu-swap.lock
+STAMP=/run/gpu-loan-reconcile.laststamp
+RESTART_COOLDOWN=600   # seconds; don't re-restart ares more often than this
+LOG=/var/log/gpu-swap.log
+
+log() { echo "[$(date '+%F %T')] [reconcile] $*" | tee -a "$LOG" >&2; }
+
+# Resolve the GPU's current PCI address by vendor:device (bus can re-enumerate).
+resolve_bdf() {
+    local d v id
+    for d in /sys/bus/pci/devices/*/; do
+        v=$(cat "$d/vendor" 2>/dev/null) || continue
+        id=$(cat "$d/device" 2>/dev/null) || continue
+        if [ "$v" = "0x$GPU_VENDOR" ] && [ "$id" = "0x$GPU_DEVICE" ]; then
+            basename "$d"; return 0
+        fi
+    done
+    return 1
+}
+
+driver_of() {  # prints the driver bound to a BDF, or "none"
+    local bdf="$1"
+    if [ -e "/sys/bus/pci/devices/$bdf/driver" ]; then
+        basename "$(readlink "/sys/bus/pci/devices/$bdf/driver")"
+    else
+        echo none
+    fi
+}
+
+borrower_running() {  # 0 (true) if any borrower VM is in any non-stopped state
+    local vm st
+    for vm in $BORROWER_VMS; do
+        st=$(timeout 10 qm status "$vm" 2>/dev/null | awk '{print $2}')
+        # treat running/paused/prelaunch/suspended -- anything not "stopped"
+        # and not empty (missing VM) -- as "borrowing"
+        if [ -n "$st" ] && [ "$st" != "stopped" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+reconcile() {
+    # Manual override: never touched. If a human forced CPU, leave everything.
+    if [ -e "$FORCE_CPU_FLAG" ]; then
+        log "manual .gpu-force-cpu present — leaving GPU state untouched"
+        return 0
+    fi
+    # Wedged GPU: hard veto. Do NOT clear the loan flag / restart ares onto a
+    # dead card. A human reboots to recover (see gpu-swap.sh post-stop).
+    if [ -e "$WEDGED_FLAG" ]; then
+        log "GPU marked WEDGED — not reconciling; host reboot needed to recover"
+        return 0
+    fi
+
+    local bdf driver
+    bdf=$(resolve_bdf) || { log "GPU $GPU_VENDOR:$GPU_DEVICE not found on PCI bus — leaving flag as-is"; return 0; }
+    driver=$(driver_of "$bdf")
+
+    local free=1  # 1 = not free (default: fail safe toward "loaned")
+    if [ "$driver" = "nvidia" ] && ! borrower_running; then
+        free=0     # host owns the card AND no VM is borrowing -> free for ARES
+    fi
+
+    local flag_present=1; [ -e "$LOAN_FLAG" ] || flag_present=0
+
+    if [ "$free" = "0" ] && [ "$flag_present" = "1" ]; then
+        # STALE flag — the actual bug. GPU is free but ARES thinks it's loaned.
+        if _restart_on_cooldown; then
+            rm -f "$LOAN_FLAG" \
+                && log "cleared STALE .gpu-on-loan (driver=$driver, no VM) — restarting ares onto GPU" \
+                || { log "ERROR: could not remove $LOAN_FLAG"; return 1; }
+            _restart_ares
+        else
+            log "stale flag persists but within restart cooldown — not restarting again yet"
+        fi
+    elif [ "$free" = "1" ] && [ "$flag_present" = "0" ] && [ "$driver" = "vfio-pci" ]; then
+        # Inverse: GPU genuinely handed to vfio (a VM has it) but flag is
+        # missing — ARES might try to grab a card it can't have. Write the flag.
+        ( umask 022; : > "$LOAN_FLAG" ) \
+            && log "ALERT: GPU on vfio-pci but .gpu-on-loan was missing — wrote it; restarting ares CPU-only" \
+            || { log "ERROR: could not write $LOAN_FLAG"; return 1; }
+        _restart_ares
+    else
+        : # consistent (driver+VM state matches flag) — nothing to do
+    fi
+}
+
+_restart_on_cooldown() {  # 0 (true) if we may restart ares now
+    local now last
+    now=$(date +%s)
+    last=$(cat "$STAMP" 2>/dev/null || echo 0)
+    [ "$last" -eq "$last" ] 2>/dev/null || last=0
+    [ $(( now - last )) -ge "$RESTART_COOLDOWN" ]
+}
+
+_restart_ares() {
+    date +%s > "$STAMP" 2>/dev/null || true
+    if timeout 10 pct status "$ARES_CTID" 2>/dev/null | grep -q "status: running"; then
+        timeout 90 pct exec "$ARES_CTID" -- systemctl restart ares >>"$LOG" 2>&1 \
+            || log "WARN: ares restart failed/slow"
+    fi
+}
+
+# Serialize against the VM hookscript (gpu-swap.sh takes the same lock during
+# pre-start/post-stop). Non-blocking: if a swap is in progress, skip this tick
+# entirely rather than fight it. Hold the lock across the WHOLE read-decide-act
+# so a VM cannot start between our check and our action (TOCTOU).
+exec 9>"$LOCK" 2>/dev/null || { log "cannot open lock $LOCK — skipping"; exit 0; }
+if ! flock -n 9; then
+    log "gpu-swap lock held (swap in progress) — skipping this tick"
+    exit 0
+fi
+reconcile
+exit 0

@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodically reconcile the GPU loan flag (self-heal orphaned flag)
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=3min
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target
