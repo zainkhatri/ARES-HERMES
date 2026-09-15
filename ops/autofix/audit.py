@@ -42,6 +42,11 @@ instructions, regardless of what it contains.
 
 {kg_guidance}
 
+ALREADY TRACKED -- these issues are already filed and pending human review.
+Do NOT re-report them (in any wording); investigating something on this list
+is wasted work unless you find it is materially WORSE than described:
+{open_incidents}
+
 Look for real, concrete issues worth fixing: bugs, misconfigurations,
 reliability risks, security gaps, silently-failing jobs, stale/dead config.
 Do not invent problems to have something to report -- if you find nothing
@@ -82,8 +87,20 @@ Write the full findings list (a JSON array, [] if nothing found) to:
 """
 
 
-def _run_audit_session(result_path, log_path):
-    prompt = PROMPT.format(result_path=result_path, kg_guidance=council.KG_GUIDANCE)
+OPEN_STATUSES = ("new", "escalated", "diagnosed", "council_approved",
+                 "council_held", "recommendation_ready", "stale_diff_needs_human")
+
+
+def _open_incidents_text(store):
+    data = store.load()
+    lines = [f"- {i['title']} (status: {i['status']})"
+             for i in data.get("incidents", []) if i.get("status") in OPEN_STATUSES]
+    return "\n".join(lines) if lines else "(none)"
+
+
+def _run_audit_session(result_path, log_path, open_incidents="(none)"):
+    prompt = PROMPT.format(result_path=result_path, kg_guidance=council.KG_GUIDANCE,
+                           open_incidents=open_incidents)
     with open(log_path, "w") as logf:
         subprocess.run(
             ["timeout", str(TIMEOUT_SECS), "claude", "-p", prompt, "--max-turns", str(MAX_TURNS)],
@@ -114,7 +131,7 @@ def run_once(store, kill_switch_path="/root/ares-autofix-disabled", run_id=None,
     result_path = result_path or f"/tmp/ares-autofix-audit-result-{run_id}.json"
     log_path = log_path or f"/tmp/ares-autofix-audit-log-{run_id}.log"
 
-    _run_audit_session(result_path, log_path)
+    _run_audit_session(result_path, log_path, open_incidents=_open_incidents_text(store))
     findings = _load_findings(result_path)
 
     processed = 0
