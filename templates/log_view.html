@@ -87,7 +87,7 @@
 {# --- pixel-art council portraits (PNG sprites from scripts/council_portraits.py) --- #}
 {% set PORTRAITS = {'Security':'security','Correctness':'correctness','Blast-Radius':'blast','Pragmatist':'pragmatist'} %}
 {% macro avatar(persona) -%}
-<img src="/static/council/{{ PORTRAITS.get(persona, 'pragmatist') }}.png?v=4" alt="{{ persona }}" loading="lazy">
+<img src="/static/council/{{ PORTRAITS.get(persona, 'pragmatist') }}.png?v=5" alt="{{ persona }}" loading="lazy">
 {%- endmacro %}
 {% set titles = {'Security':'The Warden','Correctness':'The Inspector','Blast-Radius':'The Assessor','Pragmatist':'The Operator'} %}
 {% set approvals = council_votes | selectattr('approve') | list | length if council_votes else 0 %}
