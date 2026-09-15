@@ -58,10 +58,10 @@
         .court-card { position: relative; border: 2px solid var(--gold); background: #1a0f0d;
             display: flex; flex-direction: column; align-items: center; padding: 24px 20px; transition: transform 0.3s cubic-bezier(.16,1,.3,1); }
         .court-card:hover { transform: translateY(-6px); }
-        .avatar { width: 100%; height: 150px; border: 1px solid var(--gold); background: #070403;
+        .avatar { width: 100%; height: 160px; border: 1px solid var(--gold); background: #070403;
             display: flex; align-items: center; justify-content: center; overflow: hidden; }
-        .avatar pre { font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.15; margin: 0;
-            color: var(--gold); white-space: pre; text-shadow: 0 0 10px rgba(212,175,55,0.4); }
+        .avatar svg { width: 118px; height: auto; image-rendering: pixelated;
+            filter: drop-shadow(0 0 8px rgba(212,175,55,0.35)); }
         .court-title { font-family: 'Bricolage Grotesque'; font-size: 24px; font-weight: 800; color: var(--gold);
             text-transform: uppercase; margin-top: 18px; letter-spacing: 0.02em; text-align: center; line-height: 1.1; }
         .court-persona { font-family: 'JetBrains Mono'; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.2em; margin-top: 4px; }
@@ -85,37 +85,20 @@
     </style>
 </head>
 <body>
-{# --- ASCII-art council portraits (JetBrains Mono, matches the wordmark) --- #}
+{# --- pixel-art council portraits (colored square grid -> crisp SVG) --- #}
+{% set PIXEL_PAL = {'#':'#0f0908','D':'#0f0908','S':'#caa06f','G':'#d4af37','K':'#060403','M':'#8a4b38','R':'#f5402d'} %}
+{% set PIXEL_FACES = {
+ 'Security': ['...GGGGG...','..GGGGGGG..','.GG#####GG.','.G#SSSSS#G.','.GDSSSSSDG.','..KKSSSKK..','..DSSSSSD..','..DS###SD..','..DSSSSSD..','...DSSSD...','..GG...GG..'],
+ 'Correctness': ['...DDDDD...','..DSSSSSD..','.DSSSSSSSD.','.DSKKSGGSD.','.DSSSSSGSD.','.DSMMMMMSD.','.DSSSSSSSD.','..DSSSSSD..','...DDDDD...','.....G.....','.....G.....'],
+ 'Blast-Radius': ['....R.R....','...DDDDD...','..DSSSSSD..','.DGGSGGGSD.','.DGKSGKGSD.','.DSSSSSSSD.','.DSMMMMMSD.','..DSSSSSD..','...DDDDD...','..R.....R..'],
+ 'Pragmatist': ['..GGGGGGG..','.GGGGGGGGG.','..#######..','..DSSSSSD..','.DSKSSSKSD.','.DSSSSSSSD.','.DSSMMMSSD.','.DSSSSSSSD.','..DSSSSSD..','...DDDDD...'],
+} %}
 {% macro avatar(persona) -%}
-{% if persona == 'Security' %}
-<pre>  .----.
- /_.--._\
- |[¯][¯]|
- | .--. |
- \ '==' /
-  '||||'</pre>
-{% elif persona == 'Correctness' %}
-<pre>  .----.
- / o  o\
- |  <   |
- | .Q.__|
- \ '--' /
-  '----'</pre>
-{% elif persona == 'Blast-Radius' %}
-<pre>  .----.
- /(o)(o)\
- |  <>  |
- | ==== |
- \ '~~' /
-  '----'</pre>
-{% else %}
-<pre> _.--._
-/ _  _ \
-| >  < |
-| .__. |
-\`----'/
- '||||'</pre>
-{% endif %}
+{% set grid = PIXEL_FACES.get(persona, PIXEL_FACES['Pragmatist']) %}
+{% set c = 9 %}
+<svg viewBox="0 0 {{ 11*c }} {{ (grid|length)*c }}" shape-rendering="crispEdges" width="{{ 11*c }}" height="{{ (grid|length)*c }}">
+{%- for row in grid %}{% set y = loop.index0 %}{% for ch in row %}{% if ch != '.' %}<rect x="{{ loop.index0*c }}" y="{{ y*c }}" width="{{ c }}" height="{{ c }}" fill="{{ PIXEL_PAL[ch] }}"/>{% endif %}{% endfor %}{% endfor -%}
+</svg>
 {%- endmacro %}
 {% set titles = {'Security':'The Warden','Correctness':'The Inspector','Blast-Radius':'The Assessor','Pragmatist':'The Operator'} %}
 {% set approvals = council_votes | selectattr('approve') | list | length if council_votes else 0 %}
