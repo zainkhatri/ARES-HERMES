@@ -1,106 +1,139 @@
-"""Ace-Attorney-style pixel portraits for the 4 council members.
-Draw at 56x64 with PIL shapes, upscale x8 NEAREST -> crisp pixel art."""
+"""Council portraits v2 — pixel-art fundamentals: outlines, jaw taper,
+hair mass with hairline, lidded eyes, closed mouths, rim lighting."""
 from PIL import Image, ImageDraw
 
-W, H = 56, 64
+W, H = 64, 72
+OUT = (16, 10, 8)  # universal dark outline
 
-def portrait(skin, skin_sh, skin_hi, hair, hair_hi, suit, suit_sh, shirt, tie,
-             eye, brow_angry=0, glasses=False, stubble=False, hairstyle="slick"):
-    im = Image.new("RGB", (W, H))
-    d = ImageDraw.Draw(im)
-    # courtroom wood background, vertical panels
+def bg(d):
     for x in range(W):
-        base = (58, 38, 24) if (x // 7) % 2 == 0 else (48, 30, 18)
+        panel = (x // 9) % 2
+        base = (66, 42, 26) if panel == 0 else (52, 32, 20)
         for y in range(H):
-            shade = max(0, 12 - abs(y - 20) // 3)
-            d.point((x, y), (base[0] + shade, base[1] + shade // 2, base[2]))
-    # shoulders / suit
-    d.polygon([(2, 63), (10, 46), (20, 41), (36, 41), (46, 46), (54, 63)], fill=suit)
-    d.polygon([(2, 63), (10, 46), (16, 44), (12, 63)], fill=suit_sh)
-    d.polygon([(44, 63), (46, 46), (40, 44), (54, 63)], fill=suit_sh)
-    # shirt V + tie
-    d.polygon([(22, 41), (28, 52), (34, 41)], fill=shirt)
-    d.polygon([(26, 42), (28, 50), (30, 42)], fill=tie)
-    d.polygon([(27, 50), (28, 58), (29, 50)], fill=tie)
-    # neck
-    d.rectangle([24, 36, 32, 44], fill=skin_sh)
-    # head
-    d.ellipse([13, 6, 43, 42], fill=skin)
-    # face shading: left highlight, right shadow
-    d.ellipse([15, 10, 33, 40], fill=skin_hi)
-    d.ellipse([17, 12, 41, 41], fill=skin)
-    d.polygon([(36, 14), (42, 20), (42, 36), (34, 41)], fill=skin_sh)
-    # jaw shadow
-    d.line([(20, 40), (36, 40)], fill=skin_sh)
+            v = max(0, 10 - abs(y - 22) // 4)
+            d.point((x, y), (base[0]+v, base[1]+v//2, base[2]))
+    # vertical panel seams
+    for x in range(0, W, 9):
+        d.line([(x, 0), (x, H)], fill=(38, 24, 15))
+
+def portrait(skin, sh, hi, hair, hhi, suit, ssh, shirt, tie, eye,
+             brow=-2, glasses=False, stubble=False, style="slick"):
+    im = Image.new("RGB", (W, H)); d = ImageDraw.Draw(im)
+    bg(d)
+
+    # --- suit / shoulders (with outline) ---
+    shoulders = [(0, 71), (8, 54), (20, 48), (44, 48), (56, 54), (63, 71)]
+    d.polygon(shoulders, fill=suit, outline=OUT)
+    d.polygon([(0, 71), (8, 54), (14, 51), (10, 71)], fill=ssh)
+    d.polygon([(54, 71), (56, 54), (50, 51), (63, 71)], fill=ssh)
+    # lapels + shirt + tie
+    d.polygon([(24, 48), (32, 60), (40, 48)], fill=shirt, outline=OUT)
+    d.polygon([(30, 49), (32, 57), (34, 49)], fill=tie)
+    d.polygon([(31, 57), (32, 66), (33, 57)], fill=tie)
+
+    # --- neck ---
+    d.rectangle([27, 42, 37, 50], fill=sh, outline=None)
+    d.line([(27, 42), (27, 50)], fill=OUT); d.line([(37, 42), (37, 50)], fill=OUT)
+
+    # --- head: tapered jaw, not an egg ---
+    head = [(18, 14), (14, 22), (14, 32), (17, 39), (23, 45), (28, 47),
+            (36, 47), (41, 45), (47, 39), (50, 32), (50, 22), (46, 14),
+            (40, 9), (24, 9)]
+    d.polygon(head, fill=skin, outline=OUT)
+    # shading: right-side shadow band, left highlight
+    d.polygon([(42, 14), (49, 22), (49, 32), (46, 39), (40, 44), (36, 46),
+               (40, 36), (42, 24)], fill=sh)
+    d.polygon([(17, 18), (16, 30), (19, 24)], fill=hi)
     # ears
-    d.ellipse([11, 22, 16, 30], fill=skin)
-    d.ellipse([40, 22, 45, 30], fill=skin_sh)
-    # hair
-    if hairstyle == "slick":  # swept back, widow's peak
-        d.polygon([(11, 22), (12, 8), (22, 2), (36, 2), (45, 9), (45, 22),
-                   (41, 13), (34, 9), (28, 12), (22, 9), (15, 14)], fill=hair)
-        d.line([(16, 7), (26, 4)], fill=hair_hi, width=2)
-    elif hairstyle == "spiky":
-        d.polygon([(11, 20), (10, 8), (16, 10), (18, 2), (24, 9), (28, 1),
-                   (33, 9), (39, 3), (42, 11), (46, 8), (45, 20),
-                   (40, 12), (30, 9), (20, 12), (15, 15)], fill=hair)
-        d.line([(19, 6), (23, 9)], fill=hair_hi, width=1)
-        d.line([(29, 4), (31, 8)], fill=hair_hi, width=1)
-    elif hairstyle == "side":  # neat side part
-        d.polygon([(11, 22), (12, 7), (24, 3), (38, 4), (45, 12), (45, 22),
-                   (42, 14), (36, 10), (24, 10), (16, 15)], fill=hair)
-        d.line([(15, 9), (24, 6)], fill=hair_hi, width=2)
-    elif hairstyle == "buzz":
-        d.polygon([(12, 20), (13, 9), (22, 4), (34, 4), (44, 10), (44, 20),
-                   (40, 13), (32, 10), (22, 11), (16, 15)], fill=hair)
-    # brows (angry tilt)
-    a = brow_angry
-    d.line([(19, 19 + a), (26, 19)], fill=(20, 12, 8), width=2)
-    d.line([(31, 19), (38, 19 + a)], fill=(20, 12, 8), width=2)
-    # eyes
-    for ex in (20, 32):
-        d.rectangle([ex, 22, ex + 5, 25], fill=(235, 228, 210))
-        d.rectangle([ex + 2, 22, ex + 4, 25], fill=eye)
-        d.point((ex + 2, 22), (250, 250, 250))
-        d.line([(ex, 21), (ex + 5, 21)], fill=(30, 18, 12))
+    d.rectangle([12, 24, 15, 31], fill=skin, outline=OUT)
+    d.rectangle([49, 24, 52, 31], fill=sh, outline=OUT)
+
+    # --- eyes: small, lidded, dark ---
+    for ex, shade in ((22, False), (36, True)):
+        d.line([(ex, 25), (ex + 6, 25)], fill=OUT)                 # upper lid
+        d.rectangle([ex + 1, 26, ex + 5, 28], fill=(238, 230, 214))
+        px = ex + 3
+        d.rectangle([px - 1, 26, px + 1, 28], fill=eye)
+        d.point((px, 26), (12, 8, 6))                              # pupil
+        d.point((px - 1, 26), (252, 250, 245))                     # glint
+        d.line([(ex + 1, 29), (ex + 5, 29)], fill=sh)              # lower lid
+    # brows: thick, angled
+    d.line([(20, 22 + brow), (28, 23)], fill=OUT, width=2)
+    d.line([(36, 23), (44, 22 + brow)], fill=OUT, width=2)
+
     if glasses:
-        g = (200, 170, 90)
-        d.rectangle([18, 20, 27, 27], outline=g)
-        d.rectangle([30, 20, 39, 27], outline=g)
-        d.line([(27, 23), (30, 23)], fill=g)
-    # nose
-    d.line([(28, 26), (27, 31)], fill=skin_sh, width=1)
-    d.line([(26, 32), (30, 32)], fill=skin_sh)
-    # mouth (stern flat line)
-    d.line([(24, 36), (33, 36)], fill=(110, 55, 45), width=2)
+        g = (212, 180, 96)
+        d.rectangle([19, 24, 29, 30], outline=g)
+        d.rectangle([35, 24, 45, 30], outline=g)
+        d.line([(29, 26), (35, 26)], fill=g)
+        d.line([(19, 25), (15, 24)], fill=g); d.line([(45, 25), (49, 24)], fill=g)
+
+    # --- nose: shadow-side wedge ---
+    d.line([(32, 29), (31, 34)], fill=sh)
+    d.line([(31, 35), (34, 35)], fill=sh)
+    d.point((34, 34), sh)
+
+    # --- mouth: closed, slight frown ---
+    d.line([(27, 40), (30, 41)], fill=(96, 46, 40), width=1)
+    d.line([(30, 41), (36, 41)], fill=(96, 46, 40), width=1)
+    d.line([(36, 41), (38, 40)], fill=(96, 46, 40), width=1)
+    d.line([(28, 43), (36, 43)], fill=sh)  # lower-lip shadow
+
     if stubble:
-        for px in range(20, 38, 2):
-            for py in range(37, 41, 2):
-                d.point((px, py), skin_sh)
+        pts = [(21,44),(23,45),(24,43),(26,46),(28,45),(31,46),(33,45),(35,46),
+               (37,45),(39,44),(41,43),(42,44),(22,42),(40,41),(25,44),(38,46)]
+        for px, py in pts:
+            if im.getpixel((px, py)) in (skin, sh):
+                d.point((px, py), (150, 108, 80))
+
+    # --- hair (drawn last, over forehead) ---
+    if style == "slick":       # swept back w/ widow's peak, AA-protagonist vibe
+        d.polygon([(12, 26), (11, 12), (18, 4), (32, 1), (46, 4), (53, 12), (52, 26),
+                   (48, 14), (42, 10), (34, 12), (32, 13), (30, 12), (22, 10), (16, 14)],
+                  fill=hair, outline=OUT)
+        d.line([(17, 8), (28, 4)], fill=hhi, width=2)
+        d.line([(38, 4), (47, 9)], fill=hhi, width=1)
+    elif style == "side":      # neat side part, flat across brow
+        d.polygon([(12, 26), (12, 10), (22, 4), (40, 4), (52, 11), (52, 26),
+                   (49, 16), (46, 12), (24, 12), (18, 14), (15, 18)],
+                  fill=hair, outline=OUT)
+        d.line([(20, 8), (38, 6)], fill=hhi, width=2)
+    elif style == "spiky":
+        d.polygon([(12, 24), (10, 10), (16, 12), (17, 3), (24, 10), (30, 0),
+                   (36, 9), (44, 2), (46, 11), (54, 8), (52, 24),
+                   (48, 14), (40, 11), (30, 13), (20, 12), (15, 16)],
+                  fill=hair, outline=OUT)
+        d.line([(18, 6), (22, 10)], fill=hhi, width=1)
+        d.line([(31, 3), (33, 9)], fill=hhi, width=1)
+        d.line([(43, 5), (45, 10)], fill=hhi, width=1)
+    elif style == "buzz":
+        d.polygon([(13, 22), (13, 12), (20, 6), (32, 4), (44, 6), (51, 12), (51, 22),
+                   (47, 14), (38, 11), (26, 11), (18, 14)],
+                  fill=hair, outline=OUT)
+
     return im
 
-SKIN   = (232, 178, 130); SKIN_S = (188, 128, 88); SKIN_H = (246, 202, 158)
+SKIN = (236, 184, 138); SH = (196, 134, 92); HI = (248, 208, 164)
 DEFS = {
- "security":    dict(hair=(24, 20, 22), hair_hi=(70, 66, 78), suit=(38, 42, 56), suit_sh=(26, 29, 40),
-                     shirt=(235, 232, 224), tie=(170, 40, 36), eye=(60, 110, 70),
-                     brow_angry=-3, hairstyle="slick"),
- "correctness": dict(hair=(88, 58, 30), hair_hi=(140, 100, 55), suit=(70, 52, 38), suit_sh=(52, 38, 27),
-                     shirt=(235, 232, 224), tie=(60, 80, 120), eye=(90, 65, 40),
-                     brow_angry=0, glasses=True, hairstyle="side"),
- "blast":       dict(hair=(178, 60, 34), hair_hi=(230, 120, 60), suit=(80, 34, 30), suit_sh=(58, 24, 21),
-                     shirt=(225, 220, 205), tie=(30, 26, 24), eye=(70, 90, 130),
-                     brow_angry=-2, hairstyle="spiky"),
- "pragmatist":  dict(hair=(52, 44, 38), hair_hi=(90, 80, 70), suit=(60, 62, 52), suit_sh=(44, 46, 38),
-                     shirt=(220, 214, 198), tie=(140, 100, 40), eye=(80, 70, 50),
-                     brow_angry=-1, stubble=True, hairstyle="buzz"),
+ "security":    dict(hair=(28, 24, 28), hhi=(84, 80, 96), suit=(40, 46, 62), ssh=(28, 32, 44),
+                     shirt=(238, 235, 228), tie=(178, 42, 38), eye=(52, 108, 66), brow=-3, style="slick"),
+ "correctness": dict(hair=(96, 62, 32), hhi=(150, 106, 58), suit=(74, 56, 40), ssh=(54, 40, 29),
+                     shirt=(238, 235, 228), tie=(56, 78, 122), eye=(96, 68, 42), brow=0,
+                     glasses=True, style="side"),
+ "blast":       dict(hair=(190, 62, 32), hhi=(240, 128, 58), suit=(86, 34, 30), ssh=(62, 24, 21),
+                     shirt=(228, 222, 208), tie=(28, 24, 22), eye=(66, 92, 136), brow=-3, style="spiky"),
+ "pragmatist":  dict(hair=(56, 46, 40), hhi=(96, 84, 74), suit=(62, 64, 54), ssh=(46, 48, 40),
+                     shirt=(222, 216, 200), tie=(146, 104, 42), eye=(84, 72, 52), brow=-1,
+                     stubble=True, style="buzz"),
 }
 import sys
 out = sys.argv[1] if len(sys.argv) > 1 else "/tmp"
-sheet = Image.new("RGB", (W * 8 * 4 + 24, H * 8), (10, 6, 5))
+S = 8
+sheet = Image.new("RGB", (W*S*4 + 24, H*S), (10, 6, 5))
 for i, (name, kw) in enumerate(DEFS.items()):
-    im = portrait(SKIN, SKIN_S, SKIN_H, **kw)
-    big = im.resize((W * 8, H * 8), Image.NEAREST)
+    im = portrait(SKIN, SH, HI, **kw)
+    big = im.resize((W*S, H*S), Image.NEAREST)
     big.save(f"{out}/{name}.png")
-    sheet.paste(big, (i * (W * 8 + 8), 0))
+    sheet.paste(big, (i*(W*S+8), 0))
 sheet.save("/tmp/council_sheet.png")
 print("done")
