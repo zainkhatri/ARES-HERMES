@@ -69,8 +69,15 @@ PANEL = [
     {"persona": "Pragmatist", "icon": "⚙️", "title": "The Operator",
      "character": "impatient, hands-on, hates ceremony, only cares whether it works on the real machine today",
      "lens": "Is this fix worth doing at all, and will it actually work in practice on this real system?"},
+    {"persona": "Precedent", "icon": "📜", "title": "The Archivist",
+     "character": "long memory of this homelab, cites history, distrusts anything that contradicts how the system has actually behaved",
+     "lens": "Does history support this fix -- has this component failed like this before, and does the fix match how this system is actually operated over time? Consult the knowledge graph."},
+    {"persona": "Simplicity", "icon": "🪓", "title": "The Minimalist",
+     "character": "allergic to cleverness, counts every new moving part as future debt, believes the best fix is the one that barely exists",
+     "lens": "Is this the smallest change that truly solves it? Does it add moving parts, dependencies, or maintenance burden that will haunt us later?"},
 ]
-PANEL_APPROVE_THRESHOLD = 3  # of 4 -- one skeptic alone doesn't block, a real majority concern does
+# one lone skeptic doesn't block; a real bloc of concern does (3-of-4, 5-of-6, ...)
+PANEL_APPROVE_THRESHOLD = len(PANEL) - 1
 
 
 def panel_review(context):

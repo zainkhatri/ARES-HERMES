@@ -10,7 +10,8 @@ from PIL import Image
 SHEET_URL = "https://opengameart.org/sites/default/files/portraits.png"
 XS = [5, 38, 71, 104, 137]
 YS = [7, 40, 73]
-PICKS = {"security": (2, 1), "correctness": (1, 0), "blast": (2, 2), "pragmatist": (0, 1)}
+PICKS = {"security": (2, 1), "correctness": (1, 0), "blast": (2, 2), "pragmatist": (0, 1),
+         "precedent": (2, 0), "simplicity": (0, 0)}
 
 def main(out_dir):
     data = urllib.request.urlopen(SHEET_URL, timeout=30).read()

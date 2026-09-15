@@ -64,6 +64,8 @@
         .court-title { font-family: 'Bricolage Grotesque'; font-size: 24px; font-weight: 800; color: var(--gold);
             text-transform: uppercase; margin-top: 18px; letter-spacing: 0.02em; text-align: center; line-height: 1.1; }
         .court-persona { font-family: 'JetBrains Mono'; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.2em; margin-top: 4px; }
+        .court-bio { font-family: 'Bricolage Grotesque'; font-size: 13px; font-style: italic; color: var(--text-3);
+            line-height: 1.45; margin-top: 10px; text-align: center; }
         .court-vote { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 14px; letter-spacing: 0.1em; margin-top: 16px; padding: 6px 16px; border: 2px solid currentColor; }
         .court-vote.yes { color: var(--green); } .court-vote.no { color: var(--red); }
         .court-take { font-family: 'Bricolage Grotesque'; font-size: 15px; color: var(--text-2); line-height: 1.5; margin-top: 16px; text-align: center; }
@@ -85,11 +87,18 @@
 </head>
 <body>
 {# --- pixel-art council portraits (PNG sprites from scripts/council_portraits.py) --- #}
-{% set PORTRAITS = {'Security':'security','Correctness':'correctness','Blast-Radius':'blast','Pragmatist':'pragmatist'} %}
+{% set PORTRAITS = {'Security':'security','Correctness':'correctness','Blast-Radius':'blast','Pragmatist':'pragmatist','Precedent':'precedent','Simplicity':'simplicity'} %}
+{% set BIOS = {
+ 'Security':'Keeper of the gates. Trusts nothing by default; anything that widens the attack surface dies here.',
+ 'Correctness':'The scrutineer. Only cares whether the root cause is truly solved, not papered over.',
+ 'Blast-Radius':'Veteran of every worst case. Asks "and then what breaks?" before anything ships.',
+ 'Pragmatist':'Hands-on and impatient. If it does not work on the real machine today, it does not count.',
+ 'Precedent':'The long memory of this homelab. Cites history and distrusts fixes that contradict it.',
+ 'Simplicity':'Counts every moving part as future debt. The best fix is the one that barely exists.'} %}
 {% macro avatar(persona) -%}
-<img src="/static/council/{{ PORTRAITS.get(persona, 'pragmatist') }}.png?v=9" alt="{{ persona }}" loading="lazy">
+<img src="/static/council/{{ PORTRAITS.get(persona, 'pragmatist') }}.png?v=10" alt="{{ persona }}" loading="lazy">
 {%- endmacro %}
-{% set titles = {'Security':'The Warden','Correctness':'The Inspector','Blast-Radius':'The Assessor','Pragmatist':'The Operator'} %}
+{% set titles = {'Security':'The Warden','Correctness':'The Inspector','Blast-Radius':'The Assessor','Pragmatist':'The Operator','Precedent':'The Archivist','Simplicity':'The Minimalist'} %}
 {% set approvals = council_votes | selectattr('approve') | list | length if council_votes else 0 %}
 {% set total = council_votes|length if council_votes else 0 %}
 {% set cleared = total and approvals * 4 >= total * 3 %}
@@ -148,12 +157,13 @@
             <div class="mb-16">
                 <div class="rail">The Council</div>
                 {% if council_votes %}
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {% for v in council_votes %}
                     <div class="court-card mod c-tl c-tr c-bl c-br">
                         <div class="avatar">{{ avatar(v.persona) }}</div>
                         <h3 class="court-title">{{ v.title or titles.get(v.persona, v.persona) }}</h3>
                         <span class="court-persona">{{ v.persona }}</span>
+                        {% if BIOS.get(v.persona) %}<p class="court-bio">{{ BIOS[v.persona] }}</p>{% endif %}
                         <span class="court-vote {{ 'yes' if v.approve else 'no' }}">{{ 'APPROVE' if v.approve else 'REJECT' }}</span>
                         <p class="court-take">{{ v.verdict }}</p>
                     </div>
