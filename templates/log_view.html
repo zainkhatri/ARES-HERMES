@@ -58,11 +58,9 @@
         .court-card { position: relative; border: 2px solid var(--gold); background: #1a0f0d;
             display: flex; flex-direction: column; align-items: center; padding: 24px 20px; transition: transform 0.3s cubic-bezier(.16,1,.3,1); }
         .court-card:hover { transform: translateY(-6px); }
-        .avatar { width: 100%; height: 180px; border: 1px solid var(--gold);
-            background: radial-gradient(circle at 50% 35%, #1a1008, #050302);
-            display: flex; align-items: center; justify-content: center; overflow: hidden; }
-        .avatar svg { width: 150px; height: auto; image-rendering: pixelated;
-            filter: drop-shadow(0 0 10px rgba(212,175,55,0.3)); }
+        .avatar { width: 100%; height: 200px; border: 1px solid var(--gold);
+            background: #050302; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
         .court-title { font-family: 'Bricolage Grotesque'; font-size: 24px; font-weight: 800; color: var(--gold);
             text-transform: uppercase; margin-top: 18px; letter-spacing: 0.02em; text-align: center; line-height: 1.1; }
         .court-persona { font-family: 'JetBrains Mono'; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.2em; margin-top: 4px; }
@@ -86,20 +84,10 @@
     </style>
 </head>
 <body>
-{# --- pixel-art council portraits (16-wide shaded busts -> crisp SVG) --- #}
-{% set PIXEL_PAL = {'o':'#0a0605','d':'#8a5a35','s':'#c08a56','h':'#e3b483','G':'#d4af37','g':'#9c7b23','K':'#050302','w':'#f0e8d8','M':'#6e3a2c','B':'#7c93a8','r':'#7a4a2c','R':'#f5402d'} %}
-{% set PIXEL_FACES = {
- 'Security': ['.....GGggGG.....', '...GGGGggGGGG...', '..GGGGGggGGGGG..', '.GGgggGggGgggGG.', '.GoosshhhhssooG.', '.GoggggggggggoG.', '.GoshhhhhhhhsoG.', '.oshhhhhhhhhhso.', '.oshKwhhhhwKhso.', '.osshhhhhhhhsso.', '.oshddhhhhddhso.', '.osshhhhhhhhsso.', '.osshhMMMMhhsso.', '..osshhhhhhsso..', '...ooshhhhsoo...', '....ooshhsoo....', '...ooBBBBBBoo...', '..oBBBBBBBBBBo..'],
- 'Correctness': ['................', '................', '....orrrrrro....', '..orrrhhhhrrro..', '...ooshhhhsoo...', '..osshhhhhhsso..', '..oshhhhhhhhso..', '.oshhhhhhhhhhso.', '.oGKwGhhhhGwKGo.', '.osGGhhhhhhGGso.', '.oshddhhhhddhso.', '.osshhhhhhhhsso.', '.osshhMMMMhhsso.', '..osshhhhhhsso..', '...ooshhhhsoo...', '....ooshhsoo....', '...oorrrrrroo...', '..orrrrrrrrrro..'],
- 'Blast-Radius': ['.......RR.......', '................', '....RGGGGGGR....', '.....oossoo.....', '...ooshhhhsoo...', '..osshhhhhhsso..', '..oshhhhhhhhso..', '.oGGGGGGGGGGGGo.', '.oGKwGhhhhGwKGo.', '.oGGGGhhhhGGGGo.', '.oshddhhhhddhso.', '.osshhhhhhhhsso.', '.osshhMMMMhhsso.', '..osshhhhhhsso..', '...ooshhhhsoo...', '....ooshhsoo....', '...oooooooooo...', '..oooooooooooo..'],
- 'Pragmatist': ['...GGGGGGGGGG...', '.GGGGGGGGGGGGGG.', '.GGGGGGGGGGGGGG.', '.ooooossssooooo.', '...ooshhhhsoo...', '..osshhhhhhsso..', '..oshhhhhhhhso..', '.oshhhhhhhhhhso.', '.oshKwhhhhwKhso.', '.osshhhhhhhhsso.', '.oshddhhhhddhso.', '.osshhhhhhhhsso.', '.osshhMMMMhhsso.', '..osshhhhhhsso..', '...ooshhhhsoo...', '....ooshhsoo....', '...oorrrrrroo...', '..orrrrrrrrrro..'],
-} %}
+{# --- pixel-art council portraits (PNG sprites from scripts/council_portraits.py) --- #}
+{% set PORTRAITS = {'Security':'security','Correctness':'correctness','Blast-Radius':'blast','Pragmatist':'pragmatist'} %}
 {% macro avatar(persona) -%}
-{% set grid = PIXEL_FACES.get(persona, PIXEL_FACES['Pragmatist']) %}
-{% set c = 8 %}
-<svg viewBox="0 0 {{ 16*c }} {{ (grid|length)*c }}" shape-rendering="crispEdges" width="{{ 16*c }}" height="{{ (grid|length)*c }}">
-{%- for row in grid %}{% set y = loop.index0 %}{% for ch in row %}{% if ch != '.' %}<rect x="{{ loop.index0*c }}" y="{{ y*c }}" width="{{ c }}" height="{{ c }}" fill="{{ PIXEL_PAL.get(ch, '#caa06f') }}"/>{% endif %}{% endfor %}{% endfor -%}
-</svg>
+<img src="/static/council/{{ PORTRAITS.get(persona, 'pragmatist') }}.png" alt="{{ persona }}" loading="lazy">
 {%- endmacro %}
 {% set titles = {'Security':'The Warden','Correctness':'The Inspector','Blast-Radius':'The Assessor','Pragmatist':'The Operator'} %}
 {% set approvals = council_votes | selectattr('approve') | list | length if council_votes else 0 %}
