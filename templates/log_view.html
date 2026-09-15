@@ -96,7 +96,7 @@
  'Precedent':'The long memory of this homelab. Cites history and distrusts fixes that contradict it.',
  'Simplicity':'Counts every moving part as future debt. The best fix is the one that barely exists.'} %}
 {% macro avatar(persona) -%}
-<img src="/static/council/{{ PORTRAITS.get(persona, 'pragmatist') }}.png?v=10" alt="{{ persona }}" loading="lazy">
+<img src="/static/council/{{ PORTRAITS.get(persona, 'pragmatist') }}.png?v=11" alt="{{ persona }}" loading="lazy">
 {%- endmacro %}
 {% set titles = {'Security':'The Warden','Correctness':'The Inspector','Blast-Radius':'The Assessor','Pragmatist':'The Operator','Precedent':'The Archivist','Simplicity':'The Minimalist'} %}
 {% set approvals = council_votes | selectattr('approve') | list | length if council_votes else 0 %}
