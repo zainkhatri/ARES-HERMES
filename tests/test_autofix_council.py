@@ -106,3 +106,19 @@ def test_panel_review_synthesis_failure_keeps_votes(monkeypatch):
     result = council.panel_review("ctx")
     assert result["approved"] is True
     assert result["summary"] == {}
+
+
+def test_ask_parses_fenced_json(monkeypatch):
+    monkeypatch.setattr(council.subprocess, "run",
+                         lambda *a, **k: _FakeCompleted('```json\n{"approve": true, "verdict": "fenced"}\n```'))
+    approved, verdict = council.ask("prompt")
+    assert approved is True
+    assert verdict == "fenced"
+
+
+def test_ask_parses_multiline_json_with_prose(monkeypatch):
+    out = 'Here is my ruling:\n```json\n{\n  "approve": false,\n  "verdict": "multiline"\n}\n```'
+    monkeypatch.setattr(council.subprocess, "run", lambda *a, **k: _FakeCompleted(out))
+    approved, verdict = council.ask("prompt")
+    assert approved is False
+    assert verdict == "multiline"

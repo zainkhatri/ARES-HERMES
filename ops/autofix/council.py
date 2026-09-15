@@ -24,9 +24,30 @@ KG_GUIDANCE = (
 )
 
 
+def _extract_json(stdout):
+    """Returns the last parseable JSON object in stdout, or raises.
+    Models sometimes wrap the answer in ```json fences or add trailing
+    prose -- scan lines from the end, skipping fence markers, and fall
+    back to the last {...} block for multi-line JSON."""
+    lines = [l for l in stdout.strip().splitlines() if l.strip() and not l.strip().startswith("```")]
+    for line in reversed(lines):
+        try:
+            return json.loads(line)
+        except ValueError:
+            continue
+    text = "\n".join(lines)
+    start, end = text.rfind("{"), text.rfind("}")
+    while start != -1:
+        try:
+            return json.loads(text[start:end + 1])
+        except ValueError:
+            start = text.rfind("{", 0, start)
+    raise ValueError("no JSON object found in council output")
+
+
 def ask(prompt, max_turns=8, timeout=300):
     """Runs prompt through headless claude -p, expects a JSON object with
-    at least {"approve": bool, "verdict": str} on the LAST line of stdout.
+    at least {"approve": bool, "verdict": str} in stdout.
     Fails closed (approve=False) on any error -- an uncertain council call
     should never silently green-light something."""
     try:
@@ -34,7 +55,7 @@ def ask(prompt, max_turns=8, timeout=300):
             ["claude", "-p", prompt, "--max-turns", str(max_turns)],
             capture_output=True, text=True, timeout=timeout,
         )
-        parsed = json.loads(r.stdout.strip().splitlines()[-1])
+        parsed = _extract_json(r.stdout)
         return bool(parsed["approve"]), str(parsed["verdict"])
     except Exception as e:
         return False, f"council invocation failed, fail-closed: {e}"
@@ -47,7 +68,7 @@ def _ask_json(prompt, max_turns=8, timeout=300):
             ["claude", "-p", prompt, "--max-turns", str(max_turns)],
             capture_output=True, text=True, timeout=timeout,
         )
-        return json.loads(r.stdout.strip().splitlines()[-1])
+        return _extract_json(r.stdout)
     except Exception:
         return None
 
