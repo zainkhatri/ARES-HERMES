@@ -13,15 +13,35 @@ paying-client business box). The standalone HTTP service (__main__ below)
 remains as a manual fallback/override path, same auth boundary."""
 import hashlib
 import json
+import os
 import subprocess
 import time
 
 import denylist
 
 
-def resolve_live_file_path(repo_root, target_file):
-    import os
-    return os.path.join(repo_root, target_file)
+# Repos the autofixer is allowed to write into. ARES-DASHBOARD is the default;
+# atlas (the homelab knowledge-graph the council itself queries) is a sibling
+# under the same PROJECTS root, so a KG code fix no longer has to fall back to
+# a human recommendation just because the file lives one directory over.
+_PROJECTS_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+TARGET_REPOS = {
+    "ARES-DASHBOARD": os.path.join(_PROJECTS_ROOT, "ARES-DASHBOARD"),
+    "atlas": os.path.join(_PROJECTS_ROOT, "atlas"),
+}
+
+
+def resolve_live_file_path(repo_root, target_file, target_repo=None):
+    """Resolves a diagnosis's target file to an absolute path. If target_repo
+    is given it must be an allowlisted repo (TARGET_REPOS); otherwise the
+    passed repo_root is used. Fails closed (returns None) if the resolved path
+    escapes its repo root -- blocks '../' traversal out of the allowlist."""
+    root = TARGET_REPOS.get(target_repo, repo_root) if target_repo else repo_root
+    full = os.path.realpath(os.path.join(root, target_file))
+    if os.path.commonpath([full, os.path.realpath(root)]) != os.path.realpath(root):
+        return None  # target escapes its repo -- refuse
+    return full
 
 
 def systemctl_restart(unit_name):
@@ -211,7 +231,11 @@ if __name__ == "__main__":
             result_status = run_commands(incident, box, run_fn=lambda cmd: run_command(box, cmd))
         else:
             unit_name = diag.get("unit_name", "")
-            live_file_path = resolve_live_file_path(REPO_ROOT, diag.get("target_file", ""))
+            live_file_path = resolve_live_file_path(
+                REPO_ROOT, diag.get("target_file", ""), diag.get("target_repo"))
+            if live_file_path is None:
+                store.set_status(incident_id, "stale_diff_needs_human")
+                return jsonify({"error": "target path escapes allowlisted repo"}), 409
             result_status = apply_and_restart(
                 incident, live_file_path, unit_name,
                 restart_fn=systemctl_restart, healthcheck_fn=systemctl_healthy,

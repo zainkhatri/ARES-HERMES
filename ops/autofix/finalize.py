@@ -66,7 +66,11 @@ def _auto_apply_if_ares(store, incident_id, box):
     if diag.get("commands"):
         result_status = apply.run_commands(incident, box, run_fn=lambda cmd: apply.run_command(box, cmd))
     else:
-        live_file_path = apply.resolve_live_file_path(REPO_ROOT, diag.get("target_file", ""))
+        live_file_path = apply.resolve_live_file_path(
+            REPO_ROOT, diag.get("target_file", ""), diag.get("target_repo"))
+        if live_file_path is None:
+            store.set_status(incident_id, "stale_diff_needs_human")
+            return "stale_diff_needs_human"
         result_status = apply.apply_and_restart(
             incident, live_file_path, diag.get("unit_name", ""),
             restart_fn=apply.systemctl_restart, healthcheck_fn=apply.systemctl_healthy,

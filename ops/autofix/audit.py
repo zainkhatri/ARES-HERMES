@@ -65,11 +65,15 @@ For each finding, write ONE object with these exact keys:
   box: "ARES" | "EROS" | "ZEUS"
   reasoning: what's wrong and why it matters, in plain text
   fix_title: short (under 12 words) summary of the proposed fix
-  -- THEN EITHER (if the fix is a code change inside this ARES-DASHBOARD repo):
+  -- THEN EITHER (if the fix is a code change inside a writable repo):
   diff: unified diff text
   diff_hash: sha256 hex digest of the diff text
   base_snapshot_hash: sha256 hex digest of the target file before your change
-  target_file: path relative to the repo root
+  target_file: path relative to the target repo root
+  target_repo: which repo the file lives in -- "ARES-DASHBOARD" (default, this repo)
+    or "atlas" (the homelab knowledge-graph at PROJECTS/atlas). Both are writable and
+    apply through the same council + denylist + hash-verify + revert safety path, so a
+    KG code fix should ship as a real diff (target_repo "atlas"), NOT a manual recommendation.
   unit_name: systemd unit to restart to pick up the change, or "" if none
   -- OR (if it's a remote-host/config fix, or an ARES host-level fix that isn't a repo diff):
   manual_steps: plain-English description of what should happen and why (always include this)

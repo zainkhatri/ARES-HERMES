@@ -236,3 +236,14 @@ def test_verify_commands_hash_mismatch():
 
 def test_resolve_live_file_path_is_relative_to_repo_root():
     assert applymod.resolve_live_file_path("/repo", "photos/x.py") == "/repo/photos/x.py"
+
+
+def test_resolve_target_repo_atlas_and_traversal_guard():
+    # atlas repo resolves under the sibling PROJECTS/atlas root
+    p = applymod.resolve_live_file_path("/unused", "atlas/store.py", "atlas")
+    assert p is not None and p.endswith("/atlas/atlas/store.py")
+    # a traversal attempt escaping the repo is refused (fails closed)
+    assert applymod.resolve_live_file_path("/unused", "../../etc/passwd", "atlas") is None
+    # unknown repo falls back to the passed repo_root
+    p2 = applymod.resolve_live_file_path("/tmp", "x.py", "no-such-repo")
+    assert p2 == "/tmp/x.py"
