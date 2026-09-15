@@ -1,86 +1,116 @@
-"""Council portraits v6 — hooded conclave figures. Vector SVG, no faces:
-robed silhouette, hood with gold trim, black void + glowing eyes, role sigil."""
+"""Council portraits v7 — pixel-art LAW council (judges).
+28x32 grid authored as 14-col left half + mirror. Powdered wigs, black robes,
+white jabot bands. Per-member wig/gear/palette variants."""
+from PIL import Image
 import sys
 
-W, H = 200, 240
+# K outline | W wig light | G wig shadow | S skin | M skin mid | s skin shadow
+# d dark skin accent | E eye | R robe | r robe highlight | J jabot | j jabot shadow
+# B accent (sash/trim) | . transparent
+HALF = [   # 14 cols, mirrored to 28
+"..............",
+"....KKKKKK....",
+"...KWWWWWWWWWW",
+"..KWWGWWWWWWWW",
+".KWGWWWWWWWWWW",
+".KWWKWWWWWWWWW",
+"KWGWKWWGWWWWWW",
+"KWWWK.KKKKKKKK",
+"KWGWK.KSSSSSSS",
+"KWWWKKSSSSSSSS",
+"KWGWKSSSSSSSSS",
+"KWWWKSKKKKSSSS",
+"KWGWKSKWWEKSSS",
+"KWWWKSSSSSSSSS",
+"KWGWKSSSSSSSSM",
+"KWWWKSSSSSSSsM",
+"KWGWKSSSSSKdSM",
+"KWWWKsSSSSSSMs",
+".KWWKSsSSSSKKK",
+".KWGKSSSSSSsss",
+".KWWKSSSSSSsss",
+"..KWKSSSSSSSss",
+"..KWKKsSSSSsss",
+"...KK.KssssssK",
+"......KKKKKKKK",
+"....KKRRRRKJJJ",
+"...KRRRRRRKJjJ",
+"..KRRRRRRRKJJJ",
+".KRRRRRRRRKJjJ",
+"KRRRRRRRRRKJJJ",
+"KRRRRRRRRRKJjJ",
+"KRRRRRRRRRRKJJ",
+]
 
-def figure(eye_color, sigil, hood="peak"):
-    # hood outlines per member for silhouette variety
-    hoods = {
-      "peak":  "M100 22 C 62 30, 44 62, 42 96 C 41 118, 46 132, 52 142 L 148 142 C 154 132, 159 118, 158 96 C 156 62, 138 30, 100 22 Z",
-      "round": "M100 26 C 58 34, 46 66, 45 98 C 44 120, 50 134, 56 142 L 144 142 C 150 134, 156 120, 155 98 C 154 66, 142 34, 100 26 Z",
-      "sharp": "M100 18 C 66 34, 48 60, 46 94 C 45 118, 48 132, 54 142 L 146 142 C 152 132, 155 118, 154 94 C 152 60, 134 34, 100 18 Z",
-      "wide":  "M100 26 C 54 32, 40 68, 40 100 C 40 122, 46 134, 52 142 L 148 142 C 154 134, 160 122, 160 100 C 160 68, 146 32, 100 26 Z",
-    }
-    hp = hoods[hood]
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}">
-<defs>
-  <radialGradient id="bg" cx="50%" cy="38%" r="75%">
-    <stop offset="0%" stop-color="#1c1008"/><stop offset="55%" stop-color="#0d0705"/><stop offset="100%" stop-color="#050302"/>
-  </radialGradient>
-  <linearGradient id="robe" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#241610"/><stop offset="100%" stop-color="#120a07"/>
-  </linearGradient>
-  <linearGradient id="hoodg" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#2e1d13"/><stop offset="100%" stop-color="#170e09"/>
-  </linearGradient>
-  <radialGradient id="void" cx="50%" cy="45%" r="60%">
-    <stop offset="0%" stop-color="#000000"/><stop offset="80%" stop-color="#000000"/><stop offset="100%" stop-color="#0a0503"/>
-  </radialGradient>
-  <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
-    <feGaussianBlur stdDeviation="2.4" result="b"/>
-    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter>
-  <filter id="bigglow" x="-120%" y="-120%" width="340%" height="340%">
-    <feGaussianBlur stdDeviation="5" result="b"/>
-    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter>
-</defs>
-<rect width="{W}" height="{H}" fill="url(#bg)"/>
-<!-- back-light halo behind the figure -->
-<ellipse cx="100" cy="112" rx="76" ry="88" fill="none" stroke="#d4af37" stroke-opacity="0.10" stroke-width="14"/>
-<!-- shoulders / robe -->
-<path d="M 22 240 C 28 186, 52 156, 78 146 L 122 146 C 148 156, 172 186, 178 240 Z" fill="url(#robe)" stroke="#3a2415" stroke-width="1.5"/>
-<!-- robe center opening -->
-<path d="M 88 152 L 100 240 L 112 152 Z" fill="#0a0504"/>
-<path d="M 88 152 L 100 240 M 112 152 L 100 240" stroke="#d4af37" stroke-opacity="0.35" stroke-width="1.2" fill="none"/>
-<!-- gold shoulder seams -->
-<path d="M 40 214 C 48 180, 64 160, 80 151" stroke="#d4af37" stroke-opacity="0.28" stroke-width="1.4" fill="none"/>
-<path d="M 160 214 C 152 180, 136 160, 120 151" stroke="#d4af37" stroke-opacity="0.28" stroke-width="1.4" fill="none"/>
-<!-- hood -->
-<path d="{hp}" fill="url(#hoodg)" stroke="#3a2415" stroke-width="1.5"/>
-<!-- hood gold trim (inner rim) -->
-<path d="M 58 140 C 55 112, 60 78, 100 66 C 140 78, 145 112, 142 140 L 136 142 C 139 114, 133 84, 100 74 C 67 84, 61 114, 64 142 Z"
-      fill="#d4af37" opacity="0.85"/>
-<!-- face void -->
-<path d="M 64 142 C 61 112, 68 84, 100 74 C 132 84, 139 112, 136 142 C 124 148, 76 148, 64 142 Z" fill="url(#void)"/>
-<!-- glowing eyes -->
-<g filter="url(#bigglow)">
-  <rect x="80" y="108" width="12" height="3.6" rx="1.8" fill="{eye_color}"/>
-  <rect x="108" y="108" width="12" height="3.6" rx="1.8" fill="{eye_color}"/>
-</g>
-<!-- collar clasp + sigil -->
-<circle cx="100" cy="168" r="15" fill="#0d0705" stroke="#d4af37" stroke-width="1.6"/>
-<g filter="url(#glow)" stroke="#d4af37" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-{sigil}
-</g>
-</svg>'''
+def mirror(half_rows):
+    out = []
+    for r in half_rows:
+        r = r.ljust(14, '.')
+        out.append(r + r[::-1])
+    return out
 
-SIGILS = {
- # shield
- "security": '<path d="M100 159 L108 162 L108 170 C108 175, 104 178, 100 180 C96 178, 92 175, 92 170 L92 162 Z"/>',
- # eye
- "correctness": '<path d="M91 169 C95 163, 105 163, 109 169 C105 175, 95 175, 91 169 Z"/><circle cx="100" cy="169" r="2.4"/>',
- # burst
- "blast": '<path d="M100 160 L100 166 M100 172 L100 178 M91 169 L97 169 M103 169 L109 169 M94 163 L98 167 M102 171 L106 175 M106 163 L102 167 M98 171 L94 175"/>',
- # gear
- "pragmatist": '<circle cx="100" cy="169" r="5"/><path d="M100 161 L100 164 M100 174 L100 177 M92 169 L95 169 M105 169 L108 169 M94.3 163.3 L96.5 165.5 M103.5 172.5 L105.7 174.7 M105.7 163.3 L103.5 165.5 M96.5 172.5 L94.3 174.7"/>',
+def render(grid, pal, scale=16):
+    h = len(grid); w = max(len(r) for r in grid)
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    for y, row in enumerate(grid):
+        for x, ch in enumerate(row):
+            if ch != '.':
+                im.putpixel((x, y), pal.get(ch, (255, 0, 255)) + (255,))
+    return im.resize((w*scale, h*scale), Image.NEAREST)
+
+PAL = {
+ 'K': (18, 10, 8),
+ 'W': (236, 230, 218), 'G': (196, 188, 172),
+ 'S': (244, 198, 152), 'M': (224, 158, 110), 's': (196, 118, 78), 'd': (150, 80, 50),
+ 'E': (54, 40, 30),
+ 'R': (32, 24, 22), 'r': (58, 44, 40),
+ 'J': (240, 238, 232), 'j': (206, 200, 190),
+ 'B': (170, 34, 28),
 }
-EYES = {"security": "#3fb950", "correctness": "#7fb4e8", "blast": "#f5402d", "pragmatist": "#ffb347"}
-HOODS = {"security": "peak", "correctness": "round", "blast": "sharp", "pragmatist": "wide"}
+def with_gear(grid, member):
+    g = [list(r) for r in grid]
+    def put(x, y, ch):
+        g[y][x] = ch
+    if member == "security":      # chief justice: red sash across left robe
+        for i, y in enumerate(range(25, 32)):
+            x = 5 + i
+            put(x, y, 'B'); put(x+1, y, 'B')
+    if member == "correctness":   # gold spectacles
+        for x in (12, 13, 14, 15):
+            put(x, 12, 'K')
+        for x in list(range(6, 11)) + list(range(17, 22)):
+            put(x, 13, 'K')
+        put(5, 12, 'K'); put(22, 12, 'K')
+    if member == "blast":         # grey beard + mustache over jaw
+        for y in range(18, 24):
+            for x in range(6, 22):
+                if g[y][x] in ('S', 'M', 's', 'K'):
+                    put(x, y, 'W' if (x + y) % 3 else 'G')
+        for x in range(9, 19):
+            put(x, 17, 'W' if x % 3 else 'G')
+        for x in (13, 14):
+            put(x, 18, 'K')   # mouth gap in beard
+    return ["".join(r) for r in g]
 
+MEMBERS = {
+ "security":    {},
+ "correctness": {'W': (214, 212, 206), 'G': (176, 172, 162)},
+ "blast":       {'W': (222, 218, 210), 'G': (178, 172, 160),
+                 'S': (238, 186, 138), 'M': (214, 146, 100)},
+ "pragmatist":  {'W': (128, 92, 52), 'G': (96, 66, 36),
+                 'S': (232, 178, 128), 'M': (206, 140, 94)},
+}
 out = sys.argv[1] if len(sys.argv) > 1 else "/tmp"
-for name in SIGILS:
-    svg = figure(EYES[name], SIGILS[name], HOODS[name])
-    open(f"{out}/{name}.svg", "w").write(svg)
+tiles = []
+for name, pal_over in MEMBERS.items():
+    pal = dict(PAL); pal.update(pal_over)
+    grid = with_gear(mirror(HALF), name)
+    im = render(grid, pal)
+    im.save(f"{out}/{name}.png")
+    tiles.append(im)
+w, h = tiles[0].size
+sheet = Image.new("RGBA", (w*4 + 30, h), (13, 7, 5, 255))
+for i, t in enumerate(tiles):
+    sheet.paste(t, (i*(w+10), 0), t)
+sheet.convert("RGB").save("/tmp/council_sheet.png")
 print("done")
