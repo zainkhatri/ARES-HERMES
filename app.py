@@ -861,12 +861,12 @@ def incident_log_page(incident_id):
 
     when = datetime.fromtimestamp(inc["updated_ts"], tz=_GALLERY_TZ).strftime("%b %-d, %Y %-I:%M %p") if inc.get("updated_ts") else "—"
 
-    # Simple layout: PROBLEM (what was wrong) + SOLUTION (what the fix does),
-    # both in plain English. Problem = the reasoning; Solution = the council
-    # synthesis's jargon-free explanation, falling back to the fix title.
+    # Simple layout: PROBLEM + SOLUTION, both plain English. Prefer the
+    # council synthesis's jargon-free fields; only fall back to the raw
+    # technical reasoning if the synthesis never produced them.
     summary = diag.get("council_summary") or {}
-    problem = " ".join(_paragraphize(diag.get("reasoning"))) or diag.get("triage_reason", "")
-    solution = summary.get("simple_explanation") or summary.get("what_happens") or diag.get("fix_title", "")
+    problem = summary.get("problem") or " ".join(_paragraphize(diag.get("reasoning"))) or diag.get("triage_reason", "")
+    solution = summary.get("solution") or summary.get("simple_explanation") or summary.get("what_happens") or diag.get("fix_title", "")
 
     return render_template("log_view.html", boot=get_system_info(),
                             title=diag.get("fix_title") or inc.get("title", incident_id),
