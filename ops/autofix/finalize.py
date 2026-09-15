@@ -45,11 +45,11 @@ def _unattended_remote_exec_enabled():
 
 def _auto_apply_if_ares(store, incident_id, box):
     """No auto-execution anywhere until SIGNED_OFF_FLAG is deliberately
-    created. Once signed off: ARES ships the instant council approves, no
-    human click. EROS/ZEUS additionally require UNATTENDED_REMOTE_EXEC_FLAG
-    on top of that before they'll do the same -- otherwise they stay at
-    council_approved and wait for the dashboard Approve click. Returns the
-    final status."""
+    created. Once signed off: an ARES fix auto-ships ONLY on a UNANIMOUS
+    council (every member approves) -- any dissent, even 5-of-6, stays at
+    council_approved and waits for the dashboard Merge click (user rule,
+    2026-09-15). EROS/ZEUS additionally require UNATTENDED_REMOTE_EXEC_FLAG
+    on top of that. Returns the final status."""
     if not _signed_off():
         return "council_approved"
     if box != "ARES" and not _unattended_remote_exec_enabled():
@@ -58,6 +58,10 @@ def _auto_apply_if_ares(store, incident_id, box):
     data = store.load()
     incident = next((i for i in data["incidents"] if i["id"] == incident_id), None)
     diag = incident["diagnosis"]
+
+    votes = diag.get("council_votes") or []
+    if not votes or not all(v.get("approve") for v in votes):
+        return "council_approved"  # not unanimous -> human Merge click required
 
     if diag.get("commands"):
         result_status = apply.run_commands(incident, box, run_fn=lambda cmd: apply.run_command(box, cmd))

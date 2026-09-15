@@ -321,3 +321,30 @@ def test_nothing_auto_executes_anywhere_before_sign_off_even_ares(tmp_path, monk
                                 result_path=str(result_path), tmp_log_path=str(tmp_path / "no-log.log"))
     assert status == "council_approved"
     assert executed == []
+
+
+def _split_panel():
+    """5-of-6 style panel: approved overall, but one dissenting vote."""
+    yes = {"persona": "Security", "icon": "S", "approve": True, "verdict": "ok"}
+    no = {"persona": "Blast-Radius", "icon": "B", "approve": False, "verdict": "too risky"}
+    return {"votes": [yes] * 5 + [no], "approved": True, "verdict": "ok",
+            "summary": {"what_happens": "w", "pros": [], "cons": []}}
+
+
+def test_signed_off_but_split_vote_still_waits_for_merge_click(tmp_path, monkeypatch):
+    """User rule 2026-09-15: auto-ship ONLY on unanimity. A 5/6 approval
+    stays at council_approved even with the sign-off flag set."""
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    iid = store.new_incident("sig-split-vote", "audit", "detail")
+    result_path = tmp_path / "result.json"
+    result_path.write_text(json.dumps({
+        "diff": "", "box": "ARES", "reasoning": "r", "manual_steps": "m",
+        "commands": ["true"],
+    }))
+    monkeypatch.setattr(finalize, "_council_review_recommendation", lambda *a: _split_panel())
+    monkeypatch.setattr(finalize, "_signed_off", lambda: True)
+    monkeypatch.setattr(finalize.apply, "run_commands",
+                         lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not execute on split vote")))
+    status = finalize.finalize(iid, store_path=str(tmp_path / "incidents.json"),
+                                result_path=str(result_path), tmp_log_path=str(tmp_path / "no-log.log"))
+    assert status == "council_approved"
