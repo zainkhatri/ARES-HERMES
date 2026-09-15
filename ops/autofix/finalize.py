@@ -63,17 +63,13 @@ def _auto_apply_if_ares(store, incident_id, box):
     if not votes or not all(v.get("approve") for v in votes):
         return "council_approved"  # not unanimous -> human Merge click required
 
-    # Council hardening 2026-09-15: two classes never auto-apply even when
-    # unanimous -- they wait for a human Merge click.
-    #  - atlas: the council can write the knowledge-graph code the Archivist
-    #    judge itself reads for history; a human breaks that self-reference loop.
-    #  - data-sensitive paths (backups/photos/db/incident store): a file-only
-    #    edit gets no runtime health-check, so a silent bad edit is irreversible.
-    if diag.get("target_repo") == "atlas":
-        return "council_approved"
-    if apply.touches_sensitive_data(diag):
-        return "council_approved"
-
+    # User rule, restated 2026-09-15: a unanimous council SHIPS -- no human
+    # click, no exceptions (atlas and data-path holds removed). Automatic
+    # safety that does NOT waste the user's time still applies to every change:
+    # the mechanical denylist (rm -rf/dd/mkfs/reboot/core-service restarts,
+    # vault/pve/business paths), SHA-256 hash re-verify, health-check + auto
+    # revert on service changes, and a git commit of every applied change so
+    # anything can be reverted with `git revert`.
     if diag.get("commands"):
         result_status = apply.run_commands(incident, box, run_fn=lambda cmd: apply.run_command(box, cmd))
     else:

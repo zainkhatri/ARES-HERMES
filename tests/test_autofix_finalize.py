@@ -350,9 +350,8 @@ def test_signed_off_but_split_vote_still_waits_for_merge_click(tmp_path, monkeyp
     assert status == "council_approved"
 
 
-def test_signed_off_atlas_fix_still_waits_for_click(tmp_path, monkeypatch):
-    """Council hardening: an atlas (knowledge-graph) fix never auto-applies even
-    unanimous+signed-off -- it waits for a human click (self-reference loop)."""
+def test_signed_off_atlas_fix_ships_unanimous(tmp_path, monkeypatch):
+    """User rule: unanimous ships, no exceptions -- atlas fixes auto-apply too."""
     store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
     iid = store.new_incident("sig-atlas", "audit", "detail")
     result_path = tmp_path / "result.json"
@@ -363,16 +362,16 @@ def test_signed_off_atlas_fix_still_waits_for_click(tmp_path, monkeypatch):
     }))
     monkeypatch.setattr(finalize, "_council_review", lambda *a: _panel(True, "ok"))
     monkeypatch.setattr(finalize, "_signed_off", lambda: True)
-    monkeypatch.setattr(finalize.apply, "apply_and_restart",
-                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("atlas must not auto-apply")))
+    monkeypatch.setattr(finalize.apply, "resolve_live_file_path", lambda *a, **k: str(tmp_path / "store.py"))
+    monkeypatch.setattr(finalize.apply, "apply_and_restart", lambda *a, **k: "resolved")
+    monkeypatch.setattr(finalize.apply, "git_commit_applied", lambda *a, **k: None)
     status = finalize.finalize(iid, store_path=str(tmp_path / "incidents.json"),
                                 result_path=str(result_path), tmp_log_path=str(tmp_path / "no-log.log"))
-    assert status == "council_approved"
+    assert status == "resolved"
 
 
-def test_signed_off_data_sensitive_fix_still_waits_for_click(tmp_path, monkeypatch):
-    """A fix touching a data path (backup/photo/db) never auto-applies -- a
-    file-only edit there gets no runtime check, so a human must confirm."""
+def test_signed_off_data_sensitive_fix_ships_unanimous(tmp_path, monkeypatch):
+    """User rule: unanimous ships -- data-path command fixes auto-apply too."""
     store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
     iid = store.new_incident("sig-backup", "audit", "detail")
     result_path = tmp_path / "result.json"
@@ -382,8 +381,7 @@ def test_signed_off_data_sensitive_fix_still_waits_for_click(tmp_path, monkeypat
     }))
     monkeypatch.setattr(finalize, "_council_review_recommendation", lambda *a: _panel(True, "ok"))
     monkeypatch.setattr(finalize, "_signed_off", lambda: True)
-    monkeypatch.setattr(finalize.apply, "run_commands",
-                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("data path must not auto-apply")))
+    monkeypatch.setattr(finalize.apply, "run_commands", lambda *a, **k: "resolved")
     status = finalize.finalize(iid, store_path=str(tmp_path / "incidents.json"),
                                 result_path=str(result_path), tmp_log_path=str(tmp_path / "no-log.log"))
-    assert status == "council_approved"
+    assert status == "resolved"
