@@ -63,6 +63,17 @@ def _auto_apply_if_ares(store, incident_id, box):
     if not votes or not all(v.get("approve") for v in votes):
         return "council_approved"  # not unanimous -> human Merge click required
 
+    # Council hardening 2026-09-15: two classes never auto-apply even when
+    # unanimous -- they wait for a human Merge click.
+    #  - atlas: the council can write the knowledge-graph code the Archivist
+    #    judge itself reads for history; a human breaks that self-reference loop.
+    #  - data-sensitive paths (backups/photos/db/incident store): a file-only
+    #    edit gets no runtime health-check, so a silent bad edit is irreversible.
+    if diag.get("target_repo") == "atlas":
+        return "council_approved"
+    if apply.touches_sensitive_data(diag):
+        return "council_approved"
+
     if diag.get("commands"):
         result_status = apply.run_commands(incident, box, run_fn=lambda cmd: apply.run_command(box, cmd))
     else:
@@ -75,6 +86,10 @@ def _auto_apply_if_ares(store, incident_id, box):
             incident, live_file_path, diag.get("unit_name", ""),
             restart_fn=apply.systemctl_restart, healthcheck_fn=apply.systemctl_healthy,
         )
+        if result_status == "resolved":
+            sha = apply.git_commit_applied(live_file_path, incident)
+            if sha:
+                store.write_diagnosis(incident_id, applied_commit=sha)
     store.set_status(incident_id, result_status)
     return result_status
 
@@ -165,6 +180,7 @@ def finalize(incident_id, store_path=None, result_path=None, tmp_log_path=None):
         diff_hash=result.get("diff_hash", ""),
         base_snapshot_hash=result.get("base_snapshot_hash", ""),
         target_file=target_file,
+        target_repo=result.get("target_repo", ""),
         unit_name=result.get("unit_name", ""),
         manual_steps=manual_steps,
         commands=commands,

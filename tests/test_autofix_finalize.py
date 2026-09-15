@@ -348,3 +348,42 @@ def test_signed_off_but_split_vote_still_waits_for_merge_click(tmp_path, monkeyp
     status = finalize.finalize(iid, store_path=str(tmp_path / "incidents.json"),
                                 result_path=str(result_path), tmp_log_path=str(tmp_path / "no-log.log"))
     assert status == "council_approved"
+
+
+def test_signed_off_atlas_fix_still_waits_for_click(tmp_path, monkeypatch):
+    """Council hardening: an atlas (knowledge-graph) fix never auto-applies even
+    unanimous+signed-off -- it waits for a human click (self-reference loop)."""
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    iid = store.new_incident("sig-atlas", "audit", "detail")
+    result_path = tmp_path / "result.json"
+    result_path.write_text(json.dumps({
+        "diff": "--- a/store.py\n+++ b/store.py\n@@ -1 +1 @@\n-a\n+b\n", "diff_hash": "x",
+        "base_snapshot_hash": "y", "target_file": "atlas/store.py", "target_repo": "atlas",
+        "reasoning": "fts fix",
+    }))
+    monkeypatch.setattr(finalize, "_council_review", lambda *a: _panel(True, "ok"))
+    monkeypatch.setattr(finalize, "_signed_off", lambda: True)
+    monkeypatch.setattr(finalize.apply, "apply_and_restart",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("atlas must not auto-apply")))
+    status = finalize.finalize(iid, store_path=str(tmp_path / "incidents.json"),
+                                result_path=str(result_path), tmp_log_path=str(tmp_path / "no-log.log"))
+    assert status == "council_approved"
+
+
+def test_signed_off_data_sensitive_fix_still_waits_for_click(tmp_path, monkeypatch):
+    """A fix touching a data path (backup/photo/db) never auto-applies -- a
+    file-only edit there gets no runtime check, so a human must confirm."""
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    iid = store.new_incident("sig-backup", "audit", "detail")
+    result_path = tmp_path / "result.json"
+    result_path.write_text(json.dumps({
+        "diff": "", "box": "ARES", "reasoning": "r", "manual_steps": "m",
+        "commands": ["rsync -a --delete /src /photos-backup"],
+    }))
+    monkeypatch.setattr(finalize, "_council_review_recommendation", lambda *a: _panel(True, "ok"))
+    monkeypatch.setattr(finalize, "_signed_off", lambda: True)
+    monkeypatch.setattr(finalize.apply, "run_commands",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("data path must not auto-apply")))
+    status = finalize.finalize(iid, store_path=str(tmp_path / "incidents.json"),
+                                result_path=str(result_path), tmp_log_path=str(tmp_path / "no-log.log"))
+    assert status == "council_approved"

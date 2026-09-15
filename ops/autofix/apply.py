@@ -44,6 +44,61 @@ def resolve_live_file_path(repo_root, target_file, target_repo=None):
     return full
 
 
+# Paths whose corruption is irreversible (data, backups, the photo library, the
+# incident store itself). A fix touching any of these is NEVER auto-applied even
+# on a unanimous council -- it waits for a human Merge click. Council hardening,
+# 2026-09-15: a file-only edit to a data-path script gets no runtime health-check,
+# so a silent bad edit could run days later against real data (cf. the June 2026
+# photo-index clobber). The apply itself is still allowed via the human click.
+DATA_SENSITIVE_PATTERNS = (
+    "backup", "rsync", "photo", "photos", "photo_db", "photo_index",
+    "dedup", "mergerfs", "snapshot", "incidents.json", "vault", ".db",
+)
+
+
+def touches_sensitive_data(diag):
+    """True if the diagnosis's target file or any of its commands references an
+    irreversible data path. Used to force a human click on such fixes."""
+    hay = (diag.get("target_file", "") + " " + " ".join(diag.get("commands", []) or [])).lower()
+    return any(p in hay for p in DATA_SENSITIVE_PATTERNS)
+
+
+def git_commit_applied(live_file_path, incident):
+    """Best-effort: commit a just-applied file change to its git repo so every
+    autonomous change leaves a durable, revertible record (git log / git revert)
+    instead of an anonymous live-file edit. Authored as 'ARES Autofix' to keep
+    robot commits distinct from human ones. Never pushes. A commit failure does
+    NOT fail the apply -- the fix is already live and healthy; we just log it."""
+    assert live_file_path, "live_file_path required"
+    try:
+        top = subprocess.run(["git", "-C", os.path.dirname(live_file_path),
+                              "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, timeout=15)
+        repo = top.stdout.strip()
+        if top.returncode != 0 or not repo:
+            return None  # file isn't in a git repo -- nothing to record
+        diag = incident.get("diagnosis", {})
+        votes = diag.get("council_votes") or []
+        yes = sum(1 for v in votes if v.get("approve"))
+        short = (diag.get("diff_hash", "") or "")[:12]
+        # subject-only message (no body, no Co-Authored-By) carrying the audit trail
+        subject = (f"[autofix] {diag.get('fix_title', 'applied fix')} "
+                   f"(incident {incident.get('id', '?')}, council {yes}/{len(votes)}, hash {short})")
+        subprocess.run(["git", "-C", repo, "add", "--", live_file_path],
+                       capture_output=True, timeout=15)
+        r = subprocess.run(["git", "-C", repo,
+                            "-c", "user.name=ARES Autofix", "-c", "user.email=autofix@ares.local",
+                            "commit", "--no-verify", "-m", subject, "--", live_file_path],
+                           capture_output=True, text=True, timeout=20)
+        if r.returncode != 0:
+            return None
+        sha = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                            capture_output=True, text=True, timeout=10).stdout.strip()
+        return sha or None
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
 def systemctl_restart(unit_name):
     subprocess.run(["systemctl", "restart", f"{unit_name}.service"], timeout=30)
 
@@ -240,6 +295,10 @@ if __name__ == "__main__":
                 incident, live_file_path, unit_name,
                 restart_fn=systemctl_restart, healthcheck_fn=systemctl_healthy,
             )
+            if result_status == "resolved":
+                sha = git_commit_applied(live_file_path, incident)
+                if sha:
+                    store.write_diagnosis(incident_id, applied_commit=sha)
         store.set_status(incident_id, result_status)
         return jsonify({"status": result_status})
 

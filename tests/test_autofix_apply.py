@@ -247,3 +247,33 @@ def test_resolve_target_repo_atlas_and_traversal_guard():
     # unknown repo falls back to the passed repo_root
     p2 = applymod.resolve_live_file_path("/tmp", "x.py", "no-such-repo")
     assert p2 == "/tmp/x.py"
+
+
+def test_touches_sensitive_data_matches_data_paths():
+    assert applymod.touches_sensitive_data({"target_file": "system/backup.sh"}) is True
+    assert applymod.touches_sensitive_data({"target_file": "photo_db.py"}) is True
+    assert applymod.touches_sensitive_data({"target_file": "x.py", "commands": ["rsync -a /a /b"]}) is True
+    assert applymod.touches_sensitive_data({"target_file": "ops/autofix/incidents.json"}) is True
+    assert applymod.touches_sensitive_data({"target_file": "system/kg_query.py", "commands": []}) is False
+
+
+def test_git_commit_applied_records_change_in_real_repo(tmp_path):
+    import subprocess
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "t"], check=True)
+    f = repo / "script.sh"
+    f.write_text("original\n")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "init"], check=True)
+    f.write_text("patched by autofix\n")  # simulate an applied change
+    incident = {"id": "abc123", "diagnosis": {"fix_title": "test fix", "diff_hash": "deadbeef" * 8,
+                "council_votes": [{"approve": True}] * 6}}
+    sha = applymod.git_commit_applied(str(f), incident)
+    assert sha and len(sha) == 40
+    log = subprocess.run(["git", "-C", str(repo), "log", "-1", "--format=%an%n%s"],
+                         capture_output=True, text=True).stdout
+    assert "ARES Autofix" in log
+    assert "[autofix] test fix (incident abc123, council 6/6" in log
