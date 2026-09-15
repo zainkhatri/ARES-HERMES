@@ -859,51 +859,23 @@ def incident_log_page(incident_id):
         "command_execution_failed": "Execution failed",
     }.get(status, status)
 
-    # Prose (reasoning) gets real paragraphs, not a monospace wall of text --
-    # code/diff/log stay monospace since that content actually is code.
-    reasoning_paragraphs = _paragraphize(diag.get("reasoning"))
-
-    code_section = None
-    if diag.get("diff"):
-        code_section = {"label": "Proposed diff", "kind": "diff", "lines": _diff_lines(diag["diff"])}
-    elif diag.get("manual_steps"):
-        box = diag.get("box", "")
-        intro, step_list = _parse_manual_steps(diag["manual_steps"])
-        code_section = {"label": f"Manual steps ({box})" if box else "Manual steps",
-                         "meta": "no auto-apply for this one -- run it yourself" if status != "council_approved" else "",
-                         "kind": "steps", "intro": intro, "step_list": step_list}
-
-    safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", incident_id)
-    log_path = os.path.join(_AUTOFIX_LOG_DIR, f"{safe_id}.log")
-    try:
-        with open(log_path, errors="replace") as f:
-            log_content = "".join(f.readlines()[-800:])
-    except OSError:
-        log_content = None
-
     when = datetime.fromtimestamp(inc["updated_ts"], tz=_GALLERY_TZ).strftime("%b %-d, %Y %-I:%M %p") if inc.get("updated_ts") else "—"
 
-    # Skim layout: the fix title is the page headline. "What this fix does"
-    # prefers the council synthesis's jargon-free explanation; the raw
-    # technical reasoning all lands under "Why we're doing it".
+    # Simple layout: PROBLEM (what was wrong) + SOLUTION (what the fix does),
+    # both in plain English. Problem = the reasoning; Solution = the council
+    # synthesis's jargon-free explanation, falling back to the fix title.
     summary = diag.get("council_summary") or {}
-    if summary.get("simple_explanation"):
-        what_it_does = summary["simple_explanation"]
-        why_paragraphs = reasoning_paragraphs
-    else:
-        what_it_does = reasoning_paragraphs[0] if reasoning_paragraphs else ""
-        why_paragraphs = reasoning_paragraphs[1:]
+    problem = " ".join(_paragraphize(diag.get("reasoning"))) or diag.get("triage_reason", "")
+    solution = summary.get("simple_explanation") or summary.get("what_happens") or diag.get("fix_title", "")
 
     return render_template("log_view.html", boot=get_system_info(),
                             title=diag.get("fix_title") or inc.get("title", incident_id),
                             subtitle=inc.get("title", "") if diag.get("fix_title") else "",
                             status_pill=status_label, status_pill_cls=status_cls,
-                            what_it_does=what_it_does, why_paragraphs=why_paragraphs,
+                            problem=problem, solution=solution,
                             council_votes=diag.get("council_votes", []),
                             council_discussion=diag.get("council_discussion", []),
-                            council_summary=diag.get("council_summary", {}),
                             council_verdict=diag.get("council_verdict", ""),
-                            code_section=code_section, log_content=log_content,
                             box=diag.get("box", "ARES"), when=when,
                             show_approve_reject=(status == "council_approved"), incident_id=incident_id)
 
