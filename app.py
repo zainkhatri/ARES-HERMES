@@ -703,8 +703,8 @@ def job_log_page(unit):
     label = _CRON_LOG_LABELS.get(unit, unit)
     if unit not in _CRON_LOG_UNITS:
         return render_template("log_view.html", boot=get_system_info(), title=label,
-                                status_pill=None, sections=[{"label": "Log", "content": None,
-                                "empty": "unknown job"}])
+                                status_pill=None, sections=[], job_ok=True,
+                                log_lines=None, log_empty="unknown job")
     if unit == "zeus-horcrux":
         content, empty = None, "this job runs on ZEUS, not ARES -- no local log to show"
     else:
@@ -718,16 +718,34 @@ def job_log_page(unit):
 
     job = next((j for j in _read_host_crons() if j.get("unit") == unit), None)
     job_header = None
+    job_ok = True
     if job:
+        job_ok = bool(job.get("ok"))
         job_header = [
-            {"label": "Status", "value": "OK" if job.get("ok") else "FAILED"},
+            {"label": "Status", "value": "OK" if job_ok else "FAILED", "cls": "ok" if job_ok else "bad"},
             {"label": "Last run", "value": datetime.fromtimestamp(job["last"], tz=_GALLERY_TZ).strftime("%b %-d, %-I:%M %p") if job.get("last") else "—"},
             {"label": "Next run", "value": datetime.fromtimestamp(job["next"], tz=_GALLERY_TZ).strftime("%b %-d, %-I:%M %p") if job.get("next") else "—"},
         ]
 
+    # Per-line classification for the trace panel: failures tinted red,
+    # clean completions green, everything else default.
+    log_lines = None
+    if content:
+        log_lines = []
+        for line in content.splitlines():
+            low = line.lower()
+            if any(k in low for k in ("failed", "failure", "error", "traceback")):
+                cls = "err"
+            elif any(k in low for k in ("finished", "deactivated successfully", "succeeded")):
+                cls = "fine"
+            else:
+                cls = ""
+            log_lines.append({"text": line, "cls": cls})
+
     return render_template("log_view.html", boot=get_system_info(), title=label,
-                            status_pill=None, job_header=job_header,
-                            sections=[{"label": "journalctl (last 800 lines)", "content": content, "empty": empty}])
+                            status_pill=None, job_header=job_header, job_ok=job_ok,
+                            log_lines=log_lines, log_empty=empty,
+                            sections=[])
 
 
 _AUTOFIX_APPLY_URL = "http://192.168.20.51:7684"
