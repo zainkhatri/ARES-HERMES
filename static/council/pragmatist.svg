@@ -1,19 +1,4 @@
-"""Council portraits v6 — hooded conclave figures. Vector SVG, no faces:
-robed silhouette, hood with gold trim, black void + glowing eyes, role sigil."""
-import sys
-
-W, H = 200, 240
-
-def figure(eye_color, sigil, hood="peak"):
-    # hood outlines per member for silhouette variety
-    hoods = {
-      "peak":  "M100 22 C 62 30, 44 62, 42 96 C 41 118, 46 132, 52 142 L 148 142 C 154 132, 159 118, 158 96 C 156 62, 138 30, 100 22 Z",
-      "round": "M100 26 C 58 34, 46 66, 45 98 C 44 120, 50 134, 56 142 L 144 142 C 150 134, 156 120, 155 98 C 154 66, 142 34, 100 26 Z",
-      "sharp": "M100 18 C 66 34, 48 60, 46 94 C 45 118, 48 132, 54 142 L 146 142 C 152 132, 155 118, 154 94 C 152 60, 134 34, 100 18 Z",
-      "wide":  "M100 26 C 54 32, 40 68, 40 100 C 40 122, 46 134, 52 142 L 148 142 C 154 134, 160 122, 160 100 C 160 68, 146 32, 100 26 Z",
-    }
-    hp = hoods[hood]
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240">
 <defs>
   <radialGradient id="bg" cx="50%" cy="38%" r="75%">
     <stop offset="0%" stop-color="#1c1008"/><stop offset="55%" stop-color="#0d0705"/><stop offset="100%" stop-color="#050302"/>
@@ -36,7 +21,7 @@ def figure(eye_color, sigil, hood="peak"):
     <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
   </filter>
 </defs>
-<rect width="{W}" height="{H}" fill="url(#bg)"/>
+<rect width="200" height="240" fill="url(#bg)"/>
 <!-- back-light halo behind the figure -->
 <ellipse cx="100" cy="112" rx="76" ry="88" fill="none" stroke="#d4af37" stroke-opacity="0.10" stroke-width="14"/>
 <!-- shoulders / robe -->
@@ -48,7 +33,7 @@ def figure(eye_color, sigil, hood="peak"):
 <path d="M 40 214 C 48 180, 64 160, 80 151" stroke="#d4af37" stroke-opacity="0.28" stroke-width="1.4" fill="none"/>
 <path d="M 160 214 C 152 180, 136 160, 120 151" stroke="#d4af37" stroke-opacity="0.28" stroke-width="1.4" fill="none"/>
 <!-- hood -->
-<path d="{hp}" fill="url(#hoodg)" stroke="#3a2415" stroke-width="1.5"/>
+<path d="M100 26 C 54 32, 40 68, 40 100 C 40 122, 46 134, 52 142 L 148 142 C 154 134, 160 122, 160 100 C 160 68, 146 32, 100 26 Z" fill="url(#hoodg)" stroke="#3a2415" stroke-width="1.5"/>
 <!-- hood gold trim (inner rim) -->
 <path d="M 58 140 C 55 112, 60 78, 100 66 C 140 78, 145 112, 142 140 L 136 142 C 139 114, 133 84, 100 74 C 67 84, 61 114, 64 142 Z"
       fill="#d4af37" opacity="0.85"/>
@@ -56,31 +41,12 @@ def figure(eye_color, sigil, hood="peak"):
 <path d="M 64 142 C 61 112, 68 84, 100 74 C 132 84, 139 112, 136 142 C 124 148, 76 148, 64 142 Z" fill="url(#void)"/>
 <!-- glowing eyes -->
 <g filter="url(#bigglow)">
-  <rect x="80" y="108" width="12" height="3.6" rx="1.8" fill="{eye_color}"/>
-  <rect x="108" y="108" width="12" height="3.6" rx="1.8" fill="{eye_color}"/>
+  <rect x="80" y="108" width="12" height="3.6" rx="1.8" fill="#ffb347"/>
+  <rect x="108" y="108" width="12" height="3.6" rx="1.8" fill="#ffb347"/>
 </g>
 <!-- collar clasp + sigil -->
 <circle cx="100" cy="168" r="15" fill="#0d0705" stroke="#d4af37" stroke-width="1.6"/>
 <g filter="url(#glow)" stroke="#d4af37" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-{sigil}
+<circle cx="100" cy="169" r="5"/><path d="M100 161 L100 164 M100 174 L100 177 M92 169 L95 169 M105 169 L108 169 M94.3 163.3 L96.5 165.5 M103.5 172.5 L105.7 174.7 M105.7 163.3 L103.5 165.5 M96.5 172.5 L94.3 174.7"/>
 </g>
-</svg>'''
-
-SIGILS = {
- # shield
- "security": '<path d="M100 159 L108 162 L108 170 C108 175, 104 178, 100 180 C96 178, 92 175, 92 170 L92 162 Z"/>',
- # eye
- "correctness": '<path d="M91 169 C95 163, 105 163, 109 169 C105 175, 95 175, 91 169 Z"/><circle cx="100" cy="169" r="2.4"/>',
- # burst
- "blast": '<path d="M100 160 L100 166 M100 172 L100 178 M91 169 L97 169 M103 169 L109 169 M94 163 L98 167 M102 171 L106 175 M106 163 L102 167 M98 171 L94 175"/>',
- # gear
- "pragmatist": '<circle cx="100" cy="169" r="5"/><path d="M100 161 L100 164 M100 174 L100 177 M92 169 L95 169 M105 169 L108 169 M94.3 163.3 L96.5 165.5 M103.5 172.5 L105.7 174.7 M105.7 163.3 L103.5 165.5 M96.5 172.5 L94.3 174.7"/>',
-}
-EYES = {"security": "#3fb950", "correctness": "#7fb4e8", "blast": "#f5402d", "pragmatist": "#ffb347"}
-HOODS = {"security": "peak", "correctness": "round", "blast": "sharp", "pragmatist": "wide"}
-
-out = sys.argv[1] if len(sys.argv) > 1 else "/tmp"
-for name in SIGILS:
-    svg = figure(EYES[name], SIGILS[name], HOODS[name])
-    open(f"{out}/{name}.svg", "w").write(svg)
-print("done")
+</svg>
