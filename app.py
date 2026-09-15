@@ -145,19 +145,25 @@ def _asset_versions():
 # the nvidia driver without racing a systemd-respawned GPU consumer.
 # CLIP search and video transcode degrade to their CPU paths automatically.
 GPU_LOAN_FLAG = os.path.join(_APP_DIR, ".gpu-on-loan")
-if os.path.exists(GPU_LOAN_FLAG):
+# Manual, human-set "force CPU" override. Distinct from the VM-loan flag so the
+# boot/timer reconciler (gpu-loan-reconcile) never deletes an intentional
+# override -- it only ever manages .gpu-on-loan. app honors both.
+GPU_FORCE_CPU_FLAG = os.path.join(_APP_DIR, ".gpu-force-cpu")
+if os.path.exists(GPU_LOAN_FLAG) or os.path.exists(GPU_FORCE_CPU_FLAG):
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
-    print("[gpu] .gpu-on-loan present — CPU-only mode (RTX 3080 lent to a VM)")
+    print("[gpu] loan/force-cpu flag present — CPU-only mode (RTX 3080 not in use by ARES)")
 
 
 def _gpu_on_loan():
-    """True while the RTX 3080 is lent to a VM (gaming). The borrowing VM gets
+    """True while the RTX 3080 is unavailable to ARES -- lent to a VM (gaming),
+    or held CPU-only by a manual .gpu-force-cpu override. The borrowing VM gets
     strict priority: DEFER all CPU video transcode/HLS work until the GPU
-    returns — CPU x264 encodes on the host cores starve the VM's KVM emulator/
+    returns -- CPU x264 encodes on the host cores starve the VM's KVM emulator/
     IO threads and cause input stutter. Live file check (not the startup-time
     snapshot) so work auto-resumes the moment the flag clears, no restart
-    needed. The Proxmox hookscript writes/removes the flag around VM start/stop."""
-    return os.path.exists(GPU_LOAN_FLAG)
+    needed. The Proxmox hookscript writes/removes .gpu-on-loan around VM
+    start/stop; the reconciler clears a stale one."""
+    return os.path.exists(GPU_LOAN_FLAG) or os.path.exists(GPU_FORCE_CPU_FLAG)
 
 _THUMB_DIR = os.path.join(_APP_DIR, "static", "thumbs")
 _THUMB_HQ_DIR = os.path.join(_APP_DIR, "static", "thumbs_hq")
