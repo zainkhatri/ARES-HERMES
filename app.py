@@ -690,6 +690,9 @@ def logs_index_page():
     fix summary. Linked from the Scheduled Jobs panel title."""
     from system.system_info import _read_autofix_incidents
     incidents = sorted(_read_autofix_incidents(), key=lambda i: i.get("updated_ts", 0), reverse=True)
+    # hide noise by default: rejected duplicates and triage-skipped blips (?all=1 shows everything)
+    if request.args.get("all") != "1":
+        incidents = [i for i in incidents if i.get("status") not in ("rejected", "triaged_skip")]
     for inc in incidents:
         ts = inc.get("updated_ts")
         inc["updated_ts_human"] = datetime.fromtimestamp(ts, tz=_GALLERY_TZ).strftime("%b %-d, %Y %-I:%M %p") if ts else ""
