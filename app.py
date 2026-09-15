@@ -696,13 +696,15 @@ def logs_index_page():
     for inc in incidents:
         ts = inc.get("updated_ts")
         inc["updated_ts_human"] = datetime.fromtimestamp(ts, tz=_GALLERY_TZ).strftime("%b %-d, %Y %-I:%M %p") if ts else ""
-    # two sections: still-actionable up top, already-merged below; recency within each
-    _MERGED = ("resolved",)
+    # three sections: one-click Merge fixes, human-action items, already-merged.
+    # only council_approved has a real Merge button behind it.
     _recent = lambda i: -i.get("updated_ts", 0)
-    unmerged = sorted((i for i in incidents if i.get("status") not in _MERGED), key=_recent)
-    merged = sorted((i for i in incidents if i.get("status") in _MERGED), key=_recent)
+    merge_ready = sorted((i for i in incidents if i.get("status") == "council_approved"), key=_recent)
+    merged = sorted((i for i in incidents if i.get("status") == "resolved"), key=_recent)
+    needs_you = sorted((i for i in incidents if i.get("status") not in ("council_approved", "resolved")), key=_recent)
     return render_template("logs_index.html", boot=get_system_info(),
-                           unmerged=unmerged, merged=merged, total=len(incidents))
+                           merge_ready=merge_ready, needs_you=needs_you, merged=merged,
+                           total=len(incidents))
 
 
 @app.route("/logs/job/<unit>")

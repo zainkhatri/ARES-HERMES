@@ -252,13 +252,24 @@
             <div class="text-center text-[#8d6259] italic py-24">no incidents yet</div>
             {% endif %}
 
-            {% if unmerged %}
+            {% if merge_ready %}
             <div class="section-title" style="margin-top: 8px">
                 <span style="color: var(--orange)">◆ Merge Ready</span>
-                <span class="count">{{ unmerged|length }} AWAITING</span>
+                <span class="count">{{ merge_ready|length }} ONE-CLICK</span>
             </div>
             <div class="space-y-4 stagger">
-                {% for inc in unmerged %}{{ incident_row(inc) }}{% endfor %}
+                {% for inc in merge_ready %}{{ incident_row(inc) }}{% endfor %}
+            </div>
+            {% endif %}
+
+            {% if needs_you %}
+            <div class="section-title" style="margin-top: 48px">
+                <span style="color: var(--ares-bright)">✎ Needs You</span>
+                <span class="count">{{ needs_you|length }} MANUAL</span>
+            </div>
+            <p class="text-[12px] text-[#8d6259] mb-5 -mt-4 leading-relaxed">These need a human decision — a recommendation to act on, a council hold, or a run that needs eyes. No one-click merge.</p>
+            <div class="space-y-4">
+                {% for inc in needs_you %}{{ incident_row(inc) }}{% endfor %}
             </div>
             {% endif %}
 
