@@ -702,9 +702,8 @@ def job_log_page(unit):
     from system.system_info import _read_host_crons
     label = _CRON_LOG_LABELS.get(unit, unit)
     if unit not in _CRON_LOG_UNITS:
-        return render_template("log_view.html", boot=get_system_info(), title=label,
-                                status_pill=None, sections=[], job_ok=True,
-                                log_lines=None, log_empty="unknown job")
+        return render_template("job_log.html", boot=get_system_info(), title=label, unit=unit,
+                                job_ok=True, job_header=None, log_lines=None, log_empty="unknown job")
     if unit == "zeus-horcrux":
         content, empty = None, "this job runs on ZEUS, not ARES -- no local log to show"
     else:
@@ -727,11 +726,13 @@ def job_log_page(unit):
             {"label": "Next run", "value": datetime.fromtimestamp(job["next"], tz=_GALLERY_TZ).strftime("%b %-d, %-I:%M %p") if job.get("next") else "—"},
         ]
 
-    # Per-line classification for the trace panel: failures tinted red,
-    # clean completions green, everything else default.
+    # Per-line parse for the trace panel: journalctl short format is
+    # "Sep 14 03:00:01 host unit[pid]: message" -- split into ts / service /
+    # message columns; classify failures red and clean completions green.
     log_lines = None
     if content:
         log_lines = []
+        line_re = re.compile(r"^([A-Z][a-z]{2}\s+\d+\s\d{2}:\d{2}:\d{2})\s+\S+\s+(\S+?:)\s?(.*)$")
         for line in content.splitlines():
             low = line.lower()
             if any(k in low for k in ("failed", "failure", "error", "traceback")):
@@ -740,12 +741,15 @@ def job_log_page(unit):
                 cls = "fine"
             else:
                 cls = ""
-            log_lines.append({"text": line, "cls": cls})
+            m = line_re.match(line)
+            if m:
+                log_lines.append({"ts": m.group(1), "svc": m.group(2), "msg": m.group(3), "cls": cls})
+            else:
+                log_lines.append({"ts": "", "svc": "", "msg": line, "cls": cls})
 
-    return render_template("log_view.html", boot=get_system_info(), title=label,
-                            status_pill=None, job_header=job_header, job_ok=job_ok,
-                            log_lines=log_lines, log_empty=empty,
-                            sections=[])
+    return render_template("job_log.html", boot=get_system_info(), title=label, unit=unit,
+                            job_header=job_header, job_ok=job_ok,
+                            log_lines=log_lines, log_empty=empty)
 
 
 _AUTOFIX_APPLY_URL = "http://192.168.20.51:7684"
@@ -837,7 +841,10 @@ def incident_log_page(incident_id):
     inc = next((i for i in incidents if i["id"] == incident_id), None)
     if inc is None:
         return render_template("log_view.html", boot=get_system_info(), title="incident not found",
-                                status_pill=None, sections=[]), 404
+                                subtitle="", status_pill="Not found", status_pill_cls="bad",
+                                what_it_does="", why_paragraphs=[], council_votes=[], council_summary={},
+                                council_verdict="", code_section=None, log_content=None,
+                                box="—", when="—", show_approve_reject=False, incident_id=incident_id), 404
 
     diag = inc.get("diagnosis", {})
     status = inc.get("status", "new")

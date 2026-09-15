@@ -1,93 +1,259 @@
-<!doctype html>
-<html data-brand="ARES">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-{% set page_title = "Autonomous SWE · ARES" %}
-{% include "_hud_head.html" %}
-<style>
-  body { padding-top:0 !important; }
-  .mhead { position:sticky; top:0; z-index:50; background:var(--bg-1); }
-  .wrap { max-width:1200px; width:100%; margin:0 auto; padding:40px 16px 80px; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="view-transition" content="same-origin">
+    <title>Autonomous SWE Index | ARES</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-0: #070403;
+            --bg-1: #0d0605;
+            --bg-2: #140807;
+            --ares: #f5402d;
+            --ares-rgb: 245, 64, 45;
+            --ares-bright: #ff7a45;
+            --ember-dim: rgba(245, 64, 45, 0.28);
+            --text-1: #f6ece9;
+            --text-2: #c99a90;
+            --text-3: #8d6259;
+            --panel-bg: rgba(20, 8, 7, 0.55);
+            --green: #3fb950;
+            --red: #f85149;
+            --orange: #ff7a45;
+            --dur: 180ms;
+            --ease-out: cubic-bezier(.16, 1, .3, 1);
+        }
 
-  .list-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; }
-  .list-title { font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--text-3); font-weight:700; }
-  .list-count { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ares); font-weight:700; }
+        @view-transition { navigation: auto; }
 
-  .row { display:block; text-decoration:none; color:inherit; margin-bottom:16px;
-    padding:22px 24px; position:relative; transition:all .2s var(--ease-out); }
-  .row:hover { border-color:var(--ares); background:rgba(var(--panel-rgb),.8);
-    box-shadow:0 0 26px -12px var(--ares), inset 0 0 22px rgba(var(--ares-rgb),.045); }
-  .row-grid { display:flex; gap:20px; align-items:flex-start; }
-  .row .dot { width:10px; height:10px; border-radius:50%; flex:0 0 auto; margin-top:22px; }
-  .row .dot.ok { background:#3fb950; box-shadow:0 0 12px #3fb950; }
-  .row .dot.bad { background:#f85149; box-shadow:0 0 12px #f85149; }
-  .row .dot.pending { background:var(--ares-bright); box-shadow:0 0 12px var(--ares-bright); }
-  .row-main { flex:1; min-width:0; }
-  .row-sub { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); font-weight:700;
-    margin-bottom:6px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .merge-chip { background:#3fb950; color:var(--bg-0); font-size:9px; font-weight:800; letter-spacing:.1em;
-    padding:3px 8px; }
-  .row-title { font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:20px; line-height:1.25;
-    color:var(--text-1); margin-bottom:6px; }
-  .row-summary { font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--text-2); line-height:1.6; }
-  .row-side { flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
-  .council-chip { font-size:10px; font-weight:800; letter-spacing:.1em; padding:4px 10px; border:1px solid currentColor; }
-  .council-chip.pass { color:#3fb950; }
-  .council-chip.fail { color:#f85149; }
-  .row-when { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); }
-  @media (max-width:640px){ .row-side { display:none; } }
+        ::view-transition-old(main-nav),
+        ::view-transition-new(main-nav),
+        ::view-transition-old(brand),
+        ::view-transition-new(brand) {
+            animation: none;
+            mix-blend-mode: normal;
+        }
 
-  .empty { color:var(--text-3); font-style:italic; text-align:center; padding:80px 0; }
+        ::view-transition-old(main-content) { animation: 0.25s ease-out both fade-out; }
+        ::view-transition-new(main-content) { animation: 0.25s ease-in 0.1s both fade-in; }
+        @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
-  @keyframes rise { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
-  .stagger > * { animation:rise .5s cubic-bezier(.16,1,.3,1) both; }
-  .stagger > *:nth-child(1) { animation-delay:.05s; } .stagger > *:nth-child(2) { animation-delay:.1s; }
-  .stagger > *:nth-child(3) { animation-delay:.15s; } .stagger > *:nth-child(4) { animation-delay:.2s; }
-  .stagger > *:nth-child(5) { animation-delay:.25s; } .stagger > *:nth-child(6) { animation-delay:.3s; }
-</style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg-0);
+            color: var(--text-1);
+            font-family: 'JetBrains Mono', monospace;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .hud-shell { min-height: 100vh; display: flex; flex-direction: column; }
+
+        .mhead {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 24px 16px 11px;
+            border-bottom: 1px solid rgba(var(--ares-rgb), 0.14);
+            background: var(--bg-1);
+            z-index: 50;
+            position: sticky;
+            top: 0;
+        }
+
+        .mhead-home {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border: 1px solid var(--ember-dim);
+            color: var(--text-2);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            text-decoration: none;
+            transition: all var(--dur) var(--ease-out);
+        }
+
+        .mhead-home:hover { border-color: var(--ares); color: var(--text-1); background: rgba(var(--ares-rgb), 0.1); }
+        .mhead-home .ar { color: var(--ares); font-size: 13px; }
+
+        .mark-ascii { display: flex; line-height: 0; user-select: none; }
+        .mark-ascii pre {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 7px;
+            line-height: 1.0;
+            font-weight: 700;
+            margin: 0;
+            white-space: pre;
+        }
+        .m-ar { color: var(--ares); text-shadow: 0 0 14px rgba(var(--ares-rgb), 0.45); }
+        .m-es { color: #f4f8fd; text-shadow: 0 0 14px rgba(244, 248, 253, 0.38); }
+
+        .wrap { max-width: 1100px; width: 100%; margin: 0 auto; padding: 40px 16px 80px; }
+
+        .mod {
+            position: relative;
+            contain: layout paint;
+            border: 1px solid var(--ember-dim);
+            background: var(--panel-bg);
+            box-shadow: inset 0 0 22px rgba(var(--ares-rgb), 0.045);
+            transition: all var(--dur) var(--ease-out);
+            text-decoration: none;
+            display: block;
+        }
+
+        .mod:hover {
+            background: rgba(var(--ares-rgb), 0.08);
+            border-color: var(--ares);
+            box-shadow: 0 0 16px -7px var(--ares), inset 0 0 22px rgba(var(--ares-rgb), 0.06);
+        }
+
+        .mod::before, .mod::after {
+            position: absolute;
+            width: 11px;
+            height: 11px;
+            border: 2px solid var(--ares);
+            pointer-events: none;
+            content: '';
+        }
+        .mod.c-tl::before { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
+        .mod.c-tr::before { top: -2px; right: -2px; border-left: 0; border-bottom: 0; }
+        .mod.c-bl::after  { bottom: -2px; left: -2px; border-right: 0; border-top: 0; }
+        .mod.c-br::after  { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
+
+        .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .dot.resolved { background: var(--green); box-shadow: 0 0 10px var(--green); }
+        .dot.pending { background: var(--orange); box-shadow: 0 0 10px var(--orange); animation: pulse 2s infinite; }
+        .dot.held { background: var(--red); box-shadow: 0 0 10px var(--red); }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+        .section-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--text-3);
+            margin-bottom: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .section-title span.count { color: var(--ares-bright); }
+
+        .row-title {
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-weight: 700;
+            font-size: clamp(18px, 2.5vw, 22px);
+            line-height: 1.2;
+            color: var(--text-1);
+        }
+
+        .consensus-chip {
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            padding: 4px 8px;
+            border: 1px solid var(--ember-dim);
+            background: rgba(var(--ares-rgb), 0.05);
+            color: var(--text-2);
+            text-transform: uppercase;
+        }
+
+        .merge-chip {
+            font-size: 9px;
+            background: var(--green);
+            color: var(--bg-0);
+            padding: 2px 6px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        @keyframes rise { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform:translateY(0); } }
+        .stagger > * { animation: rise 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+        .stagger > *:nth-child(1) { animation-delay: 0.05s; }
+        .stagger > *:nth-child(2) { animation-delay: 0.1s; }
+        .stagger > *:nth-child(3) { animation-delay: 0.15s; }
+        .stagger > *:nth-child(4) { animation-delay: 0.2s; }
+        .stagger > *:nth-child(5) { animation-delay: 0.25s; }
+        .stagger > *:nth-child(6) { animation-delay: 0.3s; }
+    </style>
 </head>
 <body>
-<div class="hud-shell">
-{% with page_name='LOGS' %}{% include "_hud_nav.html" %}{% endwith %}
-<div class="wrap">
-  <div class="list-head">
-    <span class="list-title">Autonomous SWE — all fixes</span>
-    <span class="list-count">{{ '%03d' % incidents|length }} incidents tracked</span>
-  </div>
+    <div class="hud-shell">
+        <header class="mhead" style="view-transition-name: main-nav">
+            <a href="/" class="mhead-home" id="nav-home-link">
+                <span class="ar">←</span> HOME
+            </a>
+            <div class="mark-ascii ml-4" aria-label="LOGS" style="view-transition-name: brand">
+                <pre class="m-ar">██╗      ██████╗
+██║     ██╔═══██╗
+██║     ██║   ██║
+██║     ██║   ██║
+███████╗╚██████╔╝
+╚══════╝ ╚═════╝ </pre>
+                <pre class="m-es"> ██████╗ ███████╗
+██╔════╝ ██╔════╝
+██║  ███╗███████╗
+██║   ██║╚════██║
+╚██████╔╝███████║
+ ╚═════╝ ╚══════╝</pre>
+            </div>
+            <div class="ml-auto flex items-center gap-6">
+                <div class="hidden md:flex flex-col text-right">
+                    <span class="text-[9px] uppercase tracking-widest text-orange-400 font-bold">Live Pipeline</span>
+                    <span class="text-[11px] font-bold tracking-tight text-[#f6ece9]">AUTONOMOUS-MODE-ACTIVE</span>
+                </div>
+            </div>
+        </header>
 
-  {% if not incidents %}
-    <div class="empty">no incidents yet</div>
-  {% endif %}
+        <main class="wrap" style="view-transition-name: main-content">
+            <div class="section-title">
+                <span>Autonomous SWE - All Fixes</span>
+                <span class="count">{{ '%03d' % incidents|length }} INCIDENTS TRACKED</span>
+            </div>
 
-  <div class="stagger">
-  {% for inc in incidents %}
-    {% set st = inc.status or 'new' %}
-    {% set diag = inc.diagnosis or {} %}
-    {% set votes = diag.council_votes or [] %}
-    {% set yes = votes | selectattr('approve') | list | length %}
-    {% set dot = 'ok' if st == 'resolved' else ('bad' if st in ['council_held','stale_diff_needs_human','revert_failed_needs_human','diagnosis_timeout','rejected','command_execution_failed'] else 'pending') %}
-    <a class="row mod c-tl c-br" href="/logs/incident/{{ inc.id }}">
-      <div class="row-grid">
-        <span class="dot {{ dot }}"></span>
-        <div class="row-main">
-          <div class="row-sub">
-            <span>BOX: {{ diag.box or 'ARES' }} / {{ inc.title or inc.signature }}</span>
-            {% if st == 'council_approved' %}<span class="merge-chip">MERGE READY</span>{% endif %}
-          </div>
-          <div class="row-title">{{ diag.fix_title or inc.title or inc.id }}</div>
-          {% set summary = (diag.council_summary or {}).get('simple_explanation') or diag.triage_reason %}
-          {% if summary %}<div class="row-summary">{{ summary[:160] }}{{ '…' if summary|length > 160 }}</div>{% endif %}
-        </div>
-        <div class="row-side">
-          {% if votes %}
-          <span class="council-chip {{ 'pass' if yes * 4 >= votes|length * 3 else 'fail' }}">{{ yes }}/{{ votes|length }} COUNCIL</span>
-          {% endif %}
-          <span class="row-when">{{ inc.updated_ts_human or '' }}</span>
-        </div>
-      </div>
-    </a>
-  {% endfor %}
-  </div>
-</div>
-</div>
+            {% if not incidents %}
+            <div class="text-center text-[#8d6259] italic py-24">no incidents yet</div>
+            {% endif %}
+
+            <div class="space-y-4 stagger">
+                {% for inc in incidents %}
+                {% set st = inc.status or 'new' %}
+                {% set diag = inc.diagnosis or {} %}
+                {% set votes = diag.council_votes or [] %}
+                {% set yes = votes | selectattr('approve') | list | length %}
+                {% set dot = 'resolved' if st == 'resolved' else ('held' if st in ['council_held','stale_diff_needs_human','revert_failed_needs_human','diagnosis_timeout','rejected','command_execution_failed'] else 'pending') %}
+                <a href="/logs/incident/{{ inc.id }}" class="mod c-tl c-tr c-bl c-br p-6 flex items-center gap-6 {{ 'opacity-80 hover:opacity-100 transition-opacity' if st == 'resolved' else ('opacity-70 hover:opacity-100' if dot == 'held') }}">
+                    <div class="dot {{ dot }}"></div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-3 mb-1 flex-wrap">
+                            <span class="text-[10px] font-bold text-[#8d6259] tracking-widest uppercase">BOX: {{ diag.box or 'ARES' }} / {{ inc.title or inc.signature }}</span>
+                            {% if st == 'council_approved' %}<span class="merge-chip">Merge Ready</span>{% endif %}
+                        </div>
+                        <h2 class="row-title">{{ diag.fix_title or inc.title or inc.id }}</h2>
+                        {% set summary = (diag.council_summary or {}).get('simple_explanation') or diag.triage_reason %}
+                        {% if summary %}<p class="text-[14px] text-[#c99a90] mt-1">{{ summary[:170] }}{{ '…' if summary|length > 170 }}</p>{% endif %}
+                    </div>
+                    <div class="text-right flex flex-col items-end gap-2 flex-shrink-0">
+                        {% if votes %}
+                        {% set passed = yes * 4 >= votes|length * 3 %}
+                        <div class="consensus-chip {{ '!text-emerald-500 !border-emerald-500/30' if passed else '!text-red-500 !border-red-500/30' }}">{{ yes }}/{{ votes|length }} Council</div>
+                        {% endif %}
+                        <div class="text-[11px] text-[#5a3d37] font-bold uppercase">{{ inc.updated_ts_human or '' }}</div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </main>
+    </div>
 </body>
 </html>

@@ -1,331 +1,451 @@
-<!doctype html>
-<html data-brand="ARES">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-{% set page_title = title + ' · ARES' %}
-{% include "_hud_head.html" %}
-<style>
-  body { padding-top:0 !important; }
-  .wrap { max-width:1100px; width:100%; margin:0 auto; padding:40px 16px 80px; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="view-transition" content="same-origin">
+    <title>{{ title }} · ARES</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        @view-transition { navigation: auto; }
+        ::view-transition-old(root), ::view-transition-new(root) {
+          animation-duration: 0.4s;
+          animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        }
 
-  /* sticky module header carries the merge action (variant B) */
-  .mhead { position:sticky; top:0; z-index:50; background:var(--bg-1); }
-  .mhead-right { margin-left:auto; display:flex; align-items:center; gap:16px; }
-  .mhead-meta { display:flex; flex-direction:column; text-align:right; }
-  .mhead-meta .k { font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:#3fb950; font-weight:700; }
-  .mhead-meta .v { font-size:11px; font-weight:700; color:var(--text-1); }
-  @media (max-width:640px){ .mhead-meta { display:none; } }
-  .btn-merge { background:#3fb950; color:var(--bg-0); font:inherit; font-weight:800; text-transform:uppercase;
-    letter-spacing:.05em; padding:12px 24px; font-size:13px; border:none; cursor:pointer;
-    box-shadow:0 0 20px -5px #3fb950; transition:all .2s var(--ease-out); }
-  .btn-merge:hover { filter:brightness(1.1); transform:translateY(-1px); }
-  .btn-reject { background:transparent; color:#f85149; font:inherit; font-weight:700; text-transform:uppercase;
-    letter-spacing:.05em; padding:12px 18px; font-size:12px; border:1px solid #f85149; cursor:pointer; transition:all .2s var(--ease-out); }
-  .btn-reject:hover { background:rgba(248,81,73,.1); }
-  .btn-merge:disabled, .btn-reject:disabled { opacity:.5; cursor:default; transform:none; }
+        :root {
+            --bg-0: #070403;
+            --bg-1: #0d0605;
+            --bg-2: #140807;
+            --ares: #f5402d;
+            --ares-rgb: 245, 64, 45;
+            --ares-bright: #ff7a45;
+            --ember-dim: rgba(245, 64, 45, 0.28);
+            --text-1: #f6ece9;
+            --text-2: #c99a90;
+            --text-3: #8d6259;
+            --panel-bg: rgba(20, 8, 7, 0.55);
+            --green: #3fb950;
+            --red: #f85149;
+            --orange: #ff7a45;
+        }
 
-  /* status + title header */
-  .status-row { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
-  .dot { width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
-  .dot.ok { background:#3fb950; box-shadow:0 0 12px #3fb950; }
-  .dot.bad { background:#f85149; box-shadow:0 0 12px #f85149; }
-  .dot.pending { background:var(--ares-bright); box-shadow:0 0 12px var(--ares-bright); animation:pulse 2.4s ease-in-out infinite; }
-  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.55; } }
-  .status-word { font-size:12px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
-  .status-word.ok { color:#3fb950; } .status-word.bad { color:#f85149; } .status-word.pending { color:var(--ares-bright); }
-  .pr-title { font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:clamp(28px,4vw,42px);
-    line-height:1.1; letter-spacing:-.02em; color:var(--text-1); margin:0 0 8px;
-    text-shadow:0 0 30px rgba(var(--ares-rgb),.2); }
-  .pr-subtitle { font-size:12px; color:var(--text-3); font-weight:700; letter-spacing:.14em; text-transform:uppercase; margin-bottom:24px; }
-  .meta-strip { display:flex; gap:40px; border-top:1px solid rgba(255,255,255,.05); border-bottom:1px solid rgba(255,255,255,.05);
-    padding:16px 0; margin-bottom:48px; flex-wrap:wrap; }
-  .meta-strip .k { font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.18em; margin-bottom:4px; }
-  .meta-strip .v { font-size:13px; font-weight:700; color:var(--text-1); }
-  .meta-strip .v.consensus-ok { color:#3fb950; }
-  .meta-strip .v.consensus-bad { color:#f85149; }
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg-0);
+            color: var(--text-1);
+            font-family: 'JetBrains Mono', monospace;
+            -webkit-font-smoothing: antialiased;
+        }
 
-  /* section titles with rule */
-  .section { margin-bottom:48px; }
-  .section-title { font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--text-3);
-    margin-bottom:16px; font-weight:700; display:flex; align-items:center; gap:8px; }
-  .section-title::after { content:''; height:1px; flex:1; background:var(--ember-dim); }
+        .hud-shell { min-height: 100vh; display: flex; flex-direction: column; }
 
-  /* executive summary */
-  .exec-summary { padding:24px; border-left:4px solid var(--ares); }
-  .exec-summary p { font-family:'Bricolage Grotesque',sans-serif; font-size:20px; font-weight:600;
-    line-height:1.55; color:var(--text-1); margin:0; }
+        .mod {
+            position: relative;
+            contain: layout paint;
+            border: 1px solid var(--ember-dim);
+            background: var(--panel-bg);
+            box-shadow: inset 0 0 22px rgba(var(--ares-rgb), 0.045);
+        }
 
-  /* prose */
-  .prose { font-family:'Bricolage Grotesque',sans-serif; color:var(--text-2); font-size:16px; line-height:1.8; max-width:75ch; }
-  .prose p { margin:0 0 24px; }
-  .prose p:last-child { margin-bottom:0; }
+        .mod::before, .mod::after {
+            position: absolute;
+            width: 11px;
+            height: 11px;
+            border: 2px solid var(--ares);
+            pointer-events: none;
+            content: '';
+        }
+        .mod.c-tl::before { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
+        .mod.c-tr::before { top: -2px; right: -2px; border-left: 0; border-bottom: 0; }
+        .mod.c-bl::after  { bottom: -2px; left: -2px; border-right: 0; border-top: 0; }
+        .mod.c-br::after  { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
 
-  /* council cards */
-  .council-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
-  .council-card { padding:24px 20px; display:flex; flex-direction:column; gap:12px; }
-  .council-card.yes { border-color:rgba(63,185,80,.4); }
-  .council-card.no { border-color:rgba(248,81,73,.4); }
-  .council-top { display:flex; justify-content:space-between; align-items:flex-start; }
-  .council-icon { font-size:24px; line-height:1; }
-  .council-vote-badge { font-size:10px; font-weight:800; padding:4px 8px; border:1px solid currentColor; letter-spacing:.08em; }
-  .council-vote-badge.yes { color:#3fb950; } .council-vote-badge.no { color:#f85149; }
-  .council-name { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-2); font-weight:700; }
-  .council-take { font-family:'Bricolage Grotesque',sans-serif; font-size:13.5px; line-height:1.55; color:var(--text-2); }
-  .council-take.failed { font-style:italic; opacity:.6; }
+        .mhead {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 24px 16px 11px;
+            border-bottom: 1px solid rgba(var(--ares-rgb), 0.14);
+            background: var(--bg-1);
+            z-index: 50;
+            position: sticky;
+            top: 0;
+        }
 
-  /* impact matrix */
-  .impact-what { font-family:'Bricolage Grotesque',sans-serif; font-size:16px; font-weight:600; color:var(--text-1);
-    line-height:1.6; padding:20px 24px 0; }
-  .impact-grid { padding:24px; display:grid; grid-template-columns:1fr 1fr; gap:32px; }
-  @media (max-width:640px){ .impact-grid { grid-template-columns:1fr; } }
-  .impact-head { font-size:11px; font-weight:700; letter-spacing:.2em; text-transform:uppercase; margin-bottom:16px; }
-  .impact-head.gains { color:#3fb950; } .impact-head.risks { color:#f85149; }
-  .impact-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px; }
-  .impact-list li { font-family:'Bricolage Grotesque',sans-serif; font-size:14px; line-height:1.55; color:var(--text-2);
-    display:flex; gap:10px; }
-  .impact-list li::before { flex:0 0 auto; font-family:'JetBrains Mono',monospace; font-weight:700; }
-  .impact-list.gains li::before { content:'✓'; color:rgba(63,185,80,.6); }
-  .impact-list.risks li::before { content:'✗'; color:rgba(248,81,73,.6); }
+        .mhead-home {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border: 1px solid var(--ember-dim);
+            color: var(--text-2);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
 
-  /* execution sequence */
-  .seq-note { font-size:12px; color:var(--text-3); margin-bottom:16px; font-style:italic; }
-  .steps-list { list-style:none; margin:0; padding:0; }
-  .steps-list li { padding:24px; display:flex; gap:24px; align-items:flex-start; border-bottom:1px solid var(--ember-dim); }
-  .steps-list li:last-child { border-bottom:none; }
-  .step-number { width:28px; height:28px; border:1px solid var(--ares-bright); color:var(--ares-bright);
-    font-weight:700; display:flex; align-items:center; justify-content:center; font-size:12px; flex:0 0 auto; }
-  .step-label { font-family:'Bricolage Grotesque',sans-serif; font-size:15px; font-weight:700; color:var(--text-1);
-    display:block; margin-bottom:8px; }
-  .steps-list code { font-family:'JetBrains Mono',monospace; font-size:12.5px; color:#5fd97a;
-    background:rgba(63,185,80,.05); border:1px solid rgba(63,185,80,.2); padding:8px 12px; display:inline-block; }
+        .mhead-home:hover { border-color: var(--ares); color: var(--text-1); background: rgba(var(--ares-rgb), 0.1); }
+        .mhead-home .ar { color: var(--ares); font-size: 13px; }
 
-  /* diff */
-  pre.logbox { margin:0; padding:18px; background:rgba(var(--panel-rgb),.5); border:1px solid var(--ember-dim);
-    font-family:'JetBrains Mono',monospace; font-size:13px; line-height:1.65;
-    white-space:pre-wrap; word-break:break-word; max-height:60vh; overflow:auto; color:var(--text-2); }
-  pre.logbox.diff { padding:0; font-size:12.5px; }
-  pre.logbox.diff span { display:block; padding:2px 18px; }
-  pre.logbox .add { background:rgba(63,185,80,.14); color:#5fd97a; }
-  pre.logbox .del { background:rgba(248,81,73,.14); color:#ff8a82; }
-  pre.logbox .hunk { color:var(--ares-bright); background:rgba(var(--ares-rgb),.08); font-weight:600; }
+        .mark-ascii { display: flex; line-height: 0; user-select: none; }
+        .mark-ascii pre {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 7px;
+            line-height: 1.0;
+            font-weight: 700;
+            margin: 0;
+            white-space: pre;
+        }
+        .m-ar { color: var(--ares); text-shadow: 0 0 14px rgba(var(--ares-rgb), 0.45); }
+        .m-es { color: #f4f8fd; text-shadow: 0 0 14px rgba(244, 248, 253, 0.38); }
 
-  /* raw log disclosure */
-  details.log-details { margin-top:60px; }
-  details.log-details summary { cursor:pointer; display:flex; align-items:center; gap:8px; list-style:none;
-    color:var(--text-3); font-size:13px; transition:color .2s; }
-  details.log-details summary:hover { color:var(--text-1); }
-  details.log-details summary::-webkit-details-marker { display:none; }
-  details.log-details summary::before { content:'▸'; }
-  details.log-details[open] summary::before { content:'▾'; }
-  details.log-details .mod { padding:24px; margin-top:16px; }
-  details.log-details pre { font-size:12px; color:var(--text-2); line-height:1.6; white-space:pre-wrap; word-break:break-word;
-    margin:0; max-height:60vh; overflow:auto; }
+        .wrap { max-width: 1100px; width: 100%; margin: 0 auto; padding: 40px 16px 80px; }
 
-  .empty-card { border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.35); padding:22px; }
-  .empty { color:var(--text-3); font-style:italic; font-size:13px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .dot.ok { background: var(--green); box-shadow: 0 0 12px var(--green); }
+        .dot.bad { background: var(--red); box-shadow: 0 0 12px var(--red); }
+        .dot.pending { background: var(--orange); box-shadow: 0 0 12px var(--orange); animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        .status-word.ok { color: var(--green); }
+        .status-word.bad { color: var(--red); }
+        .status-word.pending { color: var(--orange); }
 
-  /* stagger entrance */
-  @keyframes rise { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
-  .stagger > * { animation:rise .5s cubic-bezier(.16,1,.3,1) both; }
-  .stagger > *:nth-child(1) { animation-delay:.05s; }
-  .stagger > *:nth-child(2) { animation-delay:.1s; }
-  .stagger > *:nth-child(3) { animation-delay:.15s; }
-  .stagger > *:nth-child(4) { animation-delay:.2s; }
-  .stagger > *:nth-child(5) { animation-delay:.25s; }
-  .stagger > *:nth-child(6) { animation-delay:.3s; }
+        .section-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--text-3);
+            margin-bottom: 16px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-title::after { content: ''; height: 1px; flex: 1; background: var(--ember-dim); }
 
-  /* job-log trace panel: classified journalctl lines */
-  pre.trace { margin:0; padding:24px; font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.9;
-    white-space:pre-wrap; word-break:break-word; max-height:72vh; overflow:auto; color:var(--text-2); }
-  pre.trace span { display:block; }
-  pre.trace .err { color:#ff8a82; background:rgba(248,81,73,.07); }
-  pre.trace .fine { color:#5fd97a; }
-</style>
+        .pr-title {
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-weight: 800;
+            font-size: clamp(28px, 4vw, 42px);
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            color: var(--text-1);
+            text-shadow: 0 0 30px rgba(var(--ares-rgb), 0.2);
+        }
+
+        .btn-merge {
+            background: var(--green);
+            color: var(--bg-0);
+            font-family: inherit;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 12px 24px;
+            font-size: 14px;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 0 20px -5px var(--green);
+        }
+        .btn-merge:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-reject {
+            background: transparent;
+            color: var(--red);
+            font-family: inherit;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 12px 18px;
+            font-size: 12px;
+            border: 1px solid var(--red);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-reject:hover { background: rgba(248, 81, 73, 0.1); }
+        .btn-merge:disabled, .btn-reject:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+        .council-card {
+            padding: 24px 20px;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .council-card.yes { border-color: rgba(63, 185, 80, 0.4); }
+        .council-card.no { border-color: rgba(248, 81, 73, 0.4); }
+
+        .council-vote-badge {
+            font-size: 10px;
+            font-weight: 800;
+            padding: 4px 8px;
+            border: 1px solid currentColor;
+            width: fit-content;
+        }
+
+        .council-name {
+            font-size: 11px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--text-2);
+            font-weight: 700;
+        }
+        .council-take {
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-size: 13.5px;
+            line-height: 1.55;
+            color: var(--text-2);
+        }
+
+        .prose p { margin-bottom: 1.5rem; }
+        .prose p:last-child { margin-bottom: 0; }
+        .prose code {
+            color: var(--ares-bright);
+            background: rgba(var(--ares-rgb), 0.08);
+            padding: 1px 5px;
+        }
+
+        .steps-list li { border-bottom: 1px solid var(--ember-dim); }
+        .steps-list li:last-child { border-bottom: none; }
+
+        .step-number {
+            width: 28px; height: 28px;
+            border: 1px solid var(--ares-bright);
+            color: var(--ares-bright);
+            font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        pre.diffbox { margin: 0; padding: 0; font-family: 'JetBrains Mono', monospace; font-size: 12.5px;
+            line-height: 1.65; white-space: pre-wrap; word-break: break-word; max-height: 60vh; overflow: auto; color: var(--text-2); }
+        pre.diffbox span { display: block; padding: 2px 18px; }
+        pre.diffbox .add { background: rgba(63, 185, 80, 0.14); color: #5fd97a; }
+        pre.diffbox .del { background: rgba(248, 81, 73, 0.14); color: #ff8a82; }
+        pre.diffbox .hunk { color: var(--ares-bright); background: rgba(var(--ares-rgb), 0.08); font-weight: 600; }
+
+        @keyframes rise { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform:translateY(0); } }
+        .stagger > * { animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+        .stagger > *:nth-child(1) { animation-delay: 0.05s; }
+        .stagger > *:nth-child(2) { animation-delay: 0.1s; }
+        .stagger > *:nth-child(3) { animation-delay: 0.15s; }
+        .stagger > *:nth-child(4) { animation-delay: 0.2s; }
+        .stagger > *:nth-child(5) { animation-delay: 0.25s; }
+        .stagger > *:nth-child(6) { animation-delay: 0.3s; }
+    </style>
 </head>
 <body>
-<div class="hud-shell">
-
-{% if sections is defined %}
-{# ---------- Job-log mode: status + meta strip + classified trace ---------- #}
-{% with page_name='LOGS' %}{% include "_hud_nav.html" %}{% endwith %}
-<main class="wrap stagger">
-  <div>
-    <div class="status-row">
-      <span class="dot {{ 'ok' if job_ok else 'bad' }}"></span>
-      <span class="status-word {{ 'ok' if job_ok else 'bad' }}">{{ 'System operational' if job_ok else 'Failing' }}</span>
-    </div>
-    <h1 class="pr-title">{{ title }}</h1>
-    {% if job_header %}
-    <div class="meta-strip">
-      {% for item in job_header %}
-      <div><div class="k">{{ item.label }}</div>
-        <div class="v {{ 'consensus-ok' if item.cls == 'ok' else ('consensus-bad' if item.cls == 'bad') }}">{{ item.value }}</div></div>
-      {% endfor %}
-    </div>
-    {% endif %}
-  </div>
-
-  <div class="section">
-    <div class="section-title">journalctl — last 800 lines</div>
-    {% if log_lines %}
-    <div class="mod c-tl c-tr c-bl c-br">
-      <pre class="trace">{% for line in log_lines %}<span class="{{ line.cls }}">{{ line.text }}</span>
-{% endfor %}</pre>
-    </div>
-    {% else %}
-    <div class="empty-card"><div class="empty">{{ log_empty or 'no log yet' }}</div></div>
-    {% endif %}
-  </div>
-</main>
-
-{% else %}
-{# ---------- Incident mode: mission-control review (variant B) ---------- #}
-{% set approvals = council_votes | selectattr('approve') | list | length if council_votes else 0 %}
-<header class="mhead">
-  <a class="mhead-home" href="/"><span class="ar">←</span> HOME</a>
-  <div class="mark-ascii" aria-label="LOGS">
-<pre class="m-ar">██╗      ██████╗
+    {% set persona_icons = {'Security': 'lucide:shield-check', 'Correctness': 'lucide:search',
+                            'Blast-Radius': 'lucide:zap-off', 'Pragmatist': 'lucide:cog'} %}
+    {% set approvals = council_votes | selectattr('approve') | list | length if council_votes else 0 %}
+    {% set consensus_pass = council_votes and approvals * 4 >= council_votes|length * 3 %}
+    <div class="hud-shell">
+        <header class="mhead" style="view-transition-name: main-nav">
+            <a href="/logs" class="mhead-home" id="nav-home-link">
+                <span class="ar">←</span> LOGS
+            </a>
+            <div class="mark-ascii ml-4" aria-label="LOGS" style="view-transition-name: brand">
+                <pre class="m-ar">██╗      ██████╗
 ██║     ██╔═══██╗
 ██║     ██║   ██║
 ██║     ██║   ██║
 ███████╗╚██████╔╝
-╚══════╝ ╚═════╝ </pre><pre class="m-es"> ██████╗ ███████╗
+╚══════╝ ╚═════╝ </pre>
+                <pre class="m-es"> ██████╗ ███████╗
 ██╔════╝ ██╔════╝
 ██║  ███╗███████╗
 ██║   ██║╚════██║
 ╚██████╔╝███████║
  ╚═════╝ ╚══════╝</pre>
-  </div>
-  <div class="mhead-right">
-    {% if council_votes %}
-    <div class="mhead-meta">
-      <span class="k">Council</span>
-      <span class="v">{{ approvals }}/{{ council_votes | length }} approve</span>
-    </div>
-    {% endif %}
-    {% if show_approve_reject %}
-    <button class="btn-reject" onclick="autofixAct('reject','{{ incident_id }}',this)">Reject</button>
-    <button class="btn-merge" onclick="autofixAct('approve','{{ incident_id }}',this)">Confirm Merge</button>
-    {% endif %}
-  </div>
-</header>
-
-<main class="wrap stagger">
-  <div>
-    <div class="status-row">
-      <span class="dot {{ status_pill_cls }}"></span>
-      <span class="status-word {{ status_pill_cls }}">{{ status_pill }}</span>
-    </div>
-    <h1 class="pr-title">{{ title }}</h1>
-    {% if subtitle %}<div class="pr-subtitle">{{ subtitle }}</div>{% endif %}
-    <div class="meta-strip">
-      <div><div class="k">Origin host</div><div class="v">BOX: {{ box }}</div></div>
-      <div><div class="k">Updated</div><div class="v">{{ when }}</div></div>
-      {% if council_votes %}
-      <div><div class="k">Consensus</div>
-        <div class="v {{ 'consensus-ok' if approvals * 4 >= council_votes|length * 3 else 'consensus-bad' }}">{{ approvals }}/{{ council_votes|length }} council approve</div></div>
-      {% endif %}
-    </div>
-  </div>
-
-  {% if what_it_does %}
-  <div class="section">
-    <div class="section-title">Executive summary</div>
-    <div class="mod c-tl c-bl exec-summary"><p>{{ what_it_does }}</p></div>
-  </div>
-  {% endif %}
-
-  {% if why_paragraphs %}
-  <div class="section">
-    <div class="section-title">Investigation &amp; analysis</div>
-    <div class="prose">{% for p in why_paragraphs %}<p>{{ p }}</p>{% endfor %}</div>
-  </div>
-  {% endif %}
-
-  <div class="section">
-    <div class="section-title">Council deliberation</div>
-    {% if council_votes %}
-    <div class="council-grid">
-      {% for v in council_votes %}
-      <div class="mod c-tl c-tr c-bl c-br council-card {{ 'yes' if v.approve else 'no' }}">
-        <div class="council-top">
-          <span class="council-icon">{{ v.icon }}</span>
-          <span class="council-vote-badge {{ 'yes' if v.approve else 'no' }}">{{ '✓ APPROVE' if v.approve else '✗ REJECT' }}</span>
-        </div>
-        <div class="council-name">{{ v.persona }}</div>
-        <div class="council-take {{ 'failed' if 'review failed' in v.verdict }}">{{ v.verdict }}</div>
-      </div>
-      {% endfor %}
-    </div>
-    {% elif council_verdict %}
-    <div class="mod c-tl c-br" style="padding:20px 24px">
-      <div class="prose">{{ council_verdict }}</div>
-    </div>
-    {% else %}
-    <div class="empty-card"><div class="empty">not yet reviewed</div></div>
-    {% endif %}
-  </div>
-
-  {% if council_summary and (council_summary.what_happens or council_summary.pros or council_summary.cons) %}
-  <div class="section">
-    <div class="section-title">Operational impact</div>
-    <div class="mod c-tl c-tr c-bl c-br">
-      {% if council_summary.what_happens %}<div class="impact-what">{{ council_summary.what_happens }}</div>{% endif %}
-      <div class="impact-grid">
-        {% if council_summary.pros %}
-        <div>
-          <div class="impact-head gains">Expected gains</div>
-          <ul class="impact-list gains">{% for p in council_summary.pros %}<li>{{ p }}</li>{% endfor %}</ul>
-        </div>
-        {% endif %}
-        {% if council_summary.cons %}
-        <div>
-          <div class="impact-head risks">Residual risks</div>
-          <ul class="impact-list risks">{% for c in council_summary.cons %}<li>{{ c }}</li>{% endfor %}</ul>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-  {% endif %}
-
-  {% if code_section %}
-  <div class="section">
-    <div class="section-title">{{ 'Execution sequence' if code_section.kind == 'steps' else code_section.label }}</div>
-    {% if code_section.meta %}<div class="seq-note">{{ code_section.meta }}</div>{% endif %}
-    {% if code_section.kind == 'diff' %}
-      <pre class="logbox diff">{% for line in code_section.lines %}<span class="{{ line.cls }}">{{ line.text }}</span>
-{% endfor %}</pre>
-    {% elif code_section.kind == 'steps' %}
-      {% if code_section.intro %}<div class="prose" style="margin-bottom:16px">{{ code_section.intro }}</div>{% endif %}
-      <div class="mod c-tl c-tr c-bl c-br">
-        <ul class="steps-list">
-          {% for item in code_section.step_list %}
-          <li>
-            <div class="step-number">{{ '%02d' % loop.index }}</div>
-            <div style="flex:1">
-              {% if item.label %}<span class="step-label">{{ item.label }}</span>{% endif %}
-              <code>{{ item.command }}</code>
             </div>
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% else %}
-      <pre class="logbox">{{ code_section.content }}</pre>
-    {% endif %}
-  </div>
-  {% endif %}
+            <div class="ml-auto flex items-center gap-6">
+                {% if council_votes %}
+                <div class="hidden md:flex flex-col text-right">
+                    <span class="text-[9px] uppercase tracking-widest {{ 'text-emerald-500' if consensus_pass else 'text-red-500' }} font-bold">Council Consensus</span>
+                    <span class="text-[11px] font-bold tracking-tight text-[#f6ece9]">{{ approvals }}/{{ council_votes|length }} APPROVE</span>
+                </div>
+                {% endif %}
+                {% if show_approve_reject %}
+                <button class="btn-reject" onclick="autofixAct('reject','{{ incident_id }}',this)">Reject</button>
+                <button class="btn-merge" id="cta-merge-btn" onclick="autofixAct('approve','{{ incident_id }}',this)">Confirm Merge</button>
+                {% endif %}
+            </div>
+        </header>
 
-  <details class="log-details">
-    <summary>Raw diagnostic trace</summary>
-    <div class="mod c-tl c-tr c-bl c-br">
-      {% if log_content %}<pre>{{ log_content }}</pre>
-      {% else %}<div class="empty">no session log yet</div>{% endif %}
+        <main class="wrap stagger" style="view-transition-name: main-content">
+            <!-- Header Section -->
+            <div class="mb-12">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="dot {{ status_pill_cls }}"></div>
+                    <span class="status-word {{ status_pill_cls }} text-[11px] font-bold tracking-widest uppercase">{{ status_pill }}</span>
+                </div>
+                <h1 class="pr-title mb-2">{{ title }}</h1>
+                {% if subtitle %}<div class="text-[13px] text-[#8d6259] font-bold tracking-widest uppercase mb-6">{{ subtitle }}</div>{% endif %}
+                <div class="flex gap-8 border-y border-white/5 py-4 flex-wrap">
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-[#8d6259] uppercase tracking-widest mb-1">Origin Host</span>
+                        <span class="text-[13px] font-bold text-[#f6ece9]">BOX: {{ box }}</span>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-[#8d6259] uppercase tracking-widest mb-1">Updated</span>
+                        <span class="text-[13px] font-bold text-[#f6ece9]">{{ when }}</span>
+                    </div>
+                    {% if council_votes %}
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-[#8d6259] uppercase tracking-widest mb-1">Consensus</span>
+                        <span class="text-[13px] font-bold {{ 'text-emerald-500' if consensus_pass else 'text-red-500' }}">{{ approvals }}/{{ council_votes|length }} Council Approve</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Summary Section -->
+            {% if what_it_does %}
+            <div class="mb-12">
+                <div class="section-title">Executive Summary</div>
+                <div class="mod c-tl c-bl p-6 border-l-4 border-l-[#f5402d]">
+                    <p class="font-['Bricolage_Grotesque'] text-[20px] font-semibold leading-relaxed text-[#f6ece9]">
+                        {{ what_it_does }}
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Detailed Reasoning -->
+            {% if why_paragraphs %}
+            <div class="mb-12">
+                <div class="section-title">Investigation &amp; Analysis</div>
+                <div class="prose text-[#c99a90] text-[16px] leading-[1.8] max-w-[75ch]">
+                    {% for p in why_paragraphs %}<p>{{ p }}</p>{% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Council Grid -->
+            <div class="mb-12">
+                <div class="section-title">Council Deliberation</div>
+                {% if council_votes %}
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {% for v in council_votes %}
+                    {% set failed = 'review failed' in v.verdict %}
+                    <div class="mod c-tl c-tr c-bl c-br council-card {{ 'yes' if v.approve else 'no' }}">
+                        <div class="flex justify-between items-start">
+                            <iconify-icon icon="{{ persona_icons.get(v.persona, 'lucide:user') }}" class="text-2xl {{ 'text-emerald-500' if v.approve else 'text-red-500' }}"></iconify-icon>
+                            <span class="council-vote-badge {{ 'text-emerald-500' if v.approve else 'text-red-500' }}">{{ '✓ APPROVE' if v.approve else '✗ REJECT' }}</span>
+                        </div>
+                        <div class="council-name mt-2">{{ v.persona }} Persona</div>
+                        <div class="council-take {{ 'italic opacity-60' if failed }}">{{ v.verdict }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% elif council_verdict %}
+                <div class="mod c-tl c-br p-6">
+                    <div class="prose text-[#c99a90] text-[15px] leading-[1.7]">{{ council_verdict }}</div>
+                </div>
+                {% else %}
+                <div class="mod c-tl c-br p-6 text-[#8d6259] italic text-[13px]">not yet reviewed</div>
+                {% endif %}
+            </div>
+
+            <!-- Impact Block -->
+            {% if council_summary and (council_summary.what_happens or council_summary.pros or council_summary.cons) %}
+            <div class="mb-12">
+                <div class="section-title">Operational Impact Matrix</div>
+                <div class="mod c-tl c-tr c-bl c-br">
+                    {% if council_summary.what_happens %}
+                    <div class="px-6 pt-6 font-['Bricolage_Grotesque'] text-[16px] font-semibold text-[#f6ece9] leading-relaxed">
+                        {{ council_summary.what_happens }}
+                    </div>
+                    {% endif %}
+                    <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {% if council_summary.pros %}
+                        <div>
+                            <div class="text-[11px] font-bold text-emerald-500 tracking-[0.2em] uppercase mb-4 flex items-center gap-2">
+                                <iconify-icon icon="lucide:arrow-up-right"></iconify-icon> Expected Gains
+                            </div>
+                            <ul class="space-y-3 text-[14px] text-[#c99a90] font-['Bricolage_Grotesque']">
+                                {% for p in council_summary.pros %}
+                                <li class="flex gap-3"><iconify-icon icon="lucide:check-circle" class="text-emerald-500/50 mt-1 flex-shrink-0"></iconify-icon> {{ p }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                        {% if council_summary.cons %}
+                        <div>
+                            <div class="text-[11px] font-bold text-red-500 tracking-[0.2em] uppercase mb-4 flex items-center gap-2">
+                                <iconify-icon icon="lucide:alert-triangle"></iconify-icon> Residual Risks
+                            </div>
+                            <ul class="space-y-3 text-[14px] text-[#c99a90] font-['Bricolage_Grotesque']">
+                                {% for c in council_summary.cons %}
+                                <li class="flex gap-3"><iconify-icon icon="lucide:x-circle" class="text-red-500/50 mt-1 flex-shrink-0"></iconify-icon> {{ c }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Deployment Plan -->
+            {% if code_section %}
+            <div class="mb-12">
+                <div class="section-title">{{ 'Execution Sequence' if code_section.kind == 'steps' else code_section.label }}</div>
+                {% if code_section.meta %}<div class="text-[12px] text-[#8d6259] mb-6 italic">{{ code_section.meta }}</div>{% endif %}
+                {% if code_section.kind == 'diff' %}
+                <div class="mod c-tl c-tr c-bl c-br">
+                    <pre class="diffbox py-4">{% for line in code_section.lines %}<span class="{{ line.cls }}">{{ line.text }}</span>
+{% endfor %}</pre>
+                </div>
+                {% elif code_section.kind == 'steps' %}
+                {% if code_section.intro %}<div class="text-[14px] text-[#c99a90] mb-4 font-['Bricolage_Grotesque']">{{ code_section.intro }}</div>{% endif %}
+                <div class="mod c-tl c-tr c-bl c-br">
+                    <ul class="steps-list">
+                        {% for item in code_section.step_list %}
+                        <li class="p-6 flex gap-6 items-start">
+                            <div class="step-number">{{ '%02d' % loop.index }}</div>
+                            <div class="flex-1 min-w-0">
+                                {% if item.label %}<span class="text-[15px] font-bold text-[#f6ece9] block mb-2 font-['Bricolage_Grotesque']">{{ item.label }}</span>{% endif %}
+                                <code class="bg-emerald-500/5 border border-emerald-500/20 text-[#5fd97a] px-3 py-2 inline-block">{{ item.command }}</code>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% else %}
+                <div class="mod c-tl c-tr c-bl c-br p-6">
+                    <pre class="text-[12px] text-[#c99a90] leading-relaxed whitespace-pre-wrap">{{ code_section.content }}</pre>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Diagnostic Logs -->
+            <details class="mt-20">
+                <summary class="flex items-center gap-2 text-[#8d6259] hover:text-[#f6ece9] transition-colors cursor-pointer">
+                    <iconify-icon icon="lucide:terminal"></iconify-icon>
+                    <span>Raw Diagnostic Trace</span>
+                </summary>
+                <div class="mod c-tl c-tr c-bl c-br p-6 mt-4">
+                    {% if log_content %}
+                    <pre class="text-[12px] text-[#c99a90] leading-relaxed whitespace-pre-wrap max-h-[60vh] overflow-auto">{{ log_content }}</pre>
+                    {% else %}
+                    <div class="text-[#8d6259] italic text-[13px]">no session log yet</div>
+                    {% endif %}
+                </div>
+            </details>
+        </main>
     </div>
-  </details>
-</main>
-{% endif %}
-</div>
 {% if show_approve_reject %}
 <script>
 async function autofixAct(action, id, btn) {
