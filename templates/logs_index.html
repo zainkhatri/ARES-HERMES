@@ -215,18 +215,7 @@
             </div>
         </header>
 
-        <main class="wrap" style="view-transition-name: main-content">
-            <div class="section-title">
-                <span>Autonomous SWE - All Fixes</span>
-                <span class="count">{{ '%03d' % incidents|length }} INCIDENTS TRACKED</span>
-            </div>
-
-            {% if not incidents %}
-            <div class="text-center text-[#8d6259] italic py-24">no incidents yet</div>
-            {% endif %}
-
-            <div class="space-y-4 stagger">
-                {% for inc in incidents %}
+        {% macro incident_row(inc) %}
                 {% set st = inc.status or 'new' %}
                 {% set diag = inc.diagnosis or {} %}
                 {% set votes = diag.council_votes or [] %}
@@ -237,7 +226,7 @@
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-3 mb-1 flex-wrap">
                             <span class="text-[10px] font-bold text-[#8d6259] tracking-widest uppercase">BOX: {{ diag.box or 'ARES' }} / {{ inc.title or inc.signature }}</span>
-                            {% if st == 'council_approved' %}<span class="merge-chip">Merge Ready</span>{% endif %}
+                            {% if st == 'council_approved' %}<span class="merge-chip">Merge Ready</span>{% elif st == 'resolved' %}<span class="merge-chip" style="background: var(--text-3)">Merged</span>{% endif %}
                         </div>
                         <h2 class="row-title">{{ diag.fix_title or inc.title or inc.id }}</h2>
                         {% set summary = (diag.council_summary or {}).get('simple_explanation') or diag.triage_reason %}
@@ -251,8 +240,37 @@
                         <div class="text-[11px] text-[#5a3d37] font-bold uppercase">{{ inc.updated_ts_human or '' }}</div>
                     </div>
                 </a>
-                {% endfor %}
+        {% endmacro %}
+
+        <main class="wrap" style="view-transition-name: main-content">
+            <div class="section-title">
+                <span>Autonomous SWE - All Fixes</span>
+                <span class="count">{{ '%03d' % total }} INCIDENTS TRACKED</span>
             </div>
+
+            {% if not total %}
+            <div class="text-center text-[#8d6259] italic py-24">no incidents yet</div>
+            {% endif %}
+
+            {% if unmerged %}
+            <div class="section-title" style="margin-top: 8px">
+                <span style="color: var(--orange)">◆ Merge Ready</span>
+                <span class="count">{{ unmerged|length }} AWAITING</span>
+            </div>
+            <div class="space-y-4 stagger">
+                {% for inc in unmerged %}{{ incident_row(inc) }}{% endfor %}
+            </div>
+            {% endif %}
+
+            {% if merged %}
+            <div class="section-title" style="margin-top: 48px">
+                <span style="color: var(--green)">✓ Merged</span>
+                <span class="count">{{ merged|length }} SHIPPED</span>
+            </div>
+            <div class="space-y-4">
+                {% for inc in merged %}{{ incident_row(inc) }}{% endfor %}
+            </div>
+            {% endif %}
         </main>
     </div>
 </body>

@@ -693,14 +693,16 @@ def logs_index_page():
     # hide noise by default: rejected duplicates and triage-skipped blips (?all=1 shows everything)
     if request.args.get("all") != "1":
         incidents = [i for i in incidents if i.get("status") not in ("rejected", "triaged_skip")]
-    # unmerged (still needs eyes) first, merged/done sinks to the bottom; recency within each group
-    _MERGED = ("resolved", "command_execution_failed", "revert_failed_needs_human")
-    incidents = sorted(incidents,
-                       key=lambda i: (i.get("status") in _MERGED, -i.get("updated_ts", 0)))
     for inc in incidents:
         ts = inc.get("updated_ts")
         inc["updated_ts_human"] = datetime.fromtimestamp(ts, tz=_GALLERY_TZ).strftime("%b %-d, %Y %-I:%M %p") if ts else ""
-    return render_template("logs_index.html", boot=get_system_info(), incidents=incidents)
+    # two sections: still-actionable up top, already-merged below; recency within each
+    _MERGED = ("resolved",)
+    _recent = lambda i: -i.get("updated_ts", 0)
+    unmerged = sorted((i for i in incidents if i.get("status") not in _MERGED), key=_recent)
+    merged = sorted((i for i in incidents if i.get("status") in _MERGED), key=_recent)
+    return render_template("logs_index.html", boot=get_system_info(),
+                           unmerged=unmerged, merged=merged, total=len(incidents))
 
 
 @app.route("/logs/job/<unit>")
