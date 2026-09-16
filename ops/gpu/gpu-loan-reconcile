@@ -125,6 +125,12 @@ _restart_on_cooldown() {  # 0 (true) if we may restart ares now
 
 _restart_ares() {
     date +%s > "$STAMP" 2>/dev/null || true
+    # Ensure /dev/nvidia-uvm exists BEFORE restarting ares. nvidia-uvm is
+    # created lazily by the first CUDA app; at boot ares can restart before any
+    # CUDA use has created it, and land on CPU despite a healthy free GPU
+    # (2026-09-15 reboot test). Idempotent; nvidia-uvm-init.service also does
+    # this early at boot, this is defense-in-depth for the periodic path.
+    timeout 15 nvidia-modprobe -c 0 -u 2>>"$LOG" || log "WARN: nvidia-modprobe -u failed"
     if timeout 10 pct status "$ARES_CTID" 2>/dev/null | grep -q "status: running"; then
         timeout 90 pct exec "$ARES_CTID" -- systemctl restart ares >>"$LOG" 2>&1 \
             || log "WARN: ares restart failed/slow"

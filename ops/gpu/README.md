@@ -9,6 +9,7 @@ are kept here for version control + backup. Deploy paths:
 | `gpu-loan-reconcile` | `/usr/local/sbin/gpu-loan-reconcile` (0755) |
 | `gpu-loan-reconcile.service` | `/etc/systemd/system/` |
 | `gpu-loan-reconcile.timer` | `/etc/systemd/system/` (enable: `systemctl enable --now`) |
+| `nvidia-uvm-init.service` | `/etc/systemd/system/` (enable: `systemctl enable`) — creates /dev/nvidia-uvm before CT 101 starts |
 
 ## How it works
 - `gpu-swap.sh` hands the RTX 3080 between ARES (CT 101) and VM 200 on VM

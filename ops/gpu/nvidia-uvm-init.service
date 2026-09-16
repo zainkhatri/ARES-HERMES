@@ -1,0 +1,21 @@
+[Unit]
+Description=Create nvidia GPU device nodes (incl. nvidia-uvm) before guests start
+# Must run BEFORE Proxmox brings up CT 101, whose GPU device binds are set at
+# container-start and are static: if /dev/nvidia-uvm doesn't exist yet, the
+# container never gets it and ares silently falls back to CPU (2026-09-15
+# reboot test caught this). Ordering before pve-guests guarantees the nodes
+# exist when the container's lxc.mount.entry binds fire.
+Before=pve-guests.service
+Wants=pve-guests.service
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# -c 0 -u creates /dev/nvidia-uvm + nvidia-uvm-tools; nvidia-smi wakes nvidia0/ctl.
+ExecStart=/usr/bin/nvidia-modprobe -c 0 -u
+ExecStart=/bin/sh -c 'timeout 15 nvidia-smi -L >/dev/null 2>&1 || true'
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target
