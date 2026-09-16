@@ -351,11 +351,22 @@
         .v-tile.warn { border-color:rgba(245,158,11,.5); }
         .v-tile.crit { border-color:var(--red); box-shadow:inset 0 0 22px rgba(239,68,68,.18); }  /* perf: static (was an animated box-shadow) */
         .v-win .v-tile-bar.boot { position:relative; overflow:hidden; }
-        .v-win .v-tile-bar.boot .v-tile-fill { width:100%!important; background:linear-gradient(90deg,transparent,#f59e0b,transparent)!important; }  /* perf: static (was win-scan infinite) */
+        /* Boot/Starting/Stopping bar: a static amber base with a cheap transform-only
+           highlight sweep so a 30-90s wait reads as "working", not hung. The old
+           win-scan was removed for perf because it animated on an always-present
+           element; this one exists ONLY while .boot is in the DOM (transitional
+           states), and prefers-reduced-motion (below) strips the animation to the
+           static base. Transform-only = compositor, no layout/paint per frame. */
+        .v-win .v-tile-bar.boot .v-tile-fill { width:100%!important; background:rgba(245,158,11,.28)!important; }
+        .v-win .v-tile-bar.boot::after { content:""; position:absolute; inset:0; pointer-events:none;
+            background:linear-gradient(90deg,transparent,rgba(245,158,11,.6),transparent);
+            transform:translateX(-100%); animation:win-sweep 1.4s ease-in-out infinite; will-change:transform; }
+        @keyframes win-sweep { to { transform:translateX(100%); } }
 
         /* WIN tile: split control, same contract as before (.v-win / halves). */
         .v-tile-split { display:flex; padding:0; }
-        .v-tile-half { flex:1; padding:11px 13px 12px; cursor:pointer; transition:background var(--dur); min-width:0; overflow:hidden; }
+        .v-tile-half { flex:1; padding:11px 13px 12px; cursor:pointer; transition:background var(--dur); min-width:0; overflow:hidden;
+                       display:flex; flex-direction:column; justify-content:center; }
         .v-tile-half .v-tile-num { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .v-tile-half.status { background:rgba(16,185,129,.05); }
         .v-tile-half.remote { background:rgba(var(--ares-rgb),.06); }
@@ -1076,6 +1087,7 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     .pk-chat-a { color:var(--text-1); white-space:pre-wrap; }
     .pk-chat-cursor { animation:pkblink 1s steps(2,end) infinite; color:var(--ares); }
     @keyframes pkblink { 50% { opacity:0; } }
+    .win-live { animation:pkblink 1.1s steps(2,end) infinite; }   /* liveness dot in WIN transitional states only */
     .pk-chat-in { display:flex; gap:6px; }
     .pk-chat-in input { flex:1; min-width:0; background:var(--bg-1); border:1px solid var(--ember-dim); color:var(--text-1); padding:7px 11px; font-family:inherit; font-size:12.5px; }
     .pk-chat-in input:focus { outline:none; border-color:var(--ares); }
@@ -1247,6 +1259,22 @@ function updateWin(vh, winHtml) {
     var el = vh.querySelector('.v-win');
     if (el) el.outerHTML = winHtml;
     else vh.insertAdjacentHTML('beforeend', winHtml);
+}
+
+// One-frame opacity settle on a REAL WIN-tile state change (start/stop/ready),
+// so the tile does not hard-snap between accent colors while its numeric
+// neighbors tween. Call ONLY at genuine transitions — never from the 3s
+// renderVitals loop. Skipped under reduced-motion or a hidden tab.
+function winFade() {
+    if (prefersReducedMotion() || document.hidden) return;
+    var vh = document.getElementById('vitals-hero');
+    var nv = vh ? vh.querySelector('.v-win') : null;
+    if (!nv) return;
+    nv.style.opacity = 0;
+    requestAnimationFrame(function() {
+        nv.style.transition = 'opacity 160ms ease-out';
+        nv.style.opacity = 1;
+    });
 }
 
 // tiles: array of {k,key,tag,num,unit,meta,pct,color}. winHtml: WIN tile markup.
@@ -1981,6 +2009,7 @@ var winRunning = false;
 var winBusy = false;
 var winReady = false;
 var winGpuHome = true;
+var winInit = false;   // true once the first real /api/vm/status has landed; gates the clickable Stopped tile
 
 function winTile() {
     // No Windows VM on this box (e.g. ZEUS) -> no tile at all.
@@ -1993,7 +2022,7 @@ function winTile() {
             '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">VM 200</span></div>' +
             '<div class="v-tile-num" style="color:#f59e0b">' + label + '</div>' +
             '<div class="v-tile-bar boot"><div class="v-tile-fill"></div></div>' +
-            '<div class="v-tile-meta"><span class="lo">working\u2026</span><span style="color:#f59e0b">\u25cf</span></div>' +
+            '<div class="v-tile-meta"><span class="lo">working\u2026</span><span class="win-live" style="color:#f59e0b">\u25cf</span></div>' +
         '</div>';
     }
     if (!winRunning && !winGpuHome) {
@@ -2014,17 +2043,29 @@ function winTile() {
               '<div class="v-tile-meta"><span class="lo">vm 200</span><span style="color:#10b981">●</span></div>'
             : '<div class="v-tile-num" style="font-size:16px;color:#f59e0b">Booting…</div>' +
               '<div class="v-tile-bar boot"><div class="v-tile-fill"></div></div>' +
-              '<div class="v-tile-meta"><span class="lo">waiting for Sunshine…</span><span style="color:#f59e0b">●</span></div>';
+              '<div class="v-tile-meta"><span class="lo">waiting for Sunshine…</span><span class="win-live" style="color:#f59e0b">●</span></div>';
         return '<div class="v-tile v-win v-tile-split" style="--accent-color:' + accent + '">' +
             '<div class="v-tile-half status" onclick="toggleWindows()" title="Stop Windows">' +
                 '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">stop</span></div>' +
                 statusHalf +
             '</div>' +
             '<div class="v-tile-half remote" onclick="location.href=\'/windows\'" title="Open Windows desktop">' +
-                '<div class="v-tile-key"><span>VIEW</span><span class="v-tile-tag">' + (ready ? 'live' : 'soon') + '</span></div>' +
+                '<div class="v-tile-key"><span>VIEW</span><span class="v-tile-tag">open</span></div>' +   /* static: the DESKTOP link opens the VNC-gated /windows, not the Sunshine :47984 stream that `ready` probes */
                 '<div class="v-tile-num" style="font-size:16px;color:#e8f0f8">Desktop</div>' +
                 '<div class="v-tile-meta"><span class="lo">open</span><span style="color:#ef4444;font-size:14px">→</span></div>' +
             '</div>' +
+        '</div>';
+    }
+
+    // Before the first real status lands, show a neutral, NON-clickable tile.
+    // Otherwise a page loaded mid-boot briefly paints "Stopped / click to start"
+    // and a stray click POSTs /api/vm/start onto an already-booting VM.
+    if (!winInit) {
+        return '<div class="v-tile v-win" style="--accent-color:#2d3a4e">' +
+            '<div class="v-tile-key"><span>WIN</span><span class="v-tile-tag">VM 200</span></div>' +
+            '<div class="v-tile-num" style="font-size:17px;line-height:1.1;color:#5a6b80">Checking VM\u2026</div>' +
+            '<div class="v-tile-bar"><div class="v-tile-fill" style="width:0%;background:#2d3a4e"></div></div>' +
+            '<div class="v-tile-meta"><span class="lo">reading status\u2026</span><span style="color:#2d3a4e">\u25cb</span></div>' +
         '</div>';
     }
 
@@ -2156,14 +2197,28 @@ async function toggleWindows() {
     if (winBusy) return;
     var action = winRunning ? 'stop' : 'start';
     winBusy = true;
-    // Optimistically re-render the WIN tile
+    // Optimistically re-render the WIN tile (Starting/Stopping)
     var hero = document.getElementById('vitals-hero');
     var winEl = hero ? hero.querySelector('.v-win') : null;
     if (winEl) winEl.outerHTML = winTile();
+    winFade();
+    // Fire the command and CHECK it — a failed start/stop (host SSH down, qm
+    // error, 502/500) must surface, not silently spin the tile for 90s and revert.
     try {
-        await fetch('/api/vm/' + action, { method: 'POST' });
-    } catch(e) {}
-    // Poll until state changes, then re-render via loadVitals
+        var pr = await fetch('/api/vm/' + action, { method: 'POST' });
+        if (!pr.ok) {
+            winBusy = false;                    // set before winTile() — it reads winBusy
+            if (hero) updateWin(hero, winTile());
+            alert('VM ' + action + ' failed (' + pr.status + ')');
+            return;
+        }
+    } catch(e) {
+        winBusy = false;
+        if (hero) updateWin(hero, winTile());
+        alert('VM ' + action + ' request failed');
+        return;
+    }
+    // Poll until state changes, then re-render.
     var checks = 0;
     var poll = setInterval(async function() {
         checks++;
@@ -2171,13 +2226,19 @@ async function toggleWindows() {
             var r = await fetch('/api/vm/status', { method: 'POST' });
             var d = await r.json();
             if (d.running !== winRunning || checks > 30) {
+                var timedOut = (d.running === winRunning && checks > 30);
                 winRunning = d.running;
+                winReady = !!d.streaming_ready;   // refresh so a restart never flashes stale "Ready/live"
+                winInit = true;
                 winBusy = false;
                 clearInterval(poll);
                 loadVitals();
+                if (timedOut) alert('VM ' + action + ' timed out — status unchanged after 90s');
             }
         } catch(e) {
-            if (checks > 30) { winBusy = false; clearInterval(poll); loadVitals(); }
+            // Every probe threw for 90s: clear busy and take one authoritative
+            // read (pollWin) so a stale winRunning does not linger ~15s more.
+            if (checks > 30) { winBusy = false; clearInterval(poll); pollWin(); }
         }
     }, 3000);
 }
@@ -2188,14 +2249,19 @@ async function toggleWindows() {
 // Windows VM status lives on its OWN slow loop (~700ms subprocess), so the
 // vitals/chart loop can poll fast without paying that cost every tick.
 function pollWin() {
+    if (winBusy) return;                    // toggleWindows owns status polling during a toggle
     if (window.innerWidth <= 600) return;
     fetch('/api/vm/status', { method: 'POST' })
         .then(function(wr){ return wr.json(); })
         .then(function(wd){
             var gpuHome = (wd.gpu_home !== false);
+            var first = !winInit;           // first real status: force a redraw to clear the "Checking VM…" gate
             var changed = (wd.running !== winRunning) || (!!wd.streaming_ready !== winReady) || (gpuHome !== winGpuHome);
-            winRunning = wd.running; winReady = !!wd.streaming_ready; winGpuHome = gpuHome;
-            if (changed) { var vh2 = document.getElementById('vitals-hero'); if (vh2) updateWin(vh2, winTile()); }
+            winRunning = wd.running; winReady = !!wd.streaming_ready; winGpuHome = gpuHome; winInit = true;
+            if (changed || first) {
+                var vh2 = document.getElementById('vitals-hero');
+                if (vh2) { updateWin(vh2, winTile()); if (changed) winFade(); }
+            }
         })
         .catch(function(){});
 }

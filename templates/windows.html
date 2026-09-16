@@ -112,9 +112,18 @@ async function requestDesktop() {
     if (!winRunning) { gating = false; overlay.style.display = 'none'; return; }
     await new Promise(r => setTimeout(r, 2000));
   }
-  // Probe never answered — show the frame anyway, noVNC reconnect will retry.
+  // Probe never answered after ~3 min — do NOT park the user on a black noVNC
+  // canvas. Show a recoverable placeholder with a real retry affordance.
   gating = false;
-  showFrame();
+  showPlaceholder('Desktop not responding',
+    'Windows is up but the remote desktop did not answer after ~3 min. <b>Tap here to retry.</b>');
+  placeholder.style.cursor = 'pointer';
+  placeholder.onclick = function() {
+    placeholder.onclick = null;
+    placeholder.style.cursor = '';
+    desktopShown = false; gating = false;
+    requestDesktop();
+  };
 }
 function showPlaceholder(big, small) {
   phBig.textContent = big;
@@ -144,7 +153,12 @@ async function refresh() {
     const d = await r.json();
     winRunning = !!d.running;
     render();
-  } catch(e) { /* leave previous state */ }
+  } catch(e) {
+    // Transport failure: mark the pill stale instead of freezing a green
+    // "running". Leave winRunning untouched so the iframe/overlay survive a
+    // transient blip and self-heal on the next 8s poll.
+    statusPill.className = 'pill off'; statusPill.textContent = '(no status)';
+  }
 }
 
 async function startVM() {
@@ -162,7 +176,22 @@ async function startVM() {
   overlay.style.display = 'flex';
   bootMsg.textContent = 'Sending start command…';
 
-  try { await fetch('/api/vm/start', { method: 'POST' }); } catch(e) {}
+  // Check the start command — a failed dispatch (host SSH down, qm error, 500)
+  // must NOT leave the user staring at a boot overlay for ~6 minutes then a
+  // black desktop. Note: showPlaceholder does NOT hide the overlay (it is
+  // display:flex, z-10, over the placeholder), so hide it explicitly here.
+  let sr;
+  try { sr = await fetch('/api/vm/start', { method: 'POST' }); } catch(e) {}
+  if (!sr || !sr.ok) {
+    if (sr && sr.status === 401) { location.href = '/login'; return; }
+    isStarting = false;
+    overlay.style.display = 'none';
+    showPlaceholder('Could not start VM', 'Host unreachable or start failed. Check the Proxmox host, then tap <b>Start</b> again.');
+    btnStart.disabled = false; btnStart.textContent = 'Start';
+    btnStart.style.display = ''; btnStop.style.display = 'none';
+    statusPill.className = 'pill off'; statusPill.textContent = 'error';
+    return;
+  }
 
   bootMsg.textContent = 'Waiting for VM to boot…';
   bootSub.textContent = 'Usually takes 30–60 seconds';
@@ -187,16 +216,31 @@ async function startVM() {
       }
     } catch(e) {}
   }
-  // Poll exhausted — hand off to the desktop gate, let noVNC reconnect handle it
+  // Poll exhausted and the VM never reported running — do NOT hand off to
+  // requestDesktop(), which would falsely assert "VM is up" and count up another
+  // 3 min before handing over a black iframe. Tell the truth and let the operator retry.
   isStarting = false;
-  btnStop.disabled = false; btnStop.textContent = 'Stop';
-  statusPill.textContent = 'checking…';
-  requestDesktop();
+  winRunning = false;
+  statusPill.className = 'pill off'; statusPill.textContent = 'stopped';
+  btnStart.disabled = false; btnStart.textContent = 'Start';
+  btnStart.style.display = ''; btnStop.style.display = 'none';
+  showPlaceholder('VM did not report running',
+    'Boot is taking longer than expected or the host is unreachable. Tap <b>Start</b> to retry, or check status.');
 }
 async function stopVM() {
   if (!confirm('Stop the Windows VM?')) return;
   btnStop.disabled = true; btnStop.textContent = 'stopping…';
-  try { await fetch('/api/vm/stop', { method: 'POST' }); } catch(e) {}
+  // Check the stop dispatch. A rejected/unreachable stop must be visible — a
+  // failed STOP otherwise looks identical to a success until the desktop is
+  // noticed still running. Keep the VM's "on" pill styling (it IS still up).
+  let sr = null;
+  try { sr = await fetch('/api/vm/stop', { method: 'POST' }); } catch(e) {}
+  if (sr && sr.status === 401) { location.href = '/login'; return; }
+  if (!sr || !sr.ok) {
+    btnStop.disabled = false; btnStop.textContent = 'Stop';
+    statusPill.className = 'pill on'; statusPill.textContent = 'stop failed';
+    return;
+  }
   for (let i = 0; i < 30; i++) {
     await new Promise(r => setTimeout(r, 2000));
     await refresh();
@@ -210,6 +254,17 @@ function enterFullscreen() {
   else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
   else if (el.webkitEnterFullscreen) el.webkitEnterFullscreen();
 }
+
+// Hide ⤢ where no element-fullscreen API exists (iOS Safari): requestFullscreen
+// on an iframe is unsupported and webkitEnterFullscreen is <video>-only, so the
+// button is a silent no-op there.
+(function(){
+  var s = document.getElementById('stage');
+  if (!(s.requestFullscreen || s.webkitRequestFullscreen)) {
+    var b = document.querySelector('button[onclick="enterFullscreen()"]');
+    if (b) b.style.display = 'none';
+  }
+})();
 
 refresh();
 setInterval(refresh, 8000);

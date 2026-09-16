@@ -3455,6 +3455,19 @@ def storage_breakdown():
     return jsonify(payload)
 
 
+# One VDD-disable worker at a time. Repeated start clicks (multiple tabs, a
+# reload mid-boot) must not launch N overlapping ssh/guest-exec threads that
+# race GameModeDisplayRest. The lock guards the flag; the flag gates the spawn.
+_OLED_SOLO_LOCK = threading.Lock()
+_oled_solo_active = False
+
+# TTL cache for /api/vm/status. The probe costs up to ~16s worst case (ssh qm
+# 10s + Sunshine socket 1s + nvidia-smi 5s) and gunicorn runs ONE worker, so
+# overlapping polls (pollWin 20s + a toggle's 3s loop) must not each spawn a
+# fresh subprocess and serialize the whole dashboard behind them.
+_vm_status_cache = {"ts": 0.0, "data": None}
+
+
 def _oled_solo_after_start():
     """After VM 200 boots, disable the Virtual Display Driver so the desk OLED
     is the sole display (user wants one screen, not the VDD phantom, when they
@@ -3464,43 +3477,54 @@ def _oled_solo_after_start():
     boot+logon to settle, then disable last to win the race. Disable-PnpDevice
     is a global op, so guest-exec (session 0) is enough; no trampoline needed.
     Runs in a daemon thread."""
+    global _oled_solo_active
     import subprocess as _sp
     host = "root@192.168.20.51"
     ssh_base = ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5", host]
     ping = "qm agent 200 ping"
     disable = ("qm guest exec 200 --timeout 20 -- powershell -NoProfile "
                "-ExecutionPolicy Bypass -File C:\\gamemode\\vdd-disable.ps1")
-    up = False
-    for _ in range(40):                       # ceiling ~3.5 min waiting for guest agent
-        try:
-            _sp.check_output(ssh_base + [ping], timeout=8, stderr=_sp.DEVNULL)
-            up = True
-            break
-        except Exception:
-            time.sleep(5)
-    if not up:
-        return
-    # ponytail: fixed 45s lets logon + GameModeDisplayRest finish before we
-    # disable last. If the re-enable ever wins, poll its LastRunTime instead.
-    time.sleep(45)
-    for _ in range(2):                        # two idempotent fires, 15s apart
-        try:
-            _sp.run(ssh_base + [disable], timeout=30,
-                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
-        except Exception:
-            pass
-        time.sleep(15)
+    try:
+        up = False
+        for _ in range(40):                   # ceiling ~3.5 min waiting for guest agent
+            try:
+                _sp.check_output(ssh_base + [ping], timeout=8, stderr=_sp.DEVNULL)
+                up = True
+                break
+            except Exception:
+                time.sleep(5)
+        if not up:
+            return
+        # ponytail: fixed 45s lets logon + GameModeDisplayRest finish before we
+        # disable last. If the re-enable ever wins, poll its LastRunTime instead.
+        time.sleep(45)
+        for _ in range(2):                    # two idempotent fires, 15s apart
+            try:
+                _sp.run(ssh_base + [disable], timeout=30,
+                        stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+            except Exception:
+                pass
+            time.sleep(15)
+    finally:
+        with _OLED_SOLO_LOCK:                 # always release so a later start can re-arm
+            _oled_solo_active = False
 
 
 @app.route("/api/vm/<action>", methods=["POST"])
 @require_auth
 def vm_control(action):
     """Start or stop the Windows VM (ID 200) on PVE host."""
+    global _oled_solo_active
     import subprocess as _sp
     if action not in ("start", "stop", "status"):
         return jsonify({"error": "Invalid action"}), 400
     try:
         if action == "status":
+            # Coalesce overlapping polls (pollWin 20s + a toggle's 3s loop) on the
+            # single gunicorn worker: one ~16s-worst-case probe serves a 2s window.
+            now = time.time()
+            if _vm_status_cache["data"] is not None and now - _vm_status_cache["ts"] < 2:
+                return jsonify(_vm_status_cache["data"])
             out = _sp.check_output(
                 ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
                  "root@192.168.20.51", "qm status 200"],
@@ -3522,14 +3546,24 @@ def vm_control(action):
                 if os.path.exists(GPU_LOAN_FLAG):
                     gpu_home = False
                 else:
+                    # Flag gone => the hookscript reclaimed the GPU; that is the
+                    # authoritative signal. nvidia-smi only CONFIRMS. A broken
+                    # probe (binary absent in this CT, timeout, transient hiccup)
+                    # must NOT fabricate the red "GPU MISSING / reclaim failed"
+                    # alarm — reserve False for a positive non-zero exit.
+                    gpu_home = True
                     try:
                         rc = _sp.run(["nvidia-smi", "-L"], capture_output=True,
                                      timeout=5).returncode
-                        gpu_home = (rc == 0)
+                        if rc != 0:
+                            gpu_home = False
                     except Exception:
-                        gpu_home = False
-            return jsonify({"vm": "win11-gaming", "running": running, "raw": out,
-                            "streaming_ready": streaming_ready, "gpu_home": gpu_home})
+                        gpu_home = True          # tool missing / timeout — trust the flag
+            payload = {"vm": "win11-gaming", "running": running, "raw": out,
+                       "streaming_ready": streaming_ready, "gpu_home": gpu_home}
+            _vm_status_cache["ts"] = now
+            _vm_status_cache["data"] = payload
+            return jsonify(payload)
         else:
             # The GPU-swap hookscript restarts THIS service during both
             # pre-start and post-stop (flag+restart protocol), which kills a
@@ -3537,18 +3571,37 @@ def vm_control(action):
             # interrupt / broken pipe"). Detach qm on the host so the
             # boot/stop survives our own restart; the frontend already polls
             # /api/vm/status for the outcome.
-            cmd = ("nohup qm " + action + " 200 >>/var/log/qm-" + action +
+            # STOP uses the graceful ACPI verb so Windows flushes — VM 200 is a
+            # real gaming session; a hard power-off risks a dirty NTFS. Keep the
+            # log filename keyed on the route action.
+            _verb = "shutdown" if action == "stop" else action
+            cmd = ("nohup qm " + _verb + " 200 >>/var/log/qm-" + action +
                    "-200.log 2>&1 & echo detached")
-            _sp.check_output(
+            out = _sp.check_output(
                 ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
                  "root@192.168.20.51", cmd],
                 timeout=15, stderr=_sp.DEVNULL
-            )
+            ).decode("utf-8", "replace").strip()
+            # Detached, so we never wait on qm — but the 'detached' sentinel must
+            # come back. Its absence means the ssh/shell launch itself failed
+            # (host down, host key, qm missing); surface that instead of a false
+            # ok that dead-spins the UI for 90s.
+            if "detached" not in out:
+                return jsonify({"error": "qm launch not confirmed",
+                                "action": action, "raw": out}), 502
             if action == "start":
                 # Once Windows is up, drop the VDD so the OLED is the only screen.
-                threading.Thread(target=_oled_solo_after_start, daemon=True).start()
+                # Single-instance: never stack overlapping VDD-disable threads.
+                spawn = False
+                with _OLED_SOLO_LOCK:
+                    if not _oled_solo_active:
+                        _oled_solo_active = True
+                        spawn = True
+                if spawn:
+                    threading.Thread(target=_oled_solo_after_start, daemon=True).start()
             return jsonify({"ok": True, "action": action, "detached": True})
     except Exception as e:
+        app.logger.error("[vm/%s] failed: %s", action, e)
         return jsonify({"error": str(e)}), 500
 
 
