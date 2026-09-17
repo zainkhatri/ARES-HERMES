@@ -1,15 +1,15 @@
 [Unit]
 Description=ARES camera import — Canon G7X III CCAPI
-After=network-online.target NetworkManager.service
+After=network.target network-online.target NetworkManager.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/ares/camera-import.env
-ExecStartPre=/usr/local/sbin/ares-camera-check-iface
+EnvironmentFile=-/mnt/data/system/camera-import.env
+ExecStartPre=/mnt/data/system/ares-camera-check-iface
 ExecStart=/usr/bin/python3 -m camera.importer
-WorkingDirectory=/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD
-Restart=always
+WorkingDirectory=/mnt/data
+Restart=on-failure
 RestartSec=15
 StandardOutput=journal
 StandardError=journal
