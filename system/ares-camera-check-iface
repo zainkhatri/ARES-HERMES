@@ -1,0 +1,30 @@
+#!/bin/bash
+# ExecStartPre for ares-camera-import.service.
+# Fails the service start if the RTL8852BE interface (MAC 50:03:CF:57:81:98)
+# is not present. Silent no-op operation (poll loop runs, nothing logged wrong)
+# is worse than a loud immediate failure.
+set -euo pipefail
+
+IFACE="${CAMERA_WLAN_IFACE:-}"
+
+if [ -z "$IFACE" ]; then
+    # Auto-detect by MAC address (lower-case, colon-separated)
+    IFACE=$(ip -o link show | awk -F'[ /]' '
+        /50:03:cf:57:81:98/ || /50:03:CF:57:81:98/ { print $3 }
+    ')
+fi
+
+if [ -z "$IFACE" ]; then
+    echo "ERROR: RTL8852BE WiFi interface not found." >&2
+    echo "       Did the card bind after reboot? Check:" >&2
+    echo "         lspci | grep -i realtek" >&2
+    echo "         ip link show" >&2
+    exit 1
+fi
+
+if ! ip link show "$IFACE" > /dev/null 2>&1; then
+    echo "ERROR: Interface $IFACE listed by MAC but ip link show failed." >&2
+    exit 1
+fi
+
+echo "ares-camera-check-iface: interface $IFACE is present."
