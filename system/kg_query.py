@@ -1,8 +1,10 @@
-"""Read-only queries over the MNEMOSYNE homelab_kg.db for the dashboard KG views."""
+"""Read-only queries over the ATLAS homelab_kg.db for the dashboard KG views."""
 import os, sqlite3, urllib.parse
 
-DEFAULT_CANDS = ["/mnt/data/PROJECTS/mnemosyne/data/homelab_kg.db",
-                 "/mnt/nvme/PROMETHEUS/PROJECTS/mnemosyne/data/homelab_kg.db"]
+DEFAULT_CANDS = ["/mnt/data/PROJECTS/more projects/atlas/data/homelab_kg.db",
+                 "/mnt/nvme/PROMETHEUS/PROJECTS/more projects/atlas/data/homelab_kg.db",
+                 "/mnt/data/PROJECTS/atlas/data/homelab_kg.db",
+                 "/mnt/nvme/PROMETHEUS/PROJECTS/atlas/data/homelab_kg.db"]
 
 def db_path():
     cands = ([os.environ["KG_DB"]] if os.environ.get("KG_DB") else []) + DEFAULT_CANDS
