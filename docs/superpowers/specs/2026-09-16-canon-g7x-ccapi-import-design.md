@@ -112,6 +112,14 @@ whenever the camera's AP is in range and reconnects on drop. The importer
 service is completely WiFi-agnostic — it only probes a TCP port; NM handles
 all radio state.
 
+**Required NM profile settings (council amendment):**
+- `wifi.powersave=2` (disabled) — Linux WiFi power-save drops beacons on a
+  timer; on a SoftAP with no AP-side keepalives this causes mid-stream stalls
+  that look identical to camera-side AP drops. Must be disabled.
+- `ipv4.route-metric=50` (lower than default) — prevents NM from deprioritizing
+  this connection as "limited" (no internet) and roaming the adapter off the
+  camera's AP mid-drain.
+
 ### The "one button" experience
 
 1. User presses the camera WiFi button → camera raises its SoftAP.
@@ -132,20 +140,36 @@ spirit).
 
 ### `camera/ccapi_client.py`
 Thin CCAPI HTTP wrapper. No orchestration, no filesystem writes.
-- `ping() -> bool` — camera reachable + CCAPI up (short timeout).
+- `ping() -> bool` — TCP connect only (sub-second, no HTTP). Confirms port
+  is open; does NOT confirm CCAPI is authorized or in transfer-ready state.
 - `api_versions() -> dict` — `GET /ccapi/`; used to pin the endpoint version
   (ver100/ver110) at runtime rather than hard-coding.
 - `list_contents() -> list[ContentRef]` — enumerate storage/folders/files.
-- `file_metadata(ref) -> dict` — name, size, capture time, type.
+  Snapshot the list once at drain-start; never re-query mid-drain (content
+  list changes if the user shoots during transfer).
+- `file_metadata(ref) -> dict` — name, size, capture time, type, content ID.
 - `download(ref, dest_path, kind="main")` — stream full-res to a temp path,
   then atomic rename into place.
 - Every method: explicit timeout, status-code check, typed return or raise.
+- **401/403 → raise `CcapiNotAuthorized`** (not a generic exception). The
+  importer maps this to `state="error"` with `message="CCAPI_NOT_AUTHORIZED"`.
+  A successful TCP probe does not imply authorized state; pairing must be
+  verified at hardware gate. Pairing state (if any) is stored with restrictive
+  permissions in `ai_data/`.
 
 ### `camera/ledger.py`
 Dedup ledger so nothing is pulled twice (SD card is never modified).
 - Storage: sqlite at `ai_data/camera_import.db`.
+- **Dedup key = CCAPI content ID** (not filename). Canon resets `IMG_0001`
+  after a card format; filename-only dedup silently skips re-imported files
+  as "already pulled." Use CCAPI's own content identifier. If CCAPI does not
+  provide a stable content ID, fall back to `sha256(first 64 KB)`.
 - `is_pulled(content_id) -> bool`
 - `mark_pulled(content_id, dest_path, size, ts)`
+- **Consecutive-failure counter**: `increment_fail(content_id)` / `fail_count(content_id)`.
+  Three consecutive size-verify failures → `skip(content_id)` with a warning
+  log; skipped items require manual `ledger clear <content_id>` to retry.
+  Prevents a corrupt-on-camera file from spinning the poll loop indefinitely.
 - A pull only counts as done AFTER the file is verified on disk (size matches
   CCAPI metadata) — a mid-transfer drop is retried next cycle.
 
@@ -185,6 +209,11 @@ Single source of truth for the animation state.
 - Runs `python3 -m camera.importer` as a host service alongside ttyd /
   ares-shell-ctl.
 - `Restart=always`. Config via env (see below).
+- **`ExecStartPre` interface assertion**: before the poll loop starts, assert
+  the RTL8852BE interface exists (`ip link show <wlan-iface>`). If the card
+  failed to bind after reboot (VM200 reclaimed it, driver didn't load), the
+  service must fail immediately with a clear log line — not silently run with
+  the TCP probe never firing and nothing logged wrong.
 
 ### Flask: `GET /api/camera/status`
 - New route in `app.py`, wrapped in `require_auth`.
@@ -254,11 +283,17 @@ same status file and the toast needs no change. Details below.
 2. On the camera: activate the smartphone/WiFi connection (SoftAP mode, NOT
    "wireless remote"). Note the SSID and password the camera displays.
 3. On ARES (after reboot brings up the RTL8852BE): create an NM profile —
-   `nmcli connection add type wifi ssid "<SSID>" -- wifi-sec.key-mgmt wpa-psk
+   `nmcli connection add type wifi ssid "<SSID>" wifi-sec.key-mgmt wpa-psk
    wifi-sec.psk "<password>" 802-11-wireless.bssid 50:03:CF:57:81:98
-   connection.interface-name <wlan-iface>` — then `nmcli connection up "<SSID>"`.
+   connection.interface-name <wlan-iface> wifi.powersave 2
+   ipv4.route-metric 50` — then `nmcli connection up "<SSID>"`.
 4. Confirm the camera's SoftAP gateway IP (typically `192.168.1.1` or Canon's
    default); set `CAMERA_IP` to it. Verify during the spike (gate 1).
+5. **Hardware gate first curl:** `curl http://<CAMERA_IP>:8080/ccapi/` — confirm
+   JSON response (not 404/403). If a pairing dialog appears on the camera LCD,
+   complete it and document whether it persists across camera power cycles.
+   A 401/403 response means the importer's `CcapiNotAuthorized` path will be
+   exercised immediately and must be tested before anything else.
 
 ## Testing
 
