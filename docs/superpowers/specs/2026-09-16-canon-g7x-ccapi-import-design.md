@@ -1,7 +1,9 @@
 # Canon G7X Mark III → ARES auto-import (CCAPI) — Design
 
 Date: 2026-09-16
-Status: Approved design, pending implementation plan
+Status: Design BLOCKED on a live verification spike (see "Verification gates").
+Do not write the implementation plan until the three gates pass. Reviewed by the
+LLM Council 2026-09-16 — findings folded in below.
 
 ## Goal
 
@@ -40,6 +42,36 @@ no Canon cloud.
 | SD card | Non-destructive — never delete from the card |
 | Transfer animation | Corner toast ("photos inbound", live counter) — v1 |
 | Persistent status tile | Phase 2 (out of scope for v1) |
+
+## Verification gates (BLOCKER — do before any implementation)
+
+The LLM Council was unanimous: the design was approved before the load-bearing
+facts were checked. All three gates below use a physical camera + curl and cost
+~1 hour and $0. If any gate fails, stop and fall back to USB-C or the Mac-bridge.
+
+1. **Reachability / topology.** Confirm the camera joins the home WiFi as a
+   CLIENT (so it gets a LAN IP ARES can reach), not that it only hosts its own
+   AP. Web evidence: the physical Wi-Fi button is smartphone-oriented; the
+   "connect to computer" flow is a separate registered-connection menu path.
+   Test: put the camera on the network, then from ARES `ping <camera-ip>`.
+2. **Transport exists on THIS firmware.** `curl http://<camera-ip>:8080/ccapi/`
+   returns JSON. Then confirm the three endpoints the drain depends on: list
+   contents, get one file, and the `addedcontents` delta. CCAPI is firmware-
+   gated and thinner on PowerShot compacts than on R bodies — a 404 here kills
+   Path A.
+3. **Latency budget.** Time a real drain of ~20 JPEGs over 2.4GHz WiFi + the
+   `photo_scanner.py --incremental` reindex. Set an honest number for the toast.
+   Note: if the GPU is on loan (`CUDA_VISIBLE_DEVICES=""`), thumbnail/CLIP work
+   is CPU-bound and slower — the toast may finish before the photo is viewable.
+
+## Trigger UX reality (council finding)
+
+"Press one button → lands on ARES" is likely really "press the connection button
+→ pick the registered computer connection" (about two taps), because the G7X III
+Wi-Fi button defaults to smartphone/Camera Connect pairing. During the spike,
+determine whether the camera firmware lets the registered "computer" connection
+be assigned to the button, or whether a menu tap is unavoidable. Set the user's
+expectation to "one or two taps," not "one button," until proven otherwise.
 
 ## Architecture
 
@@ -94,6 +126,8 @@ Dedup ledger so nothing is pulled twice (SD card is never modified).
 ### `camera/importer.py`
 Orchestration and the poll loop.
 - `poll_loop()` — bounded per-cycle work, sleep between cycles, no hot-spin.
+  Probe cheaply with a sub-second **TCP connect** to the CCAPI port, NOT a full
+  HTTP request (council build note); only run a drain once the connect succeeds.
 - `drain()` — list → diff vs ledger → for each new JPEG: resolve capture date →
   build `PHOTOS/<YYYY>/<MM>/<name>` (collision-safe suffix) → `download` →
   verify → `mark_pulled` → update status counter. Per-file try/except so one bad
@@ -117,7 +151,9 @@ Single source of truth for the animation state.
   ```
 - The repo is bind-mounted into LXC 101, so Flask reads this file directly — the
   same filesystem-IPC pattern the business dashboard already uses. No new socket
-  or cross-host call.
+  or cross-host call. Reuse the existing GPU-loan-flag mtime convention (Flask
+  checks the file's mtime, reads only on change) rather than inventing new IPC
+  (council build note).
 
 ### systemd unit `ares-camera-import.service` (host)
 - Runs `python3 -m camera.importer` as a host service alongside ttyd /
@@ -163,6 +199,17 @@ Single source of truth for the animation state.
   metadata/EXIF, falling back to the file mtime, then to "unknown/" so nothing is
   ever silently dropped.
 - Reuses the existing `photo_scanner.py` shrink guard (add-only path).
+- **Partial-file protection (council finding).** A WiFi drop mid-download must
+  never produce a bad `photo_index.db` row. Downloads stream to a temp file and
+  are size-verified against CCAPI metadata BEFORE the atomic rename into PHOTOS/
+  and before `photo_scanner --incremental` runs — so the scanner only ever sees
+  complete files. Given ARES's index-corruption/clobber history, this ordering is
+  non-negotiable.
+- **Security posture (council finding).** The importer holds a plaintext HTTP
+  channel to the camera on the LAN. Bind the service to the LAN only, store any
+  CCAPI pairing/credential state with restrictive file permissions in `ai_data/`,
+  and keep it off the tailnet/public surface. Consistent with the 2026-08-22
+  hardening pass.
 
 ## One-time setup (documented for the user, not code)
 
@@ -191,3 +238,11 @@ Single source of truth for the animation state.
 - RAW/CRAW import.
 - Optional post-transfer "delete from card" mode.
 - Push notification on transfer complete.
+
+## Phase 3 idea (council, Expansionist) — do NOT scope into v1
+
+If CCAPI proves reliable, `ccapi_client.py` becomes a reusable capability, not a
+one-shot JPEG pump: remote shutter as a dashboard button, a battery/card-full HUD
+tile, "camera left on" alerts, and near-real-time auto-tagging by feeding fresh
+imports straight into the existing CLIP + face pipeline. Kept as a north star
+only — v1 stays a JPEG importer so scope never outruns the verified transport.
