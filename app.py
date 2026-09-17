@@ -2930,6 +2930,34 @@ def hermes_alerts():
     return jsonify({"level": level[0], "reasons": reasons, "age_s": int(age), "data": d})
 
 
+@app.route("/api/camera/status")
+@require_auth
+def camera_status():
+    """Camera-import status for the 'PHOTOS INBOUND' toast. Reads the status file
+    the host importer (or the simulator) writes into ai_data/. Safe idle default
+    when the file is missing, so the dashboard never breaks."""
+    from camera.status import read_status
+    d = read_status()
+    d["age_s"] = int(time.time() - d.get("last_update", 0)) if d.get("last_update") else None
+    return jsonify(d)
+
+
+@app.route("/api/camera/simulate", methods=["POST"])
+@require_auth
+def camera_simulate():
+    """Demo trigger: play a fake drain so the toast animates with no camera.
+    Spawns camera.simulate_drain in the background and returns immediately."""
+    body = request.get_json(silent=True) or {}
+    total = max(1, min(int(body.get("total", 27)), 200))
+    per = max(0.0, min(float(body.get("per", 0.22)), 2.0))
+    subprocess.Popen(
+        [sys.executable, "-m", "camera.simulate_drain", str(total), str(per)],
+        cwd=os.path.dirname(os.path.abspath(__file__)),
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    return jsonify({"ok": True, "total": total})
+
+
 @app.route("/api/eros/ask", methods=["POST"])
 @require_auth
 def eros_ask():
