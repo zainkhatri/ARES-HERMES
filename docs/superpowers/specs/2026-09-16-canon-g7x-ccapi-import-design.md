@@ -93,22 +93,32 @@ expectation to "one or two taps," not "one button," until proven otherwise.
 
 ```
 Canon G7X III  ──WiFi (CCAPI / HTTP)──►  ares-camera-import (host poll loop)
-  press WiFi button                          1. fast TCP probe camera IP (idle ~10s)
-  → joins home WiFi                          2. list contents, diff vs ledger
-  → CCAPI HTTP server up                     3. download new JPEGs → PHOTOS/YYYY/MM/
-                                             4. mark ledger (non-destructive)
+  press WiFi button                          1. fast TCP probe camera SoftAP IP (~10s)
+  → raises SoftAP                            2. list contents, diff vs ledger
+  → NM profile auto-joins camera AP          3. download new JPEGs → PHOTOS/YYYY/MM/
+  → CCAPI HTTP server up                     4. mark ledger (non-destructive)
                                              5. write status file (drives animation)
                                              6. photo_scanner.py --incremental
                                                         │
                                                 photo_index.db → gallery
 ```
 
+### WiFi connection management
+
+NetworkManager owns the association. A persistent NM connection profile is
+configured for the camera's SoftAP (SSID, WPA2 password, BSSID lock on
+`50:03:CF:57:81:98`), bound to the RTL8852BE interface. NM auto-connects
+whenever the camera's AP is in range and reconnects on drop. The importer
+service is completely WiFi-agnostic — it only probes a TCP port; NM handles
+all radio state.
+
 ### The "one button" experience
 
-1. User presses the camera WiFi button → camera joins the home WiFi.
-2. The host service is a standing idle-poller. Every ~10s it does a fast,
-   short-timeout TCP probe to the camera's reserved IP. An unreachable camera
-   fails fast and cheap.
+1. User presses the camera WiFi button → camera raises its SoftAP.
+2. NM detects the camera's AP and associates the RTL8852BE to it automatically.
+3. The host service is a standing idle-poller. Every ~10s it does a fast,
+   short-timeout TCP probe to the camera's SoftAP gateway IP. An unreachable
+   camera fails fast and cheap.
 3. When the camera answers, the service **drains all new photos in one pass**
    (camera WiFi sleeps quickly, so grab everything immediately), reindexes, then
    returns to idle polling.
@@ -241,9 +251,14 @@ same status file and the toast needs no change. Details below.
 
 1. Update camera firmware; run Canon's **CCAPI activation tool** once (free
    dev-community registration).
-2. Set the camera WiFi to **join the home network** (station mode) and assign
-   that connection to the WiFi button.
-3. Add a **DHCP reservation** for the camera; set `CAMERA_IP` to it.
+2. On the camera: activate the smartphone/WiFi connection (SoftAP mode, NOT
+   "wireless remote"). Note the SSID and password the camera displays.
+3. On ARES (after reboot brings up the RTL8852BE): create an NM profile —
+   `nmcli connection add type wifi ssid "<SSID>" -- wifi-sec.key-mgmt wpa-psk
+   wifi-sec.psk "<password>" 802-11-wireless.bssid 50:03:CF:57:81:98
+   connection.interface-name <wlan-iface>` — then `nmcli connection up "<SSID>"`.
+4. Confirm the camera's SoftAP gateway IP (typically `192.168.1.1` or Canon's
+   default); set `CAMERA_IP` to it. Verify during the spike (gate 1).
 
 ## Testing
 
