@@ -3495,10 +3495,49 @@ _oled_solo_active = False
 _vm_status_cache = {"ts": 0.0, "data": None}
 
 
+# NirSoft ControlMyMonitor: DDC/CI power-on for the desk OLED. VCP feature 0xD6
+# (power mode) = 1 (on) wakes the Odyssey G60SD over the display wire even from
+# hardware standby, unlike DPMS/WM_SYSCOMMAND tricks that no-op from a session-0
+# guest-exec. Monitor short id from scripts/gamemode/vdd-notes.md (OLED=SAM75CB).
+_OLED_DDC_ID = "SAM75CB"
+_OLED_CMM = "C:\\gamemode\\ControlMyMonitor.exe"
+
+
+def _oled_wake_ddc(ssh_base):
+    """Send DDC/CI power-on (VCP 0xD6=1) to the desk OLED so it lights up when
+    the Windows VM starts. Best-effort: bootstraps ControlMyMonitor into
+    C:\\gamemode on first run if absent, then fires the wake. Every failure is
+    logged, never raised — a dark panel must not break VM start. Call AFTER the
+    VDD is disabled so the OLED is the sole active path and DDC/CI can address
+    it. Runs on the host via qm guest exec (session 0 is enough for DDC/CI)."""
+    import subprocess as _sp
+    assert ssh_base, "ssh_base required"
+    assert _OLED_DDC_ID and _OLED_CMM, "monitor id and tool path required"
+    # Self-heal install (idempotent): only fetch if the exe is missing. Fixed
+    # C:\\gamemode paths (no $env vars) so the host shell does not mangle them.
+    boot = ("qm guest exec 200 --timeout 90 -- powershell -NoProfile "
+            "-ExecutionPolicy Bypass -Command \"if(!(Test-Path '" + _OLED_CMM +
+            "')){Invoke-WebRequest -UseBasicParsing "
+            "'https://www.nirsoft.net/utils/controlmymonitor.zip' "
+            "-OutFile 'C:\\gamemode\\cmm.zip'; "
+            "Expand-Archive 'C:\\gamemode\\cmm.zip' 'C:\\gamemode' -Force}\"")
+    wake = ("qm guest exec 200 --timeout 20 -- " + _OLED_CMM +
+            " /SetValue " + _OLED_DDC_ID + " D6 1")
+    try:
+        _sp.run(ssh_base + [boot], timeout=100,
+                stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+        rc = _sp.run(ssh_base + [wake], timeout=30,
+                     capture_output=True).returncode
+        app.logger.info("[oled] DDC/CI wake fired (rc=%s)", rc)
+    except Exception as e:
+        app.logger.warning("[oled] DDC/CI wake failed: %s", e)
+
+
 def _oled_solo_after_start():
     """After VM 200 boots, disable the Virtual Display Driver so the desk OLED
     is the sole display (user wants one screen, not the VDD phantom, when they
-    tap in via VNC/Moonlight). Reuses the VM's existing C:\\gamemode\\vdd-disable.ps1.
+    tap in via VNC/Moonlight), then wake the panel over DDC/CI so it actually
+    lights up. Reuses the VM's existing C:\\gamemode\\vdd-disable.ps1.
 
     GameModeDisplayRest re-enables the VDD on its LogonTrigger, so we wait for
     boot+logon to settle, then disable last to win the race. Disable-PnpDevice
@@ -3532,6 +3571,8 @@ def _oled_solo_after_start():
             except Exception:
                 pass
             time.sleep(15)
+        # OLED is now the sole active path — wake the physical panel over DDC/CI.
+        _oled_wake_ddc(ssh_base)
     finally:
         with _OLED_SOLO_LOCK:                 # always release so a later start can re-arm
             _oled_solo_active = False
@@ -3617,7 +3658,8 @@ def vm_control(action):
                 return jsonify({"error": "qm launch not confirmed",
                                 "action": action, "raw": out}), 502
             if action == "start":
-                # Once Windows is up, drop the VDD so the OLED is the only screen.
+                # Once Windows is up, drop the VDD so the OLED is the only screen,
+                # then wake the panel over DDC/CI (see _oled_solo_after_start).
                 # Single-instance: never stack overlapping VDD-disable threads.
                 spawn = False
                 with _OLED_SOLO_LOCK:
