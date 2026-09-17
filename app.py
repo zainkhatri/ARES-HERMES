@@ -24,9 +24,11 @@ from ai import llm_interface
 from ai import claude_interface
 from ai.llm_interface import get_usage_stats
 from system.recycling_bin import trash_file, list_trash, restore as restore_trash, TRASH_DIR as _TRASH_DIR
+from system.recycling_bin import trash_path as _trash_path, restore_gated as _restore_gated
 from photos import trash_review as _trash_review
 from system import files_api
 from system import files_index
+from system import files_write
 
 app = Flask(__name__, static_folder=None)   # built-in /static served private photo tiers with NO auth — replaced by static_files() below
 _flask_secret = os.environ.get("FLASK_SECRET", "")
@@ -120,6 +122,22 @@ session_display = {}
 # to disk. Subsequent requests are served from RAM. No pre-generation needed.
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
+# Flask static_folder is None (Caddy serves /static with auth), so code that needs
+# the on-disk static root must use this, NOT app.static_folder (which is None → crashes).
+_STATIC_DIR = os.path.join(_APP_DIR, "static")
+
+
+@app.context_processor
+def _asset_versions():
+    """Cache-bust shared static assets by mtime. hud.css is served with a 7-day
+    max-age, so without a version query CSS edits do not reach clients until the
+    cache expires (this is why unstyled headers appeared after a hud.css change)."""
+    def _mt(name):
+        try:
+            return int(os.path.getmtime(os.path.join(_STATIC_DIR, name)))
+        except OSError:
+            return 0
+    return {"hud_v": _mt("hud.css"), "zeusgraph_v": _mt("zeus-graph.js")}
 
 # ─── GPU loan flag ───
 # Written by the host's gpu-swap.sh hookscript before VM 200/300 borrows the
@@ -129,19 +147,25 @@ _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # the nvidia driver without racing a systemd-respawned GPU consumer.
 # CLIP search and video transcode degrade to their CPU paths automatically.
 GPU_LOAN_FLAG = os.path.join(_APP_DIR, ".gpu-on-loan")
-if os.path.exists(GPU_LOAN_FLAG):
+# Manual, human-set "force CPU" override. Distinct from the VM-loan flag so the
+# boot/timer reconciler (gpu-loan-reconcile) never deletes an intentional
+# override -- it only ever manages .gpu-on-loan. app honors both.
+GPU_FORCE_CPU_FLAG = os.path.join(_APP_DIR, ".gpu-force-cpu")
+if os.path.exists(GPU_LOAN_FLAG) or os.path.exists(GPU_FORCE_CPU_FLAG):
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
-    print("[gpu] .gpu-on-loan present — CPU-only mode (RTX 3080 lent to a VM)")
+    print("[gpu] loan/force-cpu flag present — CPU-only mode (RTX 3080 not in use by ARES)")
 
 
 def _gpu_on_loan():
-    """True while the RTX 3080 is lent to a VM (gaming). The borrowing VM gets
+    """True while the RTX 3080 is unavailable to ARES -- lent to a VM (gaming),
+    or held CPU-only by a manual .gpu-force-cpu override. The borrowing VM gets
     strict priority: DEFER all CPU video transcode/HLS work until the GPU
-    returns — CPU x264 encodes on the host cores starve the VM's KVM emulator/
+    returns -- CPU x264 encodes on the host cores starve the VM's KVM emulator/
     IO threads and cause input stutter. Live file check (not the startup-time
     snapshot) so work auto-resumes the moment the flag clears, no restart
-    needed. The Proxmox hookscript writes/removes the flag around VM start/stop."""
-    return os.path.exists(GPU_LOAN_FLAG)
+    needed. The Proxmox hookscript writes/removes .gpu-on-loan around VM
+    start/stop; the reconciler clears a stale one."""
+    return os.path.exists(GPU_LOAN_FLAG) or os.path.exists(GPU_FORCE_CPU_FLAG)
 
 _THUMB_DIR = os.path.join(_APP_DIR, "static", "thumbs")
 _THUMB_HQ_DIR = os.path.join(_APP_DIR, "static", "thumbs_hq")
@@ -425,6 +449,21 @@ def require_auth(f):
     return decorated
 
 
+def require_write(f):
+    """require_auth PLUS a CSRF guard: mutating file ops must carry the custom
+    request header ``X-ARES-Write: 1``. A cross-origin page cannot set a custom
+    header without a CORS preflight this server never approves, so a forged POST
+    from a malicious site (riding the logged-in session cookie) is rejected.
+    Tailscale reachability is NOT treated as a CSRF boundary. The SPA's
+    writeFetch() wrapper adds the header on every mutating call."""
+    @functools.wraps(f)
+    def inner(*args, **kwargs):
+        if request.headers.get("X-ARES-Write") != "1":
+            return jsonify({"error": "missing write token"}), 403
+        return f(*args, **kwargs)
+    return require_auth(inner)
+
+
 # Flask's built-in /static route served the private photo tiers (thumbs/faces/hls/…) with NO
 # auth, bypassing the Caddy forward_auth gate — any tailnet peer or the LXC could pull the whole
 # gallery incl. 2048px previews and face crops. static_folder=None disables it; this replacement
@@ -435,12 +474,15 @@ _STATIC_DIR = os.path.join(_APP_DIR, "static")
 _PRIVATE_STATIC = ("thumbs", "thumbs_hq", "thumbs_max", "thumbs_preview",
                    "faces", "face_avatars", "hls", "video_cache")
 
+_SHORT_CACHE_EXT = (".js", ".json", ".css")   # app logic/data — edited often, must not go stale for 7 days
+
 @app.route("/static/<path:filename>")
 def static_files(filename):
     top = filename.split("/", 1)[0]
     if top in _PRIVATE_STATIC and not (session.get("authenticated") or check_bearer_token()):
         return ("", 401)
-    return send_from_directory(_STATIC_DIR, filename)   # send_from_directory blocks ../ traversal
+    max_age = 60 if filename.endswith(_SHORT_CACHE_EXT) else None   # None = app-wide 7-day default
+    return send_from_directory(_STATIC_DIR, filename, max_age=max_age, conditional=True)   # blocks ../ traversal
 
 
 @app.route("/login", methods=["GET"])
@@ -588,102 +630,23 @@ def girlfriend_day():
 def home():
     # Inline the first system-info snapshot so the page paints with real vitals
     # instead of skeletons that pop in after the client-side fetch. Cached (~35ms).
-    return render_template("home.html", boot=get_system_info())
-
-
-@app.route("/zeus")
-@require_auth
-def zeus_view():
-    import json as _json
-    _fleet_path = os.path.join(os.path.dirname(__file__), "ai_data", "fleet.json")
-    _fleet_ts = 0
+    # kg_js_v: mtime-based cache-buster on the <script> URL — a browser that cached
+    # zeus-graph.js under the old 7-day header would otherwise never re-fetch it,
+    # since the stale cached response's own Expires header governs, not our new one.
     try:
-        with open(_fleet_path) as _f:
-            _fdata = _json.load(_f)
-            _zeus = _fdata.get("zeus", {})
-            _fleet_ts = _fdata.get("ts", 0)
-    except Exception:
-        _zeus = {}
-    _mem_used = _zeus.get("mem_used_gb", 0)
-    _mem_total = _zeus.get("mem_total_gb", 32)
-    _mem_pct = round(_mem_used / _mem_total * 100, 1) if _mem_total else 0
-    _cores = _zeus.get("cores", 8)
-    _zeus_boot = {
-        "hostname": "ZEUS",
-        "cpu": f"{_zeus.get('cpu_model', 'Intel Core i7')} ({_cores} threads)",
-        "cpu_percent": _zeus.get("cpu_pct", 0),
-        "cpu_temp": 0,
-        "memory_total": f"{_mem_total} GB",
-        "memory_used": f"{_mem_used} GB",
-        "memory_percent": _mem_pct,
-        "uptime": _zeus.get("uptime", "unknown"),
-        "os": "Debian 12",
-        "kernel": "",
-        "architecture": "x86_64",
-        "python": "",
-        "disks": [],
-        "folders": [],
-        "mordor": {"online": False},
-        "gpu": {"online": False},
-        "crons": [],
-        "io": {},
-        "caps": {"docker": 1},  # ZEUS is a docker box; drives panel visibility
-    }
-    return render_template("home.html", boot=_zeus_boot, fleet_ts=_fleet_ts)
+        kg_js_v = int(os.path.getmtime(os.path.join(_STATIC_DIR, "zeus-graph.js")))
+    except OSError:
+        kg_js_v = 0
+    return render_template("home.html", boot=get_system_info(), kg_js_v=kg_js_v)
 
 
+# EROS/ZEUS box dashboards retired 2026-09-11 — one ARES dashboard now; EROS data
+# lives in the ARES knowledge graph + the Array-map storage rows. Old URLs redirect home.
+@app.route("/zeus")
 @app.route("/eros")
 @require_auth
-def eros_view():
-    # Inject raw fleet.eros server-side so Jinja can render EROS identity on first paint
-    # and the client never needs to call ARES-scoped endpoints to populate vitals.
-    import json as _json
-    _fleet_path = os.path.join(os.path.dirname(__file__), "ai_data", "fleet.json")
-    _fleet_ts = 0
-    try:
-        with open(_fleet_path) as _f:
-            _fdata = _json.load(_f)
-            _eros = _fdata.get("eros", {})
-            _fleet_ts = _fdata.get("ts", 0)
-    except Exception:
-        _eros = {}
-    _mem_used = _eros.get("mem_used_gb", 0)
-    _mem_total = _eros.get("mem_total_gb", 15.5)
-    _mem_pct = round(_mem_used / _mem_total * 100, 1) if _mem_total else 0
-    _cores = _eros.get("cores", 16)
-    _gpu = _eros.get("gpu", {})
-    _eros_boot = {
-        "hostname": "EROS",
-        "cpu": f"{_eros.get('cpu_model', 'AMD Ryzen 7 5700X')} ({_cores} threads)",
-        "cpu_percent": _eros.get("cpu_pct", 0),
-        "cpu_temp": _gpu.get("temp", 0),  # ponytail: no CPU temp in fleet; GPU temp is closest proxy
-        "memory_total": f"{_mem_total} GB",
-        "memory_used": f"{_mem_used} GB",
-        "memory_percent": _mem_pct,
-        "uptime": _eros.get("uptime", "unknown"),
-        "os": "Proxmox VE / Debian",
-        "kernel": "",
-        "architecture": "x86_64",
-        "python": "",
-        "disks": [],
-        "folders": [],
-        "mordor": {"online": False},
-        # EROS GPU: GTX 1070 fleet data → show name+stats in h-gpu header. online=True so
-        # applyVitals renders it (but EROS CSS hides panel-gpu; only h-gpu header shows).
-        "gpu": {
-            "online": bool(_gpu),
-            "name": "GTX 1070",
-            "temp_c": _gpu.get("temp", 0),
-            "util_pct": _gpu.get("util", 0),
-            "power_w": float(_gpu.get("power", 0)),
-            "vram_used_mib": _gpu.get("mem_used", 0),
-            "vram_total_mib": _gpu.get("mem_total", 8192),
-        },
-        "crons": [],
-        "io": {},
-        "caps": {},  # no ARES caps; EROS panel visibility driven by BRAND checks
-    }
-    return render_template("home.html", boot=_eros_boot, fleet_eros=_eros, fleet_ts=_fleet_ts)
+def _retired_box_view():
+    return redirect(url_for("home"))
 
 
 @app.route("/healthz")
@@ -724,6 +687,273 @@ def healthz():
         resp.headers["Access-Control-Allow-Origin"] = _o
         resp.headers["Vary"] = "Origin"
     return resp
+
+
+_CRON_LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".host_cron_logs")
+# Allowlist, not a sanitize-and-hope: mirrors ops/cron-status.py's JOBS units
+# exactly, plus zeus-horcrux (which has no local systemd unit/log on ARES).
+_CRON_LOG_UNITS = {"ares-facescan", "ares-elite-picks", "journal-pull", "ares-autofix-watcher", "ares-autofix-audit", "zeus-horcrux"}
+
+
+@app.route("/api/cron-log/<unit>")
+@require_auth
+def cron_log(unit):
+    if unit not in _CRON_LOG_UNITS:
+        return jsonify({"error": "unknown job"}), 404
+    if unit == "zeus-horcrux":
+        return jsonify({"error": "this job runs on ZEUS, not ARES -- no local log to show"}), 404
+    path = os.path.join(_CRON_LOG_DIR, f"{unit}.log")
+    try:
+        with open(path, errors="replace") as f:
+            lines = f.readlines()
+    except OSError:
+        return jsonify({"error": "no log yet for this job"}), 404
+    return jsonify({"log": "".join(lines[-400:])})
+
+
+_CRON_LOG_LABELS = {"ares-facescan": "Facial Scan", "ares-elite-picks": "Elite's Stocks",
+                    "journal-pull": "Journal pull", "ares-autofix-watcher": "Autofix watcher",
+                    "ares-autofix-audit": "Autofix audit", "zeus-horcrux": "Backup → Zeus"}
+
+
+@app.route("/logs")
+@require_auth
+def logs_index_page():
+    """PR-list-style overview of every autofix incident: title, status,
+    fix summary. Linked from the Scheduled Jobs panel title."""
+    from system.system_info import _read_autofix_incidents
+    incidents = _read_autofix_incidents()
+    # hide noise by default: rejected duplicates and triage-skipped blips (?all=1 shows everything)
+    if request.args.get("all") != "1":
+        incidents = [i for i in incidents if i.get("status") not in ("rejected", "triaged_skip")]
+    for inc in incidents:
+        ts = inc.get("updated_ts")
+        inc["updated_ts_human"] = datetime.fromtimestamp(ts, tz=_GALLERY_TZ).strftime("%b %-d, %Y %-I:%M %p") if ts else ""
+    # three sections: one-click Merge fixes, human-action items, already-merged.
+    # only council_approved has a real Merge button behind it.
+    _recent = lambda i: -i.get("updated_ts", 0)
+    merge_ready = sorted((i for i in incidents if i.get("status") == "council_approved"), key=_recent)
+    merged = sorted((i for i in incidents if i.get("status") == "resolved"), key=_recent)
+    needs_you = sorted((i for i in incidents if i.get("status") not in ("council_approved", "resolved")), key=_recent)
+    return render_template("logs_index.html", boot=get_system_info(),
+                           merge_ready=merge_ready, needs_you=needs_you, merged=merged,
+                           total=len(incidents))
+
+
+@app.route("/logs/job/<unit>")
+@require_auth
+def job_log_page(unit):
+    from system.system_info import _read_host_crons
+    label = _CRON_LOG_LABELS.get(unit, unit)
+    if unit not in _CRON_LOG_UNITS:
+        return render_template("job_log.html", boot=get_system_info(), title=label, unit=unit,
+                                job_ok=True, job_header=None, log_lines=None, log_empty="unknown job")
+    if unit == "zeus-horcrux":
+        content, empty = None, "this job runs on ZEUS, not ARES -- no local log to show"
+    else:
+        path = os.path.join(_CRON_LOG_DIR, f"{unit}.log")
+        try:
+            with open(path, errors="replace") as f:
+                content = "".join(f.readlines()[-800:])
+            empty = None
+        except OSError:
+            content, empty = None, "no log yet for this job"
+
+    job = next((j for j in _read_host_crons() if j.get("unit") == unit), None)
+    job_header = None
+    job_ok = True
+    if job:
+        job_ok = bool(job.get("ok"))
+        job_header = [
+            {"label": "Status", "value": "OK" if job_ok else "FAILED", "cls": "ok" if job_ok else "bad"},
+            {"label": "Last run", "value": datetime.fromtimestamp(job["last"], tz=_GALLERY_TZ).strftime("%b %-d, %-I:%M %p") if job.get("last") else "—"},
+            {"label": "Next run", "value": datetime.fromtimestamp(job["next"], tz=_GALLERY_TZ).strftime("%b %-d, %-I:%M %p") if job.get("next") else "—"},
+        ]
+
+    # Per-line parse for the trace panel: journalctl short format is
+    # "Sep 14 03:00:01 host unit[pid]: message" -- split into ts / service /
+    # message columns; classify failures red and clean completions green.
+    log_lines = None
+    if content:
+        log_lines = []
+        line_re = re.compile(r"^([A-Z][a-z]{2}\s+\d+\s\d{2}:\d{2}:\d{2})\s+\S+\s+(\S+?:)\s?(.*)$")
+        for line in content.splitlines():
+            low = line.lower()
+            if any(k in low for k in ("failed", "failure", "error", "traceback")):
+                cls = "err"
+            elif any(k in low for k in ("finished", "deactivated successfully", "succeeded")):
+                cls = "fine"
+            else:
+                cls = ""
+            m = line_re.match(line)
+            if m:
+                log_lines.append({"ts": m.group(1), "svc": m.group(2), "msg": m.group(3), "cls": cls})
+            else:
+                log_lines.append({"ts": "", "svc": "", "msg": line, "cls": cls})
+
+    return render_template("job_log.html", boot=get_system_info(), title=label, unit=unit,
+                            job_header=job_header, job_ok=job_ok,
+                            log_lines=log_lines, log_empty=empty)
+
+
+_AUTOFIX_APPLY_URL = "http://192.168.20.51:7684"
+_AUTOFIX_TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ops", "autofix", ".apply-token")
+
+
+def _autofix_token():
+    """Reads the apply.py auth token via the shared host<->LXC bind mount --
+    never ares-shell-ctl's token, a separate secret entirely (spec 2026-09-13)."""
+    with open(_AUTOFIX_TOKEN_FILE) as f:
+        return f.read().strip()
+
+
+_AUTOFIX_LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ops", "autofix", "logs")
+
+
+@app.route("/api/autofix/log/<incident_id>")
+@require_auth
+def autofix_log(incident_id):
+    """Persisted headless-Claude session log for one incident (written by
+    ops/autofix/finalize.py). Bounded read -- these can be long-running
+    sessions with a lot of tool-call output."""
+    safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", incident_id)
+    path = os.path.join(_AUTOFIX_LOG_DIR, f"{safe_id}.log")
+    try:
+        with open(path, errors="replace") as f:
+            lines = f.readlines()
+    except OSError:
+        return jsonify({"error": "no log for this incident"}), 404
+    return jsonify({"log": "".join(lines[-500:])})
+
+
+def _paragraphize(text, sentences_per_para=2):
+    """Diagnosis reasoning often comes back from the LLM as one dense
+    run-on paragraph (no blank lines). Group every N sentences into a
+    paragraph so it actually reads as prose instead of a wall of text."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    if "\n\n" in text:  # already has real paragraph breaks -- respect them
+        return [p.strip() for p in text.split("\n\n") if p.strip()]
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    return [" ".join(sentences[i:i + sentences_per_para]) for i in range(0, len(sentences), sentences_per_para)]
+
+
+def _parse_manual_steps(text):
+    """Splits 'Run on EROS...: \\n 1. Label: command' into a real list --
+    returns (intro: str, items: list[{"label", "command"}]). Each item's
+    first colon separates the human label from the actual command, if any.
+    Falls back to a single unlabeled item if nothing looks numbered."""
+    lines = [l.strip() for l in (text or "").splitlines() if l.strip()]
+    intro, raw_items = "", []
+    for line in lines:
+        m = re.match(r"^\d+[.)]\s*(.+)$", line)
+        if m:
+            raw_items.append(m.group(1))
+        elif not raw_items:
+            intro = (intro + " " + line).strip()
+    if not raw_items and lines:
+        raw_items = lines
+        intro = ""
+    items = []
+    for raw in raw_items:
+        m = re.match(r"^([^:]{1,60}):\s*(.+)$", raw)
+        items.append({"label": m.group(1), "command": m.group(2)} if m else {"label": "", "command": raw})
+    return intro, items
+
+
+def _diff_lines(diff_text):
+    out = []
+    for line in (diff_text or "").splitlines():
+        if line.startswith("@@"):
+            cls = "hunk"
+        elif line.startswith("+") and not line.startswith("+++"):
+            cls = "add"
+        elif line.startswith("-") and not line.startswith("---"):
+            cls = "del"
+        else:
+            cls = ""
+        out.append({"text": line, "cls": cls})
+    return out
+
+
+@app.route("/logs/incident/<incident_id>")
+@require_auth
+def incident_log_page(incident_id):
+    from system.system_info import _read_autofix_incidents
+    incidents = _read_autofix_incidents()
+    inc = next((i for i in incidents if i["id"] == incident_id), None)
+    if inc is None:
+        return render_template("log_view.html", boot=get_system_info(), title="incident not found",
+                                subtitle="", status_pill="Not found", status_pill_cls="bad",
+                                what_it_does="", why_paragraphs=[], council_votes=[], council_summary={},
+                                council_verdict="", code_section=None, log_content=None,
+                                box="—", when="—", show_approve_reject=False, incident_id=incident_id), 404
+
+    diag = inc.get("diagnosis", {})
+    status = inc.get("status", "new")
+    status_cls = "ok" if status == "resolved" else (
+        "bad" if status in ("council_held", "stale_diff_needs_human", "revert_failed_needs_human", "diagnosis_timeout")
+        else "pending")
+    status_label = {
+        "resolved": "Resolved", "council_approved": "Ready to apply",
+        "recommendation_ready": "Recommendation", "council_held": "Held by council",
+        "rejected": "Rejected", "diagnosis_timeout": "Diagnosis failed",
+        "stale_diff_needs_human": "Stale, needs review", "revert_failed_needs_human": "Revert failed",
+        "command_execution_failed": "Execution failed",
+    }.get(status, status)
+
+    when = datetime.fromtimestamp(inc["updated_ts"], tz=_GALLERY_TZ).strftime("%b %-d, %Y %-I:%M %p") if inc.get("updated_ts") else "—"
+
+    # Simple layout: PROBLEM + SOLUTION, both plain English. Prefer the
+    # council synthesis's jargon-free fields; only fall back to the raw
+    # technical reasoning if the synthesis never produced them.
+    summary = diag.get("council_summary") or {}
+    problem = summary.get("problem") or " ".join(_paragraphize(diag.get("reasoning"))) or diag.get("triage_reason", "")
+    solution = summary.get("solution") or summary.get("simple_explanation") or summary.get("what_happens") or diag.get("fix_title", "")
+
+    return render_template("log_view.html", boot=get_system_info(),
+                            title=diag.get("fix_title") or inc.get("title", incident_id),
+                            subtitle=inc.get("title", "") if diag.get("fix_title") else "",
+                            status_pill=status_label, status_pill_cls=status_cls,
+                            problem=problem, solution=solution,
+                            council_votes=diag.get("council_votes", []),
+                            council_discussion=diag.get("council_discussion", []),
+                            council_verdict=diag.get("council_verdict", ""),
+                            box=diag.get("box", "ARES"), when=when,
+                            show_approve_reject=(status == "council_approved"), incident_id=incident_id)
+
+
+@app.route("/api/autofix/approve/<incident_id>", methods=["POST"])
+@require_auth
+def autofix_approve(incident_id):
+    import requests as _rq
+    try:
+        token = _autofix_token()
+    except OSError:
+        return jsonify({"error": "autofix apply service not installed"}), 503
+    try:
+        r = _rq.post(f"{_AUTOFIX_APPLY_URL}/apply/{incident_id}",
+                     headers={"Authorization": f"Bearer {token}"}, timeout=60)
+        return jsonify(r.json()), r.status_code
+    except _rq.exceptions.RequestException as e:
+        return jsonify({"error": f"apply service unreachable: {e}"}), 502
+
+
+@app.route("/api/autofix/reject/<incident_id>", methods=["POST"])
+@require_auth
+def autofix_reject(incident_id):
+    import requests as _rq
+    try:
+        token = _autofix_token()
+    except OSError:
+        return jsonify({"error": "autofix apply service not installed"}), 503
+    try:
+        r = _rq.post(f"{_AUTOFIX_APPLY_URL}/reject/{incident_id}",
+                     headers={"Authorization": f"Bearer {token}"}, timeout=15)
+        return jsonify(r.json()), r.status_code
+    except _rq.exceptions.RequestException as e:
+        return jsonify({"error": f"apply service unreachable: {e}"}), 502
 
 
 @app.route("/api/peer")
@@ -961,6 +1191,11 @@ def kayla_page():
 @require_auth
 def josh_page():
     return render_template("josh.html")
+
+@app.route("/yc")
+@require_auth
+def yc_page():
+    return render_template("yc.html")
 
 @app.route("/demo")
 @require_auth
@@ -2695,6 +2930,34 @@ def hermes_alerts():
     return jsonify({"level": level[0], "reasons": reasons, "age_s": int(age), "data": d})
 
 
+@app.route("/api/camera/status")
+@require_auth
+def camera_status():
+    """Camera-import status for the 'PHOTOS INBOUND' toast. Reads the status file
+    the host importer (or the simulator) writes into ai_data/. Safe idle default
+    when the file is missing, so the dashboard never breaks."""
+    from camera.status import read_status
+    d = read_status()
+    d["age_s"] = int(time.time() - d.get("last_update", 0)) if d.get("last_update") else None
+    return jsonify(d)
+
+
+@app.route("/api/camera/simulate", methods=["POST"])
+@require_auth
+def camera_simulate():
+    """Demo trigger: play a fake drain so the toast animates with no camera.
+    Spawns camera.simulate_drain in the background and returns immediately."""
+    body = request.get_json(silent=True) or {}
+    total = max(1, min(int(body.get("total", 27)), 200))
+    per = max(0.0, min(float(body.get("per", 0.22)), 2.0))
+    subprocess.Popen(
+        [sys.executable, "-m", "camera.simulate_drain", str(total), str(per)],
+        cwd=os.path.dirname(os.path.abspath(__file__)),
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    return jsonify({"ok": True, "total": total})
+
+
 @app.route("/api/eros/ask", methods=["POST"])
 @require_auth
 def eros_ask():
@@ -3247,52 +3510,110 @@ def storage_breakdown():
     return jsonify(payload)
 
 
+# One VDD-disable worker at a time. Repeated start clicks (multiple tabs, a
+# reload mid-boot) must not launch N overlapping ssh/guest-exec threads that
+# race GameModeDisplayRest. The lock guards the flag; the flag gates the spawn.
+_OLED_SOLO_LOCK = threading.Lock()
+_oled_solo_active = False
+
+# TTL cache for /api/vm/status. The probe costs up to ~16s worst case (ssh qm
+# 10s + Sunshine socket 1s + nvidia-smi 5s) and gunicorn runs ONE worker, so
+# overlapping polls (pollWin 20s + a toggle's 3s loop) must not each spawn a
+# fresh subprocess and serialize the whole dashboard behind them.
+_vm_status_cache = {"ts": 0.0, "data": None}
+
+
+# NirSoft ControlMyMonitor: DDC/CI power-on for the desk OLED. VCP feature 0xD6
+# (power mode) = 1 (on) wakes the Odyssey G60SD over the display wire even from
+# hardware standby, unlike DPMS/WM_SYSCOMMAND tricks that no-op from a session-0
+# guest-exec. Monitor short id from scripts/gamemode/vdd-notes.md (OLED=SAM75CB).
+_OLED_DDC_ID = "SAM75CB"
+_OLED_CMM = "C:\\gamemode\\ControlMyMonitor.exe"
+
+
+def _oled_wake_ddc(ssh_base):
+    """Send DDC/CI power-on (VCP 0xD6=1) to the desk OLED so it lights up when
+    the Windows VM starts. Best-effort: bootstraps ControlMyMonitor into
+    C:\\gamemode on first run if absent, then fires the wake. Every failure is
+    logged, never raised — a dark panel must not break VM start. Call AFTER the
+    VDD is disabled so the OLED is the sole active path and DDC/CI can address
+    it. Runs on the host via qm guest exec (session 0 is enough for DDC/CI)."""
+    import subprocess as _sp
+    assert ssh_base, "ssh_base required"
+    assert _OLED_DDC_ID and _OLED_CMM, "monitor id and tool path required"
+    # Self-heal install (idempotent): only fetch if the exe is missing. Fixed
+    # C:\\gamemode paths (no $env vars) so the host shell does not mangle them.
+    boot = ("qm guest exec 200 --timeout 90 -- powershell -NoProfile "
+            "-ExecutionPolicy Bypass -Command \"if(!(Test-Path '" + _OLED_CMM +
+            "')){Invoke-WebRequest -UseBasicParsing "
+            "'https://www.nirsoft.net/utils/controlmymonitor.zip' "
+            "-OutFile 'C:\\gamemode\\cmm.zip'; "
+            "Expand-Archive 'C:\\gamemode\\cmm.zip' 'C:\\gamemode' -Force}\"")
+    wake = ("qm guest exec 200 --timeout 20 -- " + _OLED_CMM +
+            " /SetValue " + _OLED_DDC_ID + " D6 1")
+    try:
+        _sp.run(ssh_base + [boot], timeout=100,
+                stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+        rc = _sp.run(ssh_base + [wake], timeout=30,
+                     capture_output=True).returncode
+        app.logger.info("[oled] DDC/CI wake fired (rc=%s)", rc)
+    except Exception as e:
+        app.logger.warning("[oled] DDC/CI wake failed: %s", e)
+
+
 def _oled_solo_after_start():
     """After VM 200 boots, disable the Virtual Display Driver so the desk OLED
     is the sole display (user wants one screen, not the VDD phantom, when they
-    tap in via VNC/Moonlight). Reuses the VM's existing C:\\gamemode\\vdd-disable.ps1.
+    tap in via VNC/Moonlight), then wake the panel over DDC/CI so it actually
+    lights up. Reuses the VM's existing C:\\gamemode\\vdd-disable.ps1.
 
     GameModeDisplayRest re-enables the VDD on its LogonTrigger, so we wait for
     boot+logon to settle, then disable last to win the race. Disable-PnpDevice
     is a global op, so guest-exec (session 0) is enough; no trampoline needed.
     Runs in a daemon thread."""
-    import subprocess as _sp
-    host = "root@192.168.20.51"
-    ssh_base = ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5", host]
-    ping = "qm agent 200 ping"
-    disable = ("qm guest exec 200 --timeout 20 -- powershell -NoProfile "
-               "-ExecutionPolicy Bypass -File C:\\gamemode\\vdd-disable.ps1")
-    up = False
-    for _ in range(40):                       # ceiling ~3.5 min waiting for guest agent
-        try:
-            _sp.check_output(ssh_base + [ping], timeout=8, stderr=_sp.DEVNULL)
-            up = True
-            break
-        except Exception:
-            time.sleep(5)
-    if not up:
-        return
-    # ponytail: fixed 45s lets logon + GameModeDisplayRest finish before we
-    # disable last. If the re-enable ever wins, poll its LastRunTime instead.
-    time.sleep(45)
-    for _ in range(2):                        # two idempotent fires, 15s apart
-        try:
-            _sp.run(ssh_base + [disable], timeout=30,
-                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
-        except Exception:
-            pass
-        time.sleep(15)
+    try:
+        up = False
+        for _ in range(40):                   # ceiling ~3.5 min waiting for guest agent
+            try:
+                _sp.check_output(ssh_base + [ping], timeout=8, stderr=_sp.DEVNULL)
+                up = True
+                break
+            except Exception:
+                time.sleep(5)
+        if not up:
+            return
+        # ponytail: fixed 45s lets logon + GameModeDisplayRest finish before we
+        # disable last. If the re-enable ever wins, poll its LastRunTime instead.
+        time.sleep(45)
+        for _ in range(2):                    # two idempotent fires, 15s apart
+            try:
+                _sp.run(ssh_base + [disable], timeout=30,
+                        stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+            except Exception:
+                pass
+            time.sleep(15)
+        # OLED is now the sole active path — wake the physical panel over DDC/CI.
+        _oled_wake_ddc(ssh_base)
+    finally:
+        with _OLED_SOLO_LOCK:                 # always release so a later start can re-arm
+            _oled_solo_active = False
 
 
 @app.route("/api/vm/<action>", methods=["POST"])
 @require_auth
 def vm_control(action):
     """Start or stop the Windows VM (ID 200) on PVE host."""
+    global _oled_solo_active
     import subprocess as _sp
     if action not in ("start", "stop", "status"):
         return jsonify({"error": "Invalid action"}), 400
     try:
         if action == "status":
+            # Coalesce overlapping polls (pollWin 20s + a toggle's 3s loop) on the
+            # single gunicorn worker: one ~16s-worst-case probe serves a 2s window.
+            now = time.time()
+            if _vm_status_cache["data"] is not None and now - _vm_status_cache["ts"] < 2:
+                return jsonify(_vm_status_cache["data"])
             out = _sp.check_output(
                 ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
                  "root@192.168.20.51", "qm status 200"],
@@ -3314,14 +3635,24 @@ def vm_control(action):
                 if os.path.exists(GPU_LOAN_FLAG):
                     gpu_home = False
                 else:
+                    # Flag gone => the hookscript reclaimed the GPU; that is the
+                    # authoritative signal. nvidia-smi only CONFIRMS. A broken
+                    # probe (binary absent in this CT, timeout, transient hiccup)
+                    # must NOT fabricate the red "GPU MISSING / reclaim failed"
+                    # alarm — reserve False for a positive non-zero exit.
+                    gpu_home = True
                     try:
                         rc = _sp.run(["nvidia-smi", "-L"], capture_output=True,
                                      timeout=5).returncode
-                        gpu_home = (rc == 0)
+                        if rc != 0:
+                            gpu_home = False
                     except Exception:
-                        gpu_home = False
-            return jsonify({"vm": "win11-gaming", "running": running, "raw": out,
-                            "streaming_ready": streaming_ready, "gpu_home": gpu_home})
+                        gpu_home = True          # tool missing / timeout — trust the flag
+            payload = {"vm": "win11-gaming", "running": running, "raw": out,
+                       "streaming_ready": streaming_ready, "gpu_home": gpu_home}
+            _vm_status_cache["ts"] = now
+            _vm_status_cache["data"] = payload
+            return jsonify(payload)
         else:
             # The GPU-swap hookscript restarts THIS service during both
             # pre-start and post-stop (flag+restart protocol), which kills a
@@ -3329,18 +3660,38 @@ def vm_control(action):
             # interrupt / broken pipe"). Detach qm on the host so the
             # boot/stop survives our own restart; the frontend already polls
             # /api/vm/status for the outcome.
-            cmd = ("nohup qm " + action + " 200 >>/var/log/qm-" + action +
+            # STOP uses the graceful ACPI verb so Windows flushes — VM 200 is a
+            # real gaming session; a hard power-off risks a dirty NTFS. Keep the
+            # log filename keyed on the route action.
+            _verb = "shutdown" if action == "stop" else action
+            cmd = ("nohup qm " + _verb + " 200 >>/var/log/qm-" + action +
                    "-200.log 2>&1 & echo detached")
-            _sp.check_output(
+            out = _sp.check_output(
                 ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
                  "root@192.168.20.51", cmd],
                 timeout=15, stderr=_sp.DEVNULL
-            )
+            ).decode("utf-8", "replace").strip()
+            # Detached, so we never wait on qm — but the 'detached' sentinel must
+            # come back. Its absence means the ssh/shell launch itself failed
+            # (host down, host key, qm missing); surface that instead of a false
+            # ok that dead-spins the UI for 90s.
+            if "detached" not in out:
+                return jsonify({"error": "qm launch not confirmed",
+                                "action": action, "raw": out}), 502
             if action == "start":
-                # Once Windows is up, drop the VDD so the OLED is the only screen.
-                threading.Thread(target=_oled_solo_after_start, daemon=True).start()
+                # Once Windows is up, drop the VDD so the OLED is the only screen,
+                # then wake the panel over DDC/CI (see _oled_solo_after_start).
+                # Single-instance: never stack overlapping VDD-disable threads.
+                spawn = False
+                with _OLED_SOLO_LOCK:
+                    if not _oled_solo_active:
+                        _oled_solo_active = True
+                        spawn = True
+                if spawn:
+                    threading.Thread(target=_oled_solo_after_start, daemon=True).start()
             return jsonify({"ok": True, "action": action, "detached": True})
     except Exception as e:
+        app.logger.error("[vm/%s] failed: %s", action, e)
         return jsonify({"error": str(e)}), 500
 
 
@@ -3394,6 +3745,163 @@ def files_thumb():
     resp = send_file(cache, mimetype="image/jpeg", conditional=True, max_age=86400)
     resp.headers["X-Content-Type-Options"] = "nosniff"
     return resp
+
+
+# ── File explorer WRITE ops ──────────────────────────────────────────────────
+# Every path in every request is resolved through files_write.gate() (confinement
+# + vault + dotfile + protected-island). All routes are @require_write (auth +
+# X-ARES-Write CSRF header). See docs/superpowers/specs/2026-09-16-files-read-write-design.md
+
+def _files_gate(rel):
+    """Resolve a user rel-path for writing. Returns (abspath, None) on success,
+    or (None, flask_response) with the right status (404 escaped/vault, 403
+    protected island)."""
+    status, ap = files_write.gate(rel if isinstance(rel, str) else "")
+    if status == "ok":
+        return ap, None
+    if status == "protected":
+        return None, (jsonify({"error": "protected area"}), 403)
+    return None, (jsonify({"error": "not found"}), 404)
+
+
+def _join_rel(parent_rel, name):
+    return (parent_rel + "/" + name) if parent_rel else name
+
+
+@app.route("/api/files/mkdir", methods=["POST"])
+@require_write
+def files_mkdir():
+    data = request.get_json(silent=True) or {}
+    rel = data.get("path", "")
+    name = data.get("name", "")
+    ap, err = _files_gate(rel)
+    if err:
+        return err
+    if not os.path.isdir(ap):
+        return jsonify({"error": "not a folder"}), 404
+    try:
+        final = files_write.make_dir(ap, name)
+    except AssertionError:
+        return jsonify({"error": "invalid folder name"}), 400
+    except OSError as e:
+        return jsonify({"error": str(e)}), 409
+    return jsonify({"ok": True, "name": final, "path": _join_rel(rel, final)})
+
+
+@app.route("/api/files/rename", methods=["POST"])
+@require_write
+def files_rename():
+    data = request.get_json(silent=True) or {}
+    rel = data.get("path", "")
+    new_name = data.get("new_name", "")
+    ap, err = _files_gate(rel)
+    if err:
+        return err
+    if not os.path.exists(ap):
+        return jsonify({"error": "not found"}), 404
+    try:
+        final = files_write.rename_item(ap, new_name)
+    except AssertionError:
+        return jsonify({"error": "invalid name"}), 400
+    except OSError as e:
+        return jsonify({"error": str(e)}), 409
+    parent_rel = rel.rsplit("/", 1)[0] if "/" in rel else ""
+    return jsonify({"ok": True, "name": final, "path": _join_rel(parent_rel, final)})
+
+
+@app.route("/api/files/move", methods=["POST"])
+@require_write
+def files_move():
+    data = request.get_json(silent=True) or {}
+    src_rel = data.get("src", "")
+    dst_rel = data.get("dst_dir", "")
+    src_ap, err = _files_gate(src_rel)
+    if err:
+        return err
+    dst_ap, err2 = _files_gate(dst_rel)
+    if err2:
+        return err2
+    if not os.path.exists(src_ap):
+        return jsonify({"error": "source not found"}), 404
+    if not os.path.isdir(dst_ap):
+        return jsonify({"error": "destination is not a folder"}), 400
+    if os.path.dirname(src_ap) == dst_ap:
+        return jsonify({"ok": True, "name": os.path.basename(src_ap),
+                        "path": src_rel, "noop": True})
+    try:
+        final = files_write.move_into(src_ap, dst_ap)
+    except AssertionError:
+        return jsonify({"error": "invalid move"}), 400
+    except OSError as e:
+        return jsonify({"error": str(e)}), 409
+    return jsonify({"ok": True, "name": final, "path": _join_rel(dst_rel, final)})
+
+
+@app.route("/api/files/delete", methods=["POST"])
+@require_write
+def files_delete():
+    data = request.get_json(silent=True) or {}
+    rel = data.get("path", "")
+    ap, err = _files_gate(rel)
+    if err:
+        return err
+    if not os.path.exists(ap):
+        return jsonify({"error": "not found"}), 404
+    res = _trash_path(ap)
+    if not res.get("success"):
+        return jsonify({"error": res.get("error", "delete failed")}), 500
+    return jsonify({"ok": True, "trash_name": res.get("trash_name")})
+
+
+@app.route("/api/files/upload", methods=["POST"])
+@require_write
+def files_upload():
+    rel = request.form.get("dir", "")
+    relpath = request.form.get("relpath", "")
+    ap, err = _files_gate(rel)
+    if err:
+        return err
+    if not os.path.isdir(ap):
+        return jsonify({"error": "not a folder"}), 404
+    fobj = request.files.get("file")
+    if fobj is None:
+        return jsonify({"error": "no file"}), 400
+    try:
+        final = files_write.write_upload(ap, relpath, fobj.stream)
+    except ValueError as e:
+        if "exceeds" in str(e):
+            return jsonify({"error": "file too large"}), 413
+        return jsonify({"error": "invalid path"}), 400
+    except AssertionError:
+        return jsonify({"error": "invalid path"}), 400
+    except OSError as e:
+        return jsonify({"error": str(e)}), 409
+    return jsonify({"ok": True, "name": final, "path": _join_rel(rel, final)})
+
+
+@app.route("/api/files/trash/restore", methods=["POST"])
+@require_write
+def files_trash_restore():
+    data = request.get_json(silent=True) or {}
+    trash_name = data.get("trash_name", "")
+    if not trash_name:
+        return jsonify({"error": "no trash_name"}), 400
+
+    def _dest_ok(abspath):
+        # restore_gated hands us the absolute ORIGINAL PARENT dir; re-confirm it
+        # is inside the writable, non-island files tree before letting anything
+        # land there.
+        try:
+            rel = os.path.relpath(abspath, files_write.ROOT)
+        except ValueError:
+            return False
+        if rel == ".." or rel.startswith(".." + os.sep):
+            return False
+        status, _ = files_write.gate("" if rel == "." else rel)
+        return status == "ok"
+
+    res = _restore_gated(trash_name, _dest_ok)
+    return jsonify(res), (200 if res.get("success") else 400)
 
 
 def _ollama_complete(system_prompt, user_prompt):
@@ -9510,7 +10018,7 @@ def api_person_avatar(cluster_id):
         chosen_bbox = best_bbox
         if not chosen_bbox:
             # No detected face at all — center crop the thumbnail
-            thumb_path = os.path.join(app.static_folder, "thumbs", photo_hash + ".jpg")
+            thumb_path = os.path.join(_STATIC_DIR, "thumbs", photo_hash + ".jpg")
             if not os.path.exists(thumb_path):
                 return jsonify({"error": "Photo not found"}), 404
             c["avatar_hash"] = photo_hash
@@ -9545,7 +10053,7 @@ def api_person_avatar(cluster_id):
 
         # Generate and cache the avatar crop
         _invalidate_avatar(cluster_id)
-        thumb_path = os.path.join(app.static_folder, "thumbs", photo_hash + ".jpg")
+        thumb_path = os.path.join(_STATIC_DIR, "thumbs", photo_hash + ".jpg")
         if os.path.exists(thumb_path):
             v = request.args.get("v", "11")
             cache_path = os.path.join(_AVATAR_DIR, f"{cluster_id}_v{v}_{photo_hash[:8]}.jpg")
@@ -9576,7 +10084,7 @@ def api_person_avatar(cluster_id):
 
     # Manual avatar override — use the pinned photo + stored bbox
     if avatar_hash:
-        thumb_path = os.path.join(app.static_folder, "thumbs", avatar_hash + ".jpg")
+        thumb_path = os.path.join(_STATIC_DIR, "thumbs", avatar_hash + ".jpg")
         if os.path.exists(thumb_path):
             # Use stored bbox, or find face via emb_to_cluster
             avatar_bbox = c.get("avatar_bbox")
@@ -9630,7 +10138,7 @@ def api_person_avatar(cluster_id):
             dists = [(i, float(np.linalg.norm(face_embs[i] - centroid))) for i in valid]
             dists.sort(key=lambda x: x[1])
             for best_idx, _ in dists[:10]:
-                face_path = os.path.join(app.static_folder, "faces", f"{best_idx}.jpg")
+                face_path = os.path.join(_STATIC_DIR, "faces", f"{best_idx}.jpg")
                 if os.path.exists(face_path):
                     try:
                         img = Image.open(face_path).convert("RGB")
@@ -9674,7 +10182,7 @@ def api_person_avatar(cluster_id):
         # Sort by distance to centroid — closest = most representative
         best_per_photo.sort(key=lambda x: x[0])
         for _, best_idx in best_per_photo[:10]:
-            face_path = os.path.join(app.static_folder, "faces", f"{best_idx}.jpg")
+            face_path = os.path.join(_STATIC_DIR, "faces", f"{best_idx}.jpg")
             if os.path.exists(face_path):
                 try:
                     img = Image.open(face_path).convert("RGB")
@@ -9706,7 +10214,7 @@ def api_face_crop(photo_hash, emb_idx):
     if not face:
         return jsonify({"error": "Face not found"}), 404
 
-    thumb_path = os.path.join(app.static_folder, "thumbs", photo_hash + ".jpg")
+    thumb_path = os.path.join(_STATIC_DIR, "thumbs", photo_hash + ".jpg")
     if not os.path.exists(thumb_path):
         return jsonify({"error": "Photo not found"}), 404
 

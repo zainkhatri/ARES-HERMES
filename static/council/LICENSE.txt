@@ -1,0 +1,4 @@
+Council portraits: "32x32 Fantasy Portrait Set" by CobraLad (Vitaliy Bakal)
+Source: https://opengameart.org/content/32x32-fantasy-portrait-set
+License: CC-BY 3.0 (https://creativecommons.org/licenses/by/3.0/)
+Four portraits from the set are used as the ARES autofix council avatars.

@@ -2,6 +2,9 @@
 .env
 .env.*
 .env.local
+ops/autofix/.apply-token
+ops/autofix/incidents.json
+ops/autofix/logs/
 .venv
 venv/
 *.pyc
@@ -71,6 +74,7 @@ portfolio.json
 ios_photo_ids.json
 .host_drives.json
 .host_crons.json
+.host_cron_logs/
 .deploy_stamp
 data/
 xcuserdata/
@@ -86,6 +90,7 @@ vault_video_cache/
 blurhashes.json
 templates/josh.html
 templates/kriti.html
+templates/yc.html
 templates/se_course.html
 templates/sigma_demo.html
 templates/adam.html

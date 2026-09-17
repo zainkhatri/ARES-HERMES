@@ -16,10 +16,13 @@
   var MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   function z(n) { return (n < 10 ? '0' : '') + n; }
   function tickClock() {
-    var el = document.getElementById('box-clock'); if (!el) return;
     var d = new Date();
-    el.innerHTML = '<span class="t">' + z(d.getHours()) + ':' + z(d.getMinutes()) + ':' + z(d.getSeconds()) + '</span>' +
-      '<span class="d">' + DOW[d.getDay()] + ' · ' + MON[d.getMonth()] + ' ' + z(d.getDate()) + ' ' + d.getFullYear() + '</span>';
+    var h24 = d.getHours(), ap = h24 < 12 ? 'AM' : 'PM', h12 = h24 % 12 || 12;  // 12-hour clock
+    var el = document.getElementById('box-clock');       // time → top-right
+    if (el) el.innerHTML = '<span class="t">' + z(h12) + ':' + z(d.getMinutes()) + ':' + z(d.getSeconds()) +
+      ' <small style="font-size:.6em;letter-spacing:.1em">' + ap + '</small></span>';
+    var de = document.getElementById('box-date');         // date → top-left
+    if (de) de.textContent = DOW[d.getDay()] + ' · ' + MON[d.getMonth()] + ' ' + z(d.getDate()) + ' ' + d.getFullYear();
   }
   tickClock(); setInterval(tickClock, 1000);
 })();

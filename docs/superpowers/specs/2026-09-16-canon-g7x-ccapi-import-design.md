@@ -1,0 +1,324 @@
+# Canon G7X Mark III → ARES auto-import (CCAPI) — Design
+
+Date: 2026-09-16
+Status: Design BLOCKED on a live verification spike (see "Verification gates").
+Do not write the implementation plan until the three gates pass. Reviewed by the
+LLM Council 2026-09-16 — findings folded in below.
+
+## Goal
+
+Replace the Canon Camera Connect app workflow. The user presses the WiFi button
+on a Canon PowerShot G7X Mark III. New photos transfer over WiFi into the ARES
+`PHOTOS/` library, appear in the gallery within seconds, and ARES shows a live
+"photos inbound" animation while the transfer runs. No SD-card reader, no phone,
+no Canon cloud.
+
+## Facts that constrain the design
+
+- The G7X Mark III supports **CCAPI** (Canon Camera Control API): an official
+  REST-over-HTTP API. It must be activated once with Canon's activation tool
+  (free developer-community registration). After activation it is plain HTTP.
+- `gphoto2` over WiFi is broken for the G7X series (documented I/O errors). Not
+  used.
+- Canon's native "auto send to computer" needs *Image Transfer Utility 2*, which
+  is Windows/Mac only. Not used (keeps the Mac out of the loop).
+- The gallery ingestion seam already exists: a file dropped into
+  `/mnt/nvme/PROMETHEUS/PHOTOS/<YYYY>/<MM>/` becomes a gallery entry after
+  `photo_scanner.py --incremental` runs. Thumbnails generate on-demand
+  (`app.py:_serve_thumb_on_demand`). A cron runs the incremental scan every
+  15 min today; this design triggers it immediately after each drain.
+- `photo_db.save_items` has a >50% shrink guard. This design only ADDS files, so
+  the guard is never at risk.
+
+## Decisions
+
+| Decision | Choice |
+|---|---|
+| Transfer path | CCAPI direct, camera → ARES host (no Mac, no cloud) |
+| Where it runs | Host systemd service (PHOTOS + photo_scanner live on host) |
+| File types | JPEG only (RAW/CRAW stays on the card) |
+| Camera network | Camera is its OWN AP (SoftAP). ARES joins the camera's AP with a dedicated antenna — NOT a DHCP reservation on the home LAN. |
+| ARES antenna | Reclaimed Realtek RTL8852BE (was VM200 passthrough `hostpci3`, 06:00.0). Freed 2026-09-17; binds to host `rtw89_8852be` after the next reboot. |
+| Reindex | Immediate `photo_scanner.py --incremental` after each drain |
+| SD card | Non-destructive — never delete from the card |
+| Transfer animation | Corner toast ("photos inbound", live counter) — v1 |
+| Persistent status tile | Phase 2 (out of scope for v1) |
+
+## Verification gates (BLOCKER — do before any implementation)
+
+The LLM Council was unanimous: the design was approved before the load-bearing
+facts were checked. All three gates below use a physical camera + curl and cost
+~1 hour and $0. If any gate fails, stop and fall back to USB-C or the Mac-bridge.
+
+1. **Association / reachability.** Camera is a SoftAP (confirmed). Bring up the
+   reclaimed RTL8852BE on the host, associate it to the camera's AP (match BSSID
+   from MAC `50:03:CF:57:81:98`), get a DHCP lease from the camera, then `ping`
+   the camera's SoftAP gateway IP. Confirm which camera menu entry raises a
+   CCAPI-reachable AP (the smartphone path, NOT "wireless remote").
+2. **Transport exists on THIS firmware.** `curl http://<camera-ip>:8080/ccapi/`
+   returns JSON. Then confirm the three endpoints the drain depends on: list
+   contents, get one file, and the `addedcontents` delta. CCAPI is firmware-
+   gated and thinner on PowerShot compacts than on R bodies — a 404 here kills
+   Path A.
+3. **Latency budget.** Time a real drain of ~20 JPEGs over 2.4GHz WiFi + the
+   `photo_scanner.py --incremental` reindex. Set an honest number for the toast.
+   Note: if the GPU is on loan (`CUDA_VISIBLE_DEVICES=""`), thumbnail/CLIP work
+   is CPU-bound and slower — the toast may finish before the photo is viewable.
+
+## Camera + antenna facts (confirmed with the user, 2026-09-17)
+
+- **Camera makes its own WiFi (SoftAP).** Devices join the camera, not the LAN.
+  So ARES cannot use a home-LAN DHCP reservation; it needs its own radio to
+  associate to the camera's AP. That radio is the reclaimed RTL8852BE.
+- **Camera WiFi MAC: `50:03:CF:57:81:98`.** The camera's SoftAP BSSID derives
+  from this — use it to identify/lock onto the camera's AP in the antenna's
+  wpa_supplicant profile (match by BSSID, not just SSID).
+- **CAUTION — "Connect to wireless remote" is NOT our path.** That menu entry is
+  the Bluetooth BR-E1 shutter remote (LE), which triggers the shutter and does
+  NOT transfer images or expose CCAPI. The transfer path is the smartphone-style
+  Wi-Fi connection (which raises the SoftAP the phone/Camera Connect joins);
+  after CCAPI activation, the CCAPI HTTP server is reachable on that same AP.
+  Confirm during the spike which menu entry raises a CCAPI-reachable AP.
+
+## Trigger UX reality (council finding)
+
+"Press one button → lands on ARES" is likely really "press the connection button
+→ pick the registered computer connection" (about two taps), because the G7X III
+Wi-Fi button defaults to smartphone/Camera Connect pairing. During the spike,
+determine whether the camera firmware lets the registered "computer" connection
+be assigned to the button, or whether a menu tap is unavoidable. Set the user's
+expectation to "one or two taps," not "one button," until proven otherwise.
+
+## Architecture
+
+```
+Canon G7X III  ──WiFi (CCAPI / HTTP)──►  ares-camera-import (host poll loop)
+  press WiFi button                          1. fast TCP probe camera SoftAP IP (~10s)
+  → raises SoftAP                            2. list contents, diff vs ledger
+  → NM profile auto-joins camera AP          3. download new JPEGs → PHOTOS/YYYY/MM/
+  → CCAPI HTTP server up                     4. mark ledger (non-destructive)
+                                             5. write status file (drives animation)
+                                             6. photo_scanner.py --incremental
+                                                        │
+                                                photo_index.db → gallery
+```
+
+### WiFi connection management
+
+NetworkManager owns the association. A persistent NM connection profile is
+configured for the camera's SoftAP (SSID, WPA2 password, BSSID lock on
+`50:03:CF:57:81:98`), bound to the RTL8852BE interface. NM auto-connects
+whenever the camera's AP is in range and reconnects on drop. The importer
+service is completely WiFi-agnostic — it only probes a TCP port; NM handles
+all radio state.
+
+**Required NM profile settings (council amendment):**
+- `wifi.powersave=2` (disabled) — Linux WiFi power-save drops beacons on a
+  timer; on a SoftAP with no AP-side keepalives this causes mid-stream stalls
+  that look identical to camera-side AP drops. Must be disabled.
+- `ipv4.route-metric=50` (lower than default) — prevents NM from deprioritizing
+  this connection as "limited" (no internet) and roaming the adapter off the
+  camera's AP mid-drain.
+
+### The "one button" experience
+
+1. User presses the camera WiFi button → camera raises its SoftAP.
+2. NM detects the camera's AP and associates the RTL8852BE to it automatically.
+3. The host service is a standing idle-poller. Every ~10s it does a fast,
+   short-timeout TCP probe to the camera's SoftAP gateway IP. An unreachable
+   camera fails fast and cheap.
+3. When the camera answers, the service **drains all new photos in one pass**
+   (camera WiFi sleeps quickly, so grab everything immediately), reindexes, then
+   returns to idle polling.
+
+## Components
+
+Each unit has one purpose, a defined interface, and is testable in isolation.
+Target: files under 500 lines; functions ~60 lines; bounded loops; timeouts on
+every network call; validate every response and return value (Power-of-Ten
+spirit).
+
+### `camera/ccapi_client.py`
+Thin CCAPI HTTP wrapper. No orchestration, no filesystem writes.
+- `ping() -> bool` — TCP connect only (sub-second, no HTTP). Confirms port
+  is open; does NOT confirm CCAPI is authorized or in transfer-ready state.
+- `api_versions() -> dict` — `GET /ccapi/`; used to pin the endpoint version
+  (ver100/ver110) at runtime rather than hard-coding.
+- `list_contents() -> list[ContentRef]` — enumerate storage/folders/files.
+  Snapshot the list once at drain-start; never re-query mid-drain (content
+  list changes if the user shoots during transfer).
+- `file_metadata(ref) -> dict` — name, size, capture time, type, content ID.
+- `download(ref, dest_path, kind="main")` — stream full-res to a temp path,
+  then atomic rename into place.
+- Every method: explicit timeout, status-code check, typed return or raise.
+- **401/403 → raise `CcapiNotAuthorized`** (not a generic exception). The
+  importer maps this to `state="error"` with `message="CCAPI_NOT_AUTHORIZED"`.
+  A successful TCP probe does not imply authorized state; pairing must be
+  verified at hardware gate. Pairing state (if any) is stored with restrictive
+  permissions in `ai_data/`.
+
+### `camera/ledger.py`
+Dedup ledger so nothing is pulled twice (SD card is never modified).
+- Storage: sqlite at `ai_data/camera_import.db`.
+- **Dedup key = CCAPI content ID** (not filename). Canon resets `IMG_0001`
+  after a card format; filename-only dedup silently skips re-imported files
+  as "already pulled." Use CCAPI's own content identifier. If CCAPI does not
+  provide a stable content ID, fall back to `sha256(first 64 KB)`.
+- `is_pulled(content_id) -> bool`
+- `mark_pulled(content_id, dest_path, size, ts)`
+- **Consecutive-failure counter**: `increment_fail(content_id)` / `fail_count(content_id)`.
+  Three consecutive size-verify failures → `skip(content_id)` with a warning
+  log; skipped items require manual `ledger clear <content_id>` to retry.
+  Prevents a corrupt-on-camera file from spinning the poll loop indefinitely.
+- A pull only counts as done AFTER the file is verified on disk (size matches
+  CCAPI metadata) — a mid-transfer drop is retried next cycle.
+
+### `camera/importer.py`
+Orchestration and the poll loop.
+- `poll_loop()` — bounded per-cycle work, sleep between cycles, no hot-spin.
+  Probe cheaply with a sub-second **TCP connect** to the CCAPI port, NOT a full
+  HTTP request (council build note); only run a drain once the connect succeeds.
+- `drain()` — list → diff vs ledger → for each new JPEG: resolve capture date →
+  build `PHOTOS/<YYYY>/<MM>/<name>` (collision-safe suffix) → `download` →
+  verify → `mark_pulled` → update status counter. Per-file try/except so one bad
+  file cannot stall the batch.
+- `_reindex()` — run `photo_scanner.py --incremental` (subprocess) after a drain.
+- `_write_status(...)` — update the status file (see below) at each state change
+  and per-file during a drain.
+
+### `camera/status.py`
+Single source of truth for the animation state.
+- Writes `ai_data/camera_import_status.json` atomically:
+  ```json
+  {
+    "state": "idle | connected | draining | done | error",
+    "batch_total": 27,
+    "batch_done": 12,
+    "pulled_today": 41,
+    "last_update": 1789999999.0,
+    "message": "Added 27 photos"
+  }
+  ```
+- The repo is bind-mounted into LXC 101, so Flask reads this file directly — the
+  same filesystem-IPC pattern the business dashboard already uses. No new socket
+  or cross-host call. Reuse the existing GPU-loan-flag mtime convention (Flask
+  checks the file's mtime, reads only on change) rather than inventing new IPC
+  (council build note).
+
+### systemd unit `ares-camera-import.service` (host)
+- Runs `python3 -m camera.importer` as a host service alongside ttyd /
+  ares-shell-ctl.
+- `Restart=always`. Config via env (see below).
+- **`ExecStartPre` interface assertion**: before the poll loop starts, assert
+  the RTL8852BE interface exists (`ip link show <wlan-iface>`). If the card
+  failed to bind after reboot (VM200 reclaimed it, driver didn't load), the
+  service must fail immediately with a clear log line — not silently run with
+  the TCP probe never firing and nothing logged wrong.
+
+### Flask: `GET /api/camera/status`
+- New route in `app.py`, wrapped in `require_auth`.
+- Reads `ai_data/camera_import_status.json`, returns it as JSON. Returns a safe
+  `idle` default if the file is missing.
+
+### Frontend: corner toast — BUILT 2026-09-17 (v1, simulated feed)
+
+Status: implemented and live on the dashboard, driven by a simulated drain (no
+camera yet). `camera/status.py` (atomic status file), `camera/simulate_drain.py`
+(plays connected→draining→done→idle), `GET /api/camera/status` +
+`POST /api/camera/simulate` (both `require_auth`), and the inline toast in
+`templates/home.html` (CSS-only animation, adaptive 550ms/2500ms poll). Trigger a
+demo with Shift+P on the home page. When the real importer lands, it writes the
+same status file and the toast needs no change. Details below.
+
+### Frontend: corner toast (in `templates/home.html`, inline)
+- Home page polls `/api/camera/status` every ~2s (cheap; matches the existing
+  3s-poll perf pattern — NO continuous rAF loop, per the idle-repaint-lag fix).
+- On `state == "draining"`: a compact toast slides in bottom-right — "📷 PHOTOS
+  INBOUND", a segmented meter bar, and a live `batch_done / batch_total` counter.
+- On `state == "done"`: brief flourish "Added N photos", then fade out.
+- On `state == "error"`: red toast with the message.
+- Styling matches house style: sharp tiles, accent red `#ef4444`, Bricolage
+  numerals, segmented meter bars. Study `templates/home.html` before building.
+- CSS-triggered animation only (keyframes fire on class change); bump `hud.css`
+  `?v=` mtime cache-bust after edits.
+
+## Configuration (env, read by the service)
+
+| Var | Default | Purpose |
+|---|---|---|
+| `CAMERA_IP` | — | Reserved IP of the G7X III |
+| `CAMERA_CCAPI_PORT` | `8080` | CCAPI HTTP port (pinned at impl time) |
+| `CAMERA_POLL_INTERVAL` | `10` | Idle probe interval (seconds) |
+| `CAMERA_DEST_ROOT` | `/mnt/nvme/PROMETHEUS/PHOTOS` | Import target root |
+| `CAMERA_PULL_RAW` | `0` | JPEG only by default |
+| `CAMERA_PROBE_TIMEOUT` | `2` | Fast-fail probe timeout (seconds) |
+
+## Error handling & safety
+
+- **Non-destructive**: the SD card is never modified; the ledger prevents
+  re-pulls.
+- Every HTTP call has a hard timeout; downloads stream to a temp file and are
+  size-verified before the atomic rename and ledger write.
+- Bounded per-file retry; the idle loop always sleeps between cycles.
+- Filename collisions get a numeric suffix; capture date resolves from CCAPI
+  metadata/EXIF, falling back to the file mtime, then to "unknown/" so nothing is
+  ever silently dropped.
+- Reuses the existing `photo_scanner.py` shrink guard (add-only path).
+- **Partial-file protection (council finding).** A WiFi drop mid-download must
+  never produce a bad `photo_index.db` row. Downloads stream to a temp file and
+  are size-verified against CCAPI metadata BEFORE the atomic rename into PHOTOS/
+  and before `photo_scanner --incremental` runs — so the scanner only ever sees
+  complete files. Given ARES's index-corruption/clobber history, this ordering is
+  non-negotiable.
+- **Security posture (council finding).** The importer holds a plaintext HTTP
+  channel to the camera on the LAN. Bind the service to the LAN only, store any
+  CCAPI pairing/credential state with restrictive file permissions in `ai_data/`,
+  and keep it off the tailnet/public surface. Consistent with the 2026-08-22
+  hardening pass.
+
+## One-time setup (documented for the user, not code)
+
+1. Update camera firmware; run Canon's **CCAPI activation tool** once (free
+   dev-community registration).
+2. On the camera: activate the smartphone/WiFi connection (SoftAP mode, NOT
+   "wireless remote"). Note the SSID and password the camera displays.
+3. On ARES (after reboot brings up the RTL8852BE): create an NM profile —
+   `nmcli connection add type wifi ssid "<SSID>" wifi-sec.key-mgmt wpa-psk
+   wifi-sec.psk "<password>" 802-11-wireless.bssid 50:03:CF:57:81:98
+   connection.interface-name <wlan-iface> wifi.powersave 2
+   ipv4.route-metric 50` — then `nmcli connection up "<SSID>"`.
+4. Confirm the camera's SoftAP gateway IP (typically `192.168.1.1` or Canon's
+   default); set `CAMERA_IP` to it. Verify during the spike (gate 1).
+5. **Hardware gate first curl:** `curl http://<CAMERA_IP>:8080/ccapi/` — confirm
+   JSON response (not 404/403). If a pairing dialog appears on the camera LCD,
+   complete it and document whether it persists across camera power cycles.
+   A 401/403 response means the importer's `CcapiNotAuthorized` path will be
+   exercised immediately and must be tested before anything else.
+
+## Testing
+
+- `ccapi_client`: unit tests against a mock HTTP server returning recorded CCAPI
+  responses (versions, contents list, file metadata, a small file body). Cover
+  timeout, non-200, and truncated-download cases.
+- `ledger`: insert / is_pulled / dedup / verify-before-mark.
+- `importer.drain`: with a fake client + temp dest — asserts correct date
+  foldering, collision handling, per-file failure isolation, ledger writes, and
+  status-file transitions.
+- `status`: atomic write + schema; Flask route returns the file / safe default.
+- Manual end-to-end: press the button, confirm the toast animates, confirm the
+  photos land in `PHOTOS/<YYYY>/<MM>/` and appear in the gallery.
+
+## Out of scope (phase 2)
+
+- Persistent "Camera" status tile on the dashboard.
+- RAW/CRAW import.
+- Optional post-transfer "delete from card" mode.
+- Push notification on transfer complete.
+
+## Phase 3 idea (council, Expansionist) — do NOT scope into v1
+
+If CCAPI proves reliable, `ccapi_client.py` becomes a reusable capability, not a
+one-shot JPEG pump: remote shutter as a dashboard button, a battery/card-full HUD
+tile, "camera left on" alerts, and near-real-time auto-tagging by feeding fresh
+imports straight into the existing CLIP + face pipeline. Kept as a north star
+only — v1 stays a JPEG importer so scope never outruns the verified transport.

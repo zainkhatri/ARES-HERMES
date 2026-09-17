@@ -12,7 +12,7 @@
 - Never modify the gpu-swap hookscript. Keep `ensure_only_display` and the clone resting state.
 - Deploy files with the base64/WriteAllBytes pattern; interactive-session actions via a temporary `Register-ScheduledTask` (LogonType Interactive) trampoline — `quser`/`qwinsta`/`schtasks /np` are unavailable (Win11 Home) and guest-exec is session 0.
 - Guest paths: scripts in `C:\gamemode\`; Sunshine config `C:\Program Files\Sunshine\config\sunshine.conf`; restart via `Restart-Service SunshineService`.
-- Known values: VM IP 192.168.20.215, Sunshine creds REDACTED/REDACTED (PIN API: `curl -sk -u REDACTED:REDACTED -X POST https://192.168.20.215:47990/api/pin -d '{"pin":"XXXX","name":"pc"}'`), VDD config `C:\VirtualDisplayDriver\vdd_settings.xml`, loan flag `/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/.gpu-on-loan`, dashboard curl-with-login pattern in the launch plan Task 7.
+- Known values: VM IP 192.168.20.215, Sunshine creds in `.env` (`SUNSHINE_USER`/`SUNSHINE_PASS`, rotated after a 2026-09-13 GitGuardian leak alert -- never hardcode here again) (PIN API: `curl -sk -u "$SUNSHINE_USER:$SUNSHINE_PASS" -X POST https://192.168.20.215:47990/api/pin -d '{"pin":"XXXX","name":"pc"}'`), VDD config `C:\VirtualDisplayDriver\vdd_settings.xml`, loan flag `/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/.gpu-on-loan`, dashboard curl-with-login pattern in the launch plan Task 7.
 - Git commits: subject only, no co-author.
 
 ---

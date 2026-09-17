@@ -72,3 +72,22 @@ html, body {
 /* ---- meter bar (array/IO style) ---- */
 .meter { position:relative; height:14px; background:rgba(var(--ares-rgb),.1); overflow:hidden; }
 .meter-fill { height:100%; background:var(--ares); box-shadow:0 0 10px -2px var(--ares); transition:width var(--dur) var(--ease-out); }
+
+/* ---- unified module header band (shared across all operation modules) ---- */
+.mhead { display:flex; align-items:center; gap:10px 20px; flex-wrap:wrap;
+         padding:calc(11px + var(--sat)) 16px 11px; border-bottom:1px solid rgba(var(--ares-rgb),.14); }
+.mhead-home { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; text-decoration:none;
+              border:1px solid var(--ember-dim); color:var(--text-2);
+              font-size:11px; font-weight:700; letter-spacing:.16em; text-transform:uppercase;
+              transition:all var(--dur) var(--ease-out); }
+.mhead-home:hover { border-color:var(--ares); color:var(--text-1); background:rgba(var(--ares-rgb),.1); }
+.mhead-home .ar { color:var(--ares); font-size:13px; }
+.mark-ascii { display:flex; align-items:flex-start; gap:0; line-height:0; user-select:none; overflow:hidden; }
+.mark-ascii pre { font-family:'JetBrains Mono',monospace; font-size:7px; line-height:1.0;
+                  font-weight:700; margin:0; white-space:pre;
+                  text-shadow:0 0 14px rgba(var(--ares-rgb),.45), 0 0 40px rgba(var(--ares-rgb),.20); }
+.mark-ascii .m-ar { color:var(--ares); }
+.mark-ascii .m-es { color:#f4f8fd; text-shadow:0 0 14px rgba(244,248,253,.38), 0 0 40px rgba(244,248,253,.16); }
+.mhead-right { margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+@media (max-width:760px){ .mark-ascii pre { font-size:5px; } }
+@media (max-width:560px){ .mark-ascii { display:none; } }

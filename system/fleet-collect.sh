@@ -38,7 +38,9 @@ ero_probe='
   g=$(nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d " ")
   [ -n "$g" ] && echo "gpu=$g"
   free -m | awk "/^Mem:/{printf \"mem_used_mb=%d\nmem_total_mb=%d\n\",\$3,\$2}"
-  df -P / | awk "NR==2{printf \"disk_used_kb=%d\ndisk_total_kb=%d\ndisk_pct=%d\n\",\$3,\$2,\$5}"
+  # total = sum of PHYSICAL disks (what the box HAS); used = sum of real filesystems
+  echo "disk_total_gb=$(lsblk -bdn -o SIZE,TYPE 2>/dev/null | awk "\$2==\"disk\"{s+=\$1} END{printf \"%d\", s/1073741824}")"
+  echo "disk_used_gb=$(df -P -B1G 2>/dev/null | awk "\$1 ~ /^\/dev\/(sd|nvme|mapper|vd)/{u+=\$3} END{printf \"%d\", u}")"
   echo "uptime=$(uptime -p 2>/dev/null | sed "s/^up //")"
   curl -s -m2 http://127.0.0.1:11434/api/tags 2>/dev/null | grep -oE "\"name\":\"[^\"]+\"" | sed "s/\"name\":\"//;s/\"//" | head -6 | while read -r m; do echo "model=$m"; done
   qm list 2>/dev/null | awk "NR>1{printf \"vm=%s|%s|%s\n\",\$1,\$2,\$3}"
@@ -74,8 +76,7 @@ if [ "$ero_up" = true ]; then
         else .[$m.k] = ($m.v|tonumber? // $m.v) end)
     | if .mem_used_mb  then .mem_used_gb=(.mem_used_mb/1024*10|round/10)   | del(.mem_used_mb)  else . end
     | if .mem_total_mb then .mem_total_gb=(.mem_total_mb/1024*10|round/10) | del(.mem_total_mb) else . end
-    | if .disk_used_kb then .disk_used_gb=(.disk_used_kb/1048576|round)    | del(.disk_used_kb) else . end
-    | if .disk_total_kb then .disk_total_gb=(.disk_total_kb/1048576|round) | del(.disk_total_kb) else . end
+    | if (.disk_total_gb // 0) > 0 then .disk_pct=((.disk_used_gb/.disk_total_gb*100)|round) else . end
   ') || ero_json='{"up":true}'
 fi
 
@@ -139,6 +140,22 @@ if [ "$zeus_disks" = '[]' ] && [ -r "$DISKS_CACHE" ]; then
   disks_epoch=$(jq -r '.ts // 0' "$DISKS_CACHE" 2>/dev/null || echo 0)
 fi
 
+# ZEUS storage — total = sum of PHYSICAL disks (~2.5TB); used = sum of real block-device
+# filesystems (avoids double-counting the mergerfs overlay). GiB. Cached across sleep.
+ZSTORE_CACHE="/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/ai_data/zeus-store.json"
+zeus_store='null'
+if [ "$zeus_reach" = true ]; then
+  zs=$(timeout 10 ssh -o BatchMode=yes -o ConnectTimeout=6 -o StrictHostKeyChecking=accept-new root@"$ZEUS_IP" \
+       'tot=$(lsblk -bdn -o SIZE,TYPE 2>/dev/null | awk "\$2==\"disk\"{s+=\$1}END{printf \"%d\",s/1073741824}");
+        used=$(df -P -B1G 2>/dev/null | awk "\$1 ~ /^\/dev\/(sd|nvme|vd)/{u+=\$3}END{printf \"%d\",u}");
+        echo "$used|$tot"' 2>/dev/null)
+  if [ -n "$zs" ]; then
+    zeus_store=$(printf '%s' "$zs" | jq -Rn 'input|split("|")|(.[0]|tonumber? // 0) as $u|(.[1]|tonumber? // 0) as $t|{used_gb:$u, total_gb:$t, pct:(if $t>0 then (($u/$t*100)|round) else 0 end)}')
+    printf '%s\n' "$zeus_store" > "$ZSTORE_CACHE"
+  fi
+fi
+if [ "$zeus_store" = null ] && [ -r "$ZSTORE_CACHE" ]; then zeus_store=$(cat "$ZSTORE_CACHE"); fi
+
 # --- Daily trend logs (once/day) so ZEUS panel can PREDICT, not just show now --
 # capacity: one row/day of each drive's %used → growth slope → days-to-full.
 # pull: one row/day of the nightly horcrux result → 60-night backup heatmap.
@@ -172,7 +189,9 @@ jq -n \
   --arg snap_oldest "$snap_oldest" --arg snap_size "$snap_size" \
   --argjson disks "$zeus_disks" --argjson disks_epoch "${disks_epoch:-0}" \
   --argjson cap_hist "$cap_hist" --argjson pull_hist "$pull_hist" \
+  --argjson zeus_store "$zeus_store" \
   '{ts:$ts, eros:$eros,
+    zeus:{store:$zeus_store},
     backups:{
       ares_to_zeus:{state:$a2z_state, epoch:$a2z_epoch},
       zeus_to_ares:{state:$z2a_state, epoch:$z2a_epoch},

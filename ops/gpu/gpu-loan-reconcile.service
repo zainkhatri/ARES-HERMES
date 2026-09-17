@@ -1,0 +1,13 @@
+[Unit]
+Description=Reconcile the .gpu-on-loan flag with actual GPU driver/VM state
+# Run after Proxmox guest bring-up so qm/pct status are meaningful and CT 101 is up.
+After=pve-guests.service
+Wants=pve-guests.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+ExecStart=/usr/local/sbin/gpu-loan-reconcile
+# A hung nvidia-smi/qm/pct can never wedge boot: the whole run is bounded, and
+# the timer (not a boot target) pulls this unit, so even a timeout won't block.
+TimeoutStartSec=120

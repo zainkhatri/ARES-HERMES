@@ -69,6 +69,21 @@ def _read_host_crons():
     return data.get("jobs", []) if isinstance(data, dict) else []
 
 
+AUTOFIX_INCIDENTS_FILE = os.path.join(PROJECT_ROOT, "ops", "autofix", "incidents.json")
+
+
+def _read_autofix_incidents():
+    """Autonomous-fixer incident list, same host-file-read pattern as
+    _read_host_crons() -- watcher.py (host, ARES only) is the sole writer.
+    [] if missing (e.g. the kill switch has always been on, so it never ran)."""
+    try:
+        with open(AUTOFIX_INCIDENTS_FILE) as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return []
+    return data.get("incidents", []) if isinstance(data, dict) else []
+
+
 # --- capability profiles: which feature panels this box should show ----------
 _CAPS_DEFAULTS = {
     "ARES":   {"gpu": 1, "proxmox": 1, "windows_vm": 1, "mordor": 1, "photos": 1, "journals": 1, "finance": 1, "terminal": 1, "docker": 0},
@@ -1047,6 +1062,7 @@ def get_system_info() -> dict:
         "mordor": _get_mordor_status() if caps.get("mordor") else {"online": False},
         "gpu": _get_gpu_info() if caps.get("gpu") else {"online": False},
         "crons": _read_crontab_jobs() if os.getenv("HOST_BRAND", "").upper() == "ZEUS" else _read_host_crons(),
+        "autofix_incidents": _read_autofix_incidents() if os.getenv("HOST_BRAND", "").upper() == "ARES" else [],
         "io": _io_rates(),
         "caps": caps,
     }

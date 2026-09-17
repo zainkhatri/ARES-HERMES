@@ -145,9 +145,17 @@
 
     /* ─── HUD chip nav — mirrors dashboard chip aesthetic ─── */
     .chrome-brand {
-        display:flex; align-items:center; gap:8px;
+        display:flex; align-items:center; gap:14px;
         min-width:0;
     }
+    /* two-tone ASCII wordmark — matches dashboard home */
+    .mark-ascii { display:flex; align-items:flex-start; gap:0; line-height:0; user-select:none; overflow:hidden; flex-shrink:1; }
+    .mark-ascii pre { font-family:'JetBrains Mono',monospace; font-size:7px; line-height:1.0; font-weight:700; margin:0; white-space:pre;
+                      text-shadow:0 0 14px rgba(245,64,45,.45), 0 0 40px rgba(245,64,45,.20); }
+    .mark-ascii .m-ar { color:var(--ares); }
+    .mark-ascii .m-es { color:#f4f8fd; text-shadow:0 0 14px rgba(244,248,253,.38), 0 0 40px rgba(244,248,253,.16); }
+    @media (max-width:760px){ .mark-ascii pre { font-size:5px; } }
+    @media (max-width:560px){ .mark-ascii { display:none; } }
     /* chip: pill-bordered nav element */
     .hud-chip {
         display:inline-flex; align-items:center; gap:7px;
@@ -2949,18 +2957,20 @@
             <span class="hud-chip-label">HOME</span>
             <span class="hud-chip-tag">→</span>
         </a>
-        <!-- HUD chip: active — A · ARES · PHOTOS -->
-        <span class="hud-chip is-active" aria-current="page">
-            <span class="hud-chip-mark">A</span>
-            <span class="hud-chip-label">ARES</span>
-            <span class="hud-chip-tag">· PHOTOS</span>
-        </span>
-        <!-- HUD chip: jump to ZEUS (CRONOS/HERMES sister box) -->
-        <a href="/jump/zeus" class="hud-chip" title="Switch to ZEUS">
-            <span class="hud-chip-mark">H</span>
-            <span class="hud-chip-label">ZEUS</span>
-            <span class="hud-chip-tag">→</span>
-        </a>
+        <!-- two-tone ASCII wordmark: PHOTOS -->
+        <div class="mark-ascii" aria-label="PHOTOS">
+<pre class="m-ar">██████╗ ██╗  ██╗ ██████╗
+██╔══██╗██║  ██║██╔═══██╗
+██████╔╝███████║██║   ██║
+██╔═══╝ ██╔══██║██║   ██║
+██║     ██║  ██║╚██████╔╝
+╚═╝     ╚═╝  ╚═╝ ╚═════╝ </pre><pre class="m-es">████████╗ ██████╗ ███████╗
+╚══██╔══╝██╔═══██╗██╔════╝
+   ██║   ██║   ██║███████╗
+   ██║   ██║   ██║╚════██║
+   ██║   ╚██████╔╝███████║
+   ╚═╝    ╚═════╝ ╚══════╝</pre>
+        </div>
         <!-- hidden legacy elements kept so JS id="t-count" still resolves -->
         <a href="/" class="brand-mark" title="Home" style="text-decoration:none">A</a>
         <div class="brand-id">
@@ -3015,11 +3025,6 @@
                     <button class="om-density-btn" data-size="280" role="radio">Large</button>
                 </div>
             </div>
-            <a href="/jump/zeus" class="om-link" role="menuitem">
-                <span class="nx-mark">H</span>
-                <span>Switch to ZEUS</span>
-                <span class="arrow">→</span>
-            </a>
             <a href="/" class="om-link" role="menuitem">
                 <svg viewBox="0 0 24 24"><path d="M3 12 12 3l9 9"/><path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10"/></svg>
                 <span>Back to home</span>
@@ -5794,14 +5799,28 @@ function showLbItem() {
                 vid.src = videoURL;
             }
         }
-        if (item._vaultKey) {
+        /* Direct MP4 FIRST: the cached transcode has +faststart and is served by
+           Caddy with range requests, so the first frame arrives in ONE round-trip.
+           HLS-first cost 3-4 round-trips (hls fetch -> m3u8 -> init -> segment ->
+           MANIFEST_PARSED) before playback — the reason videos were slow to start.
+           Median transcode is ~3MB, so direct playback is optimal; HLS is kept only
+           as an error fallback for the rare file that won't play directly. */
+        function _playDirect() {
             vid.src = videoURL;
-            var _vp = vid.play();
-            if (_vp && _vp.catch) _vp.catch(function() { vid.muted = true; vid.play().catch(function(){}); });
+            var p = vid.play();
+            if (p && p.catch) p.catch(function() { vid.muted = true; vid.play().catch(function(){}); });
+        }
+        if (item._vaultKey) {
+            _playDirect();
         } else {
-            fetch('/api/photos/hls?p=' + encodeURIComponent(item.path || ''), {credentials: 'same-origin', redirect: 'follow'})
-                .then(function(r) { if (!r.ok) throw new Error(r.status); _playHls(r.url); })
-                .catch(function() { vid.src = videoURL; var p = vid.play(); if (p && p.catch) p.catch(function() { vid.muted = true; vid.play().catch(function(){}); }); });
+            var _triedHls = false;
+            vid.addEventListener('error', function() {
+                if (_triedHls) return; _triedHls = true;
+                fetch('/api/photos/hls?p=' + encodeURIComponent(item.path || ''), {credentials: 'same-origin', redirect: 'follow'})
+                    .then(function(r) { if (!r.ok) throw new Error(r.status); _playHls(r.url); })
+                    .catch(function() {});
+            });
+            _playDirect();
         }
         /* hls teardown is handled by _destroyLbHls() on nav + close — no per-open
            transitionend handler (those accumulated one listener per video opened). */

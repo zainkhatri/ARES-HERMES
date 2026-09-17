@@ -45,13 +45,13 @@
     .page-title em { font-style:normal; color:var(--accent); }
     .count-pill { font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); border:1px solid var(--line-2); border-radius:999px; padding:7px 14px; white-space:nowrap; }
 
-    /* ── Page layout: a centered column of panels (was full-viewport panels with
-          content re-centered inside → dark voids on the sides). ── */
-    .hud-shell > .mod { width:100%; max-width:1200px; margin-inline:auto; }
+    /* ── Page layout: full-bleed panels that fill the viewport width, matching the
+          home dashboard (which fills width via its grid rather than centering). ── */
+    .hud-shell > .mod { width:100%; max-width:none; margin-inline:0; }
     .mod-body .wrap { max-width:none; padding:2px 6px; }
 
     /* ── Identity header — gives the page the wordmark presence home.html has ── */
-    .jr-hero { width:100%; max-width:1200px; margin:4px auto 2px; padding:0 6px;
+    .jr-hero { width:100%; max-width:none; margin:4px 0 2px; padding:0 6px;
                display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; }
     .jr-hero .page-title { margin-top:6px; text-shadow:0 0 34px rgba(var(--ares-rgb),.42), 0 0 3px rgba(var(--ares-rgb),.28); }
     .jr-stats { display:flex; border:1px solid var(--ember-dim); background:rgba(var(--panel-rgb),.5); }
@@ -189,8 +189,8 @@
     .rail-foot { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); border-top:1px solid var(--line); padding-top:10px; display:flex; justify-content:space-between; }
     @media (max-width:600px){ .rcard-frame{ height:56vh; } }
     @media (prefers-reduced-motion: reduce){ .rcard,.rmark{ animation:none; opacity:1; transform:none; } }
-    .otd-grid { display:flex; flex-wrap:wrap; gap:22px; }
-    .otd-card { cursor:pointer; width:320px; max-width:100%; }
+    .otd-grid { display:flex; flex-wrap:wrap; gap:18px; }
+    .otd-card { cursor:pointer; width:190px; max-width:100%; }
     .otd-frame { border-radius:9px; overflow:hidden; position:relative; background:var(--panel); border:1px solid var(--line); box-shadow:var(--shadow); transition:transform .2s, box-shadow .2s; }
     .otd-card:hover .otd-frame { transform:translateY(-4px); box-shadow:0 24px 48px -18px rgba(0,0,0,.75); }
     .otd-frame img { width:100%; height:auto; display:block; }
@@ -289,12 +289,9 @@
 
 {% with page_name='JOURNALS' %}{% include "_hud_nav.html" %}{% endwith %}
 
-<!-- ── Identity header ── -->
+<!-- ── Identity header (title now carried by the ASCII wordmark above) ── -->
 <header class="jr-hero">
-    <div>
-        <div class="eyebrow">ARES · Handwritten Archive</div>
-        <h1 class="page-title">Journals</h1>
-    </div>
+    <div class="eyebrow">Handwritten Archive</div>
     <div class="jr-stats">
         <div class="stat"><b id="st-books">—</b><span>Notebooks</span></div>
         <div class="stat"><b id="st-pages">—</b><span>Pages</span></div>
@@ -321,17 +318,6 @@
     </div>
 </section>
 
-<!-- ── On This Day panel ── -->
-<section class="mod c-tl c-br" id="jr-today" hidden>
-    <div class="mod-head">
-        <span class="mod-title">On This Day</span>
-        <span class="mod-meta" id="otd-date"></span>
-    </div>
-    <div class="mod-body">
-        <div class="wrap" id="otd-body"></div>
-    </div>
-</section>
-
 <!-- ── Archive panel (bookshelf + gallery) ── -->
 <section class="mod c-tl c-tr c-bl c-br" id="jr-archive">
     <div class="mod-head">
@@ -348,6 +334,17 @@
         <!-- Notebook pages -->
         <main class="wrap" id="gallery" hidden></main>
 
+    </div>
+</section>
+
+<!-- ── On This Day panel (below the archive) ── -->
+<section class="mod c-tl c-br" id="jr-today" hidden>
+    <div class="mod-head">
+        <span class="mod-title">On This Day</span>
+        <span class="mod-meta" id="otd-date"></span>
+    </div>
+    <div class="mod-body">
+        <div class="wrap" id="otd-body"></div>
     </div>
 </section>
 
