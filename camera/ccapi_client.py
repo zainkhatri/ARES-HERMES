@@ -103,6 +103,8 @@ class CcapiClient:
                 continue
             try:
                 refs.append(self.file_metadata(item_url))
+            except CcapiNotAuthorized:
+                raise
             except CcapiError:
                 pass  # skip unreadable metadata; log at caller
         return refs
@@ -137,7 +139,7 @@ class CcapiClient:
                 if chunk:
                     f.write(chunk)
                     written += len(chunk)
-        assert written >= 0, "written must be non-negative"
+        assert written > 0 or ref.size == 0, "download produced 0 bytes for non-empty file"
         return written
 
     # ------------------------------------------------------------------ #
