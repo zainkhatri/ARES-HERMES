@@ -42,13 +42,12 @@ def poll_loop(max_cycles=0):
     """Main entry point. Polls camera and drains when reachable.
     max_cycles=0 runs forever; >0 exits after N cycles (tests only)."""
     assert _CAMERA_IP, "CAMERA_IP env var is required"
+    assert isinstance(max_cycles, int) and max_cycles >= 0, "max_cycles must be non-negative int"
     client = CcapiClient(_CAMERA_IP, _CAMERA_PORT, probe_timeout=_PROBE_TIMEOUT)
     ledger = Ledger(_LEDGER_PATH)
     cycle = 0
     try:
-        while True:
-            if max_cycles and cycle >= max_cycles:  # bounded in tests
-                break
+        while not max_cycles or cycle < max_cycles:
             _run_cycle(client, ledger)
             cycle += 1
             time.sleep(_POLL_INTERVAL)
@@ -172,17 +171,22 @@ def _resolve_dest(item):
 def _collision_safe_path(dest_dir, name):
     """Return a path under dest_dir that does not collide with an existing file."""
     assert dest_dir and name, "dest_dir and name required"
+    assert len(name) < 256, "filename too long"
     base, ext = os.path.splitext(name)
     candidate = os.path.join(dest_dir, name)
+    _MAX_COLLISIONS = 9999
     n = 0
-    while os.path.exists(candidate):   # bounded: n < file count in dir
+    while os.path.exists(candidate) and n < _MAX_COLLISIONS:   # hard upper bound
         n += 1
         candidate = os.path.join(dest_dir, "%s_%04d%s" % (base, n, ext))
+    assert n < _MAX_COLLISIONS, "collision limit exceeded for %s" % name
     return candidate
 
 
 def _reindex():
     """Run photo_scanner.py --incremental once after a drain. Logs; never raises."""
+    assert _SCANNER_TIMEOUT > 0, "_SCANNER_TIMEOUT must be positive"
+    assert sys.executable, "sys.executable must be set"
     if not os.path.isfile(_SCANNER_SCRIPT):
         log.warning("photo_scanner.py not found at %s; skipping reindex",
                     _SCANNER_SCRIPT)
