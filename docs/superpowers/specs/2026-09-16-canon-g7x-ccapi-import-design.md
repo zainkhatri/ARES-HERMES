@@ -37,7 +37,8 @@ no Canon cloud.
 | Transfer path | CCAPI direct, camera → ARES host (no Mac, no cloud) |
 | Where it runs | Host systemd service (PHOTOS + photo_scanner live on host) |
 | File types | JPEG only (RAW/CRAW stays on the card) |
-| Camera discovery | Fixed IP via router DHCP reservation |
+| Camera network | Camera is its OWN AP (SoftAP). ARES joins the camera's AP with a dedicated antenna — NOT a DHCP reservation on the home LAN. |
+| ARES antenna | Reclaimed Realtek RTL8852BE (was VM200 passthrough `hostpci3`, 06:00.0). Freed 2026-09-17; binds to host `rtw89_8852be` after the next reboot. |
 | Reindex | Immediate `photo_scanner.py --incremental` after each drain |
 | SD card | Non-destructive — never delete from the card |
 | Transfer animation | Corner toast ("photos inbound", live counter) — v1 |
@@ -49,11 +50,11 @@ The LLM Council was unanimous: the design was approved before the load-bearing
 facts were checked. All three gates below use a physical camera + curl and cost
 ~1 hour and $0. If any gate fails, stop and fall back to USB-C or the Mac-bridge.
 
-1. **Reachability / topology.** Confirm the camera joins the home WiFi as a
-   CLIENT (so it gets a LAN IP ARES can reach), not that it only hosts its own
-   AP. Web evidence: the physical Wi-Fi button is smartphone-oriented; the
-   "connect to computer" flow is a separate registered-connection menu path.
-   Test: put the camera on the network, then from ARES `ping <camera-ip>`.
+1. **Association / reachability.** Camera is a SoftAP (confirmed). Bring up the
+   reclaimed RTL8852BE on the host, associate it to the camera's AP (match BSSID
+   from MAC `50:03:CF:57:81:98`), get a DHCP lease from the camera, then `ping`
+   the camera's SoftAP gateway IP. Confirm which camera menu entry raises a
+   CCAPI-reachable AP (the smartphone path, NOT "wireless remote").
 2. **Transport exists on THIS firmware.** `curl http://<camera-ip>:8080/ccapi/`
    returns JSON. Then confirm the three endpoints the drain depends on: list
    contents, get one file, and the `addedcontents` delta. CCAPI is firmware-
@@ -63,6 +64,21 @@ facts were checked. All three gates below use a physical camera + curl and cost
    `photo_scanner.py --incremental` reindex. Set an honest number for the toast.
    Note: if the GPU is on loan (`CUDA_VISIBLE_DEVICES=""`), thumbnail/CLIP work
    is CPU-bound and slower — the toast may finish before the photo is viewable.
+
+## Camera + antenna facts (confirmed with the user, 2026-09-17)
+
+- **Camera makes its own WiFi (SoftAP).** Devices join the camera, not the LAN.
+  So ARES cannot use a home-LAN DHCP reservation; it needs its own radio to
+  associate to the camera's AP. That radio is the reclaimed RTL8852BE.
+- **Camera WiFi MAC: `50:03:CF:57:81:98`.** The camera's SoftAP BSSID derives
+  from this — use it to identify/lock onto the camera's AP in the antenna's
+  wpa_supplicant profile (match by BSSID, not just SSID).
+- **CAUTION — "Connect to wireless remote" is NOT our path.** That menu entry is
+  the Bluetooth BR-E1 shutter remote (LE), which triggers the shutter and does
+  NOT transfer images or expose CCAPI. The transfer path is the smartphone-style
+  Wi-Fi connection (which raises the SoftAP the phone/Camera Connect joins);
+  after CCAPI activation, the CCAPI HTTP server is reachable on that same AP.
+  Confirm during the spike which menu entry raises a CCAPI-reachable AP.
 
 ## Trigger UX reality (council finding)
 
@@ -165,7 +181,17 @@ Single source of truth for the animation state.
 - Reads `ai_data/camera_import_status.json`, returns it as JSON. Returns a safe
   `idle` default if the file is missing.
 
-### Frontend: corner toast (in `templates/home.html` + `static/hud.css`)
+### Frontend: corner toast — BUILT 2026-09-17 (v1, simulated feed)
+
+Status: implemented and live on the dashboard, driven by a simulated drain (no
+camera yet). `camera/status.py` (atomic status file), `camera/simulate_drain.py`
+(plays connected→draining→done→idle), `GET /api/camera/status` +
+`POST /api/camera/simulate` (both `require_auth`), and the inline toast in
+`templates/home.html` (CSS-only animation, adaptive 550ms/2500ms poll). Trigger a
+demo with Shift+P on the home page. When the real importer lands, it writes the
+same status file and the toast needs no change. Details below.
+
+### Frontend: corner toast (in `templates/home.html`, inline)
 - Home page polls `/api/camera/status` every ~2s (cheap; matches the existing
   3s-poll perf pattern — NO continuous rAF loop, per the idle-repaint-lag fix).
 - On `state == "draining"`: a compact toast slides in bottom-right — "📷 PHOTOS
