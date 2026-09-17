@@ -381,3 +381,98 @@ Restore.
 - Copy (vs move), multi-select drag, cut/paste keyboard model.
 - Adopting `safe_create`/`safe_mkdirs` across other write routes.
 - A quota/size dashboard for `.ares-trash`.
+- `GET /api/files/zip?path=` folder download (symmetric to the walker — deferred).
+- iOS files client (the 6 endpoints are Bearer-auth ready — deferred).
+
+---
+
+## Council review amendments (2026-09-16, post-spec)
+
+An `llm-council` review of this spec caught load-bearing bugs. These override the
+sections above where they conflict:
+
+1. **`restore()` is a confinement bypass — fix it.** The existing
+   `recycling_bin.restore()` moves an item back to its stored `original_path`
+   with no confinement/island check, and fails when the original path is now
+   occupied. The Files feature must call a **gated restore**: re-run
+   `writable_target(original_path_rel)`; if it fails → refuse with a clear
+   error (never move outside the confined, non-island tree). On occupied
+   destination → **auto-rename** (bump), so Undo never silently fails. Implement
+   as `recycling_bin.restore_gated(trash_name, gate)` where `gate` is a callable
+   the route passes (`files_write.writable_target`); the legacy `restore()` stays
+   for the photos caller.
+
+2. **Island check runs on the existing PARENT, not the not-yet-existing target.**
+   `safe_resolve` only realpaths the existing prefix. For mkdir/upload/rename the
+   final component does not exist yet. `writable_target` therefore island-checks
+   the **parent directory** (which exists) for create ops, and the target itself
+   for move/delete/rename-source (which exist). Island roots are computed
+   **`ROOT`-relative** — `os.path.join(ROOT, "PHOTOS")`, `os.path.join(ROOT,
+   "MORDOR")`, `os.path.join(ROOT, "PROJECTS", "ARES-DASHBOARD")` — each compared
+   with the `path == island or path.startswith(island + os.sep)` idiom (the
+   `os.sep` guard stops `/PHOTOS` from also blocking `/PHOTOS-backup`). This is
+   robust to the `/mnt/data` bind-mount; do **not** derive the repo island from
+   `__file__`.
+
+3. **Cut idempotent-skip and `/api/files/exists` from v1.** The client never
+   sends its file mtime, so server-side name+size+mtime skip cannot match
+   correctly and can dedupe two different same-size files to the first — data
+   loss dressed as resumability. v1: **every upload collision auto-renames**
+   (`name-2.ext`), same as move. Re-dropping a folder makes renamed copies; that
+   is honest and safe. (Resumable sync can return later with a client-sent
+   `lastModified`.) This also removes the confusing "skipped" count.
+
+4. **`trash_name` must be collision-proof under 32 threads.** Same-second,
+   same-basename deletes would make `shutil.move` merge/overwrite a prior trashed
+   directory. Build `trash_name = f"{ts}_{token}_{basename}"` where `token` is
+   `os.urandom(4).hex()`. Keep a bounded existence re-check (≤16) as belt-and-
+   suspenders, then fail.
+
+5. **Do not `rglob` a directory's size on delete.** `_dir_size` walks the whole
+   subtree synchronously inside the request — a huge delete pins a thread
+   (unbounded, violates Rule 2). For directories, store `size: null` in the trash
+   meta and skip the walk. The Trash view shows "—" for folder size.
+
+6. **Harden move/rename too, not just create.** Move and rename currently would
+   run `os.rename`/`shutil.move` on `safe_resolve`'d strings (TOCTOU on a swapped
+   parent). Do them relative to parent `dir_fd`s opened `O_DIRECTORY|O_NOFOLLOW`:
+   `os.rename(oldname, newname, src_dir_fd=sfd, dst_dir_fd=dfd)`. The `.part` →
+   final rename uses the **same** `dfd` the `.part` was created in — never a
+   rebuilt absolute path. `EXDEV` (future cross-mount) → `shutil.move` fallback.
+
+7. **CSRF via one decorator.** Add `@require_write` = `require_auth` + `if
+   request.headers.get("X-ARES-Write") != "1": abort(403)`. Apply it to the 5
+   mutating routes. There is no prior CSRF pattern to copy; this is new. Require
+   the header **always** (Bearer callers set it too). `MAX_CONTENT_LENGTH` is
+   already 8 GB globally (app.py:109) — enforce the 2 GiB per-file cap by
+   counting bytes while streaming, do not trust `Content-Length`.
+
+8. **Sanctioned-write-primitive framing (cheap win).** `files_write` module
+   docstring declares `writable_target` + `safe_create`/`safe_mkdirs` the ONLY
+   sanctioned write path into the browsed tree — mirroring how `photo_db.py` is
+   the only sanctioned DB writer — so the next contributor does not hand-roll an
+   unconfined `open()`.
+
+### UX amendments (from the Outsider review)
+
+- **Name the failed files.** The upload summary lists which files failed with a
+  per-file Retry, not just a count. Retry re-runs only those.
+- **Reassurance in the modal, not just the toast.** The delete confirm says
+  "Moved items can be restored from Trash." (Toasts vanish; the modal is read.)
+- **Softer trash wording.** "Kept until <date>, then removed" — not "purges in N
+  days".
+- **Keep the moved/renamed item selected/highlighted** after the op so the user
+  sees where it went (esp. after an auto-rename).
+- **Lock islands visibly before the drop.** Protected folders render with a lock
+  badge and dimmed state, so a rejected drop is expected, not a mystery. The
+  `403 protected area` toast is the backstop.
+- **Loud paused state.** A stalled upload (no progress N s) shows a distinct
+  "Upload paused — connection lost · Resume" state, never a silently frozen bar.
+
+### Build order (Executor)
+
+gate + island (pure, unit-tested) → `safe_create`/`safe_mkdirs` (symlinked-parent
+test) → `recycling_bin.trash_path` + `restore_gated` → `@require_write` decorator
+→ endpoints mkdir → upload → move → rename → delete (curl+Bearer each) → frontend
+(writeFetch, context menu, mkdir/rename/delete, drag-move, drop-upload, Trash
+view). Test each layer before the next.

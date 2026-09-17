@@ -2,6 +2,7 @@
 
 import json
 import os
+import secrets
 import shutil
 import time
 from datetime import datetime, timedelta
@@ -54,6 +55,104 @@ def trash_file(file_path: str) -> dict:
     _meta_path(trash_name).write_text(json.dumps(meta, indent=2))
 
     return {"success": True, "message": f"Moved to trash: {src.name}", "trash_name": trash_name}
+
+
+def trash_path(abspath: str) -> dict:
+    """Move a FILE or DIRECTORY to the recycling bin. Files-explorer entry point.
+
+    Unlike trash_file(), this accepts directories — the caller (the file-explorer
+    delete route) has already vetted `abspath` through files_write.gate() so it is
+    confined and not inside a protected island. We still refuse system paths as
+    defense-in-depth. The trash_name carries a random token so two same-second,
+    same-name deletes across the 32 threads cannot collide (a bare timestamp name
+    would let shutil.move merge/overwrite a prior trashed directory). Directory
+    size is NOT walked (rglob would pin a thread on a huge tree) — stored as None.
+    """
+    assert isinstance(abspath, str) and abspath, "abspath required"
+    assert os.path.isabs(abspath), "abspath must be absolute"
+    src = Path(abspath).resolve()
+    if not src.exists():
+        return {"success": False, "error": f"Path does not exist: {abspath}"}
+    sp = str(src)
+    if sp == "/" or any(sp == p or sp.startswith(p + "/") for p in _TRASH_DENY_PREFIXES):
+        return {"success": False, "error": "refusing to trash a system path"}
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    is_dir = src.is_dir()
+    for _attempt in range(0, 16):                       # bounded uniqueness retry
+        token = secrets.token_hex(4)
+        trash_name = f"{timestamp}_{token}_{src.name}"
+        dest = TRASH_DIR / trash_name
+        if not dest.exists() and not _meta_path(trash_name).exists():
+            break
+    else:
+        return {"success": False, "error": "could not allocate a unique trash name"}
+
+    try:
+        shutil.move(str(src), str(dest))               # handles cross-device (EXDEV) itself
+    except Exception as e:
+        return {"success": False, "error": f"Failed to move to trash: {e}"}
+
+    meta = {
+        "original_path": str(src),
+        "trash_name": trash_name,
+        "trashed_at": datetime.now().isoformat(),
+        "is_dir": is_dir,
+        "size": None if is_dir else (dest.stat().st_size if dest.is_file() else None),
+    }
+    _meta_path(trash_name).write_text(json.dumps(meta, indent=2))
+    return {"success": True, "message": f"Moved to trash: {src.name}",
+            "trash_name": trash_name}
+
+
+def restore_gated(trash_name: str, gate):
+    """Restore a trashed item, but re-validate its destination through `gate`.
+
+    `gate(abspath) -> bool` must return True only if abspath is a safe, confined,
+    non-island place to write (the file-explorer passes files_write's check). The
+    legacy restore() trusts the stored original_path blindly, which would let an
+    Undo drop a file into PHOTOS/MORDOR/the repo — this variant refuses that, and
+    auto-renames instead of failing when the original location is now occupied.
+    Returns {success, message|error, restored_to?}.
+    """
+    assert isinstance(trash_name, str) and trash_name, "trash_name required"
+    assert callable(gate), "gate must be callable"
+    item_path = TRASH_DIR / trash_name
+    try:
+        item_path.resolve().relative_to(Path(TRASH_DIR).resolve())
+    except ValueError:
+        return {"success": False, "error": "invalid name"}
+    meta_file = _meta_path(trash_name)
+    if not item_path.exists():
+        return {"success": False, "error": f"Item not found in trash: {trash_name}"}
+    if not meta_file.exists():
+        return {"success": False, "error": f"Metadata not found for: {trash_name}"}
+
+    meta = json.loads(meta_file.read_text())
+    original = Path(meta["original_path"])
+    parent = original.parent
+    if not gate(str(parent)):
+        return {"success": False,
+                "error": "cannot restore here — destination is read-only or outside the files area"}
+
+    parent.mkdir(parents=True, exist_ok=True)
+    dest = original
+    if dest.exists():                                   # occupied -> bump, never clobber
+        stem, ext = os.path.splitext(original.name)
+        for i in range(2, 2 + 128):                     # bounded
+            cand = parent / f"{stem}-{i}{ext}"
+            if not cand.exists():
+                dest = cand
+                break
+        else:
+            return {"success": False, "error": "too many name collisions at destination"}
+
+    try:
+        shutil.move(str(item_path), str(dest))
+        meta_file.unlink()
+        return {"success": True, "message": f"Restored to: {dest}", "restored_to": str(dest)}
+    except Exception as e:
+        return {"success": False, "error": f"Restore failed: {e}"}
 
 
 def list_trash() -> list[dict]:

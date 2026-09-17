@@ -24,9 +24,11 @@ from ai import llm_interface
 from ai import claude_interface
 from ai.llm_interface import get_usage_stats
 from system.recycling_bin import trash_file, list_trash, restore as restore_trash, TRASH_DIR as _TRASH_DIR
+from system.recycling_bin import trash_path as _trash_path, restore_gated as _restore_gated
 from photos import trash_review as _trash_review
 from system import files_api
 from system import files_index
+from system import files_write
 
 app = Flask(__name__, static_folder=None)   # built-in /static served private photo tiers with NO auth — replaced by static_files() below
 _flask_secret = os.environ.get("FLASK_SECRET", "")
@@ -447,6 +449,21 @@ def require_auth(f):
     return decorated
 
 
+def require_write(f):
+    """require_auth PLUS a CSRF guard: mutating file ops must carry the custom
+    request header ``X-ARES-Write: 1``. A cross-origin page cannot set a custom
+    header without a CORS preflight this server never approves, so a forged POST
+    from a malicious site (riding the logged-in session cookie) is rejected.
+    Tailscale reachability is NOT treated as a CSRF boundary. The SPA's
+    writeFetch() wrapper adds the header on every mutating call."""
+    @functools.wraps(f)
+    def inner(*args, **kwargs):
+        if request.headers.get("X-ARES-Write") != "1":
+            return jsonify({"error": "missing write token"}), 403
+        return f(*args, **kwargs)
+    return require_auth(inner)
+
+
 # Flask's built-in /static route served the private photo tiers (thumbs/faces/hls/…) with NO
 # auth, bypassing the Caddy forward_auth gate — any tailnet peer or the LXC could pull the whole
 # gallery incl. 2048px previews and face crops. static_folder=None disables it; this replacement
@@ -457,12 +474,15 @@ _STATIC_DIR = os.path.join(_APP_DIR, "static")
 _PRIVATE_STATIC = ("thumbs", "thumbs_hq", "thumbs_max", "thumbs_preview",
                    "faces", "face_avatars", "hls", "video_cache")
 
+_SHORT_CACHE_EXT = (".js", ".json", ".css")   # app logic/data — edited often, must not go stale for 7 days
+
 @app.route("/static/<path:filename>")
 def static_files(filename):
     top = filename.split("/", 1)[0]
     if top in _PRIVATE_STATIC and not (session.get("authenticated") or check_bearer_token()):
         return ("", 401)
-    return send_from_directory(_STATIC_DIR, filename)   # send_from_directory blocks ../ traversal
+    max_age = 60 if filename.endswith(_SHORT_CACHE_EXT) else None   # None = app-wide 7-day default
+    return send_from_directory(_STATIC_DIR, filename, max_age=max_age, conditional=True)   # blocks ../ traversal
 
 
 @app.route("/login", methods=["GET"])
@@ -610,7 +630,14 @@ def girlfriend_day():
 def home():
     # Inline the first system-info snapshot so the page paints with real vitals
     # instead of skeletons that pop in after the client-side fetch. Cached (~35ms).
-    return render_template("home.html", boot=get_system_info())
+    # kg_js_v: mtime-based cache-buster on the <script> URL — a browser that cached
+    # zeus-graph.js under the old 7-day header would otherwise never re-fetch it,
+    # since the stale cached response's own Expires header governs, not our new one.
+    try:
+        kg_js_v = int(os.path.getmtime(os.path.join(_STATIC_DIR, "zeus-graph.js")))
+    except OSError:
+        kg_js_v = 0
+    return render_template("home.html", boot=get_system_info(), kg_js_v=kg_js_v)
 
 
 # EROS/ZEUS box dashboards retired 2026-09-11 — one ARES dashboard now; EROS data
@@ -3655,6 +3682,163 @@ def files_thumb():
     resp = send_file(cache, mimetype="image/jpeg", conditional=True, max_age=86400)
     resp.headers["X-Content-Type-Options"] = "nosniff"
     return resp
+
+
+# ── File explorer WRITE ops ──────────────────────────────────────────────────
+# Every path in every request is resolved through files_write.gate() (confinement
+# + vault + dotfile + protected-island). All routes are @require_write (auth +
+# X-ARES-Write CSRF header). See docs/superpowers/specs/2026-09-16-files-read-write-design.md
+
+def _files_gate(rel):
+    """Resolve a user rel-path for writing. Returns (abspath, None) on success,
+    or (None, flask_response) with the right status (404 escaped/vault, 403
+    protected island)."""
+    status, ap = files_write.gate(rel if isinstance(rel, str) else "")
+    if status == "ok":
+        return ap, None
+    if status == "protected":
+        return None, (jsonify({"error": "protected area"}), 403)
+    return None, (jsonify({"error": "not found"}), 404)
+
+
+def _join_rel(parent_rel, name):
+    return (parent_rel + "/" + name) if parent_rel else name
+
+
+@app.route("/api/files/mkdir", methods=["POST"])
+@require_write
+def files_mkdir():
+    data = request.get_json(silent=True) or {}
+    rel = data.get("path", "")
+    name = data.get("name", "")
+    ap, err = _files_gate(rel)
+    if err:
+        return err
+    if not os.path.isdir(ap):
+        return jsonify({"error": "not a folder"}), 404
+    try:
+        final = files_write.make_dir(ap, name)
+    except AssertionError:
+        return jsonify({"error": "invalid folder name"}), 400
+    except OSError as e:
+        return jsonify({"error": str(e)}), 409
+    return jsonify({"ok": True, "name": final, "path": _join_rel(rel, final)})
+
+
+@app.route("/api/files/rename", methods=["POST"])
+@require_write
+def files_rename():
+    data = request.get_json(silent=True) or {}
+    rel = data.get("path", "")
+    new_name = data.get("new_name", "")
+    ap, err = _files_gate(rel)
+    if err:
+        return err
+    if not os.path.exists(ap):
+        return jsonify({"error": "not found"}), 404
+    try:
+        final = files_write.rename_item(ap, new_name)
+    except AssertionError:
+        return jsonify({"error": "invalid name"}), 400
+    except OSError as e:
+        return jsonify({"error": str(e)}), 409
+    parent_rel = rel.rsplit("/", 1)[0] if "/" in rel else ""
+    return jsonify({"ok": True, "name": final, "path": _join_rel(parent_rel, final)})
+
+
+@app.route("/api/files/move", methods=["POST"])
+@require_write
+def files_move():
+    data = request.get_json(silent=True) or {}
+    src_rel = data.get("src", "")
+    dst_rel = data.get("dst_dir", "")
+    src_ap, err = _files_gate(src_rel)
+    if err:
+        return err
+    dst_ap, err2 = _files_gate(dst_rel)
+    if err2:
+        return err2
+    if not os.path.exists(src_ap):
+        return jsonify({"error": "source not found"}), 404
+    if not os.path.isdir(dst_ap):
+        return jsonify({"error": "destination is not a folder"}), 400
+    if os.path.dirname(src_ap) == dst_ap:
+        return jsonify({"ok": True, "name": os.path.basename(src_ap),
+                        "path": src_rel, "noop": True})
+    try:
+        final = files_write.move_into(src_ap, dst_ap)
+    except AssertionError:
+        return jsonify({"error": "invalid move"}), 400
+    except OSError as e:
+        return jsonify({"error": str(e)}), 409
+    return jsonify({"ok": True, "name": final, "path": _join_rel(dst_rel, final)})
+
+
+@app.route("/api/files/delete", methods=["POST"])
+@require_write
+def files_delete():
+    data = request.get_json(silent=True) or {}
+    rel = data.get("path", "")
+    ap, err = _files_gate(rel)
+    if err:
+        return err
+    if not os.path.exists(ap):
+        return jsonify({"error": "not found"}), 404
+    res = _trash_path(ap)
+    if not res.get("success"):
+        return jsonify({"error": res.get("error", "delete failed")}), 500
+    return jsonify({"ok": True, "trash_name": res.get("trash_name")})
+
+
+@app.route("/api/files/upload", methods=["POST"])
+@require_write
+def files_upload():
+    rel = request.form.get("dir", "")
+    relpath = request.form.get("relpath", "")
+    ap, err = _files_gate(rel)
+    if err:
+        return err
+    if not os.path.isdir(ap):
+        return jsonify({"error": "not a folder"}), 404
+    fobj = request.files.get("file")
+    if fobj is None:
+        return jsonify({"error": "no file"}), 400
+    try:
+        final = files_write.write_upload(ap, relpath, fobj.stream)
+    except ValueError as e:
+        if "exceeds" in str(e):
+            return jsonify({"error": "file too large"}), 413
+        return jsonify({"error": "invalid path"}), 400
+    except AssertionError:
+        return jsonify({"error": "invalid path"}), 400
+    except OSError as e:
+        return jsonify({"error": str(e)}), 409
+    return jsonify({"ok": True, "name": final, "path": _join_rel(rel, final)})
+
+
+@app.route("/api/files/trash/restore", methods=["POST"])
+@require_write
+def files_trash_restore():
+    data = request.get_json(silent=True) or {}
+    trash_name = data.get("trash_name", "")
+    if not trash_name:
+        return jsonify({"error": "no trash_name"}), 400
+
+    def _dest_ok(abspath):
+        # restore_gated hands us the absolute ORIGINAL PARENT dir; re-confirm it
+        # is inside the writable, non-island files tree before letting anything
+        # land there.
+        try:
+            rel = os.path.relpath(abspath, files_write.ROOT)
+        except ValueError:
+            return False
+        if rel == ".." or rel.startswith(".." + os.sep):
+            return False
+        status, _ = files_write.gate("" if rel == "." else rel)
+        return status == "ok"
+
+    res = _restore_gated(trash_name, _dest_ok)
+    return jsonify(res), (200 if res.get("success") else 400)
 
 
 def _ollama_complete(system_prompt, user_prompt):
