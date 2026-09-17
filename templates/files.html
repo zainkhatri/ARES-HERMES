@@ -750,6 +750,119 @@
                 z-index:600; border-left:none; padding-top:var(--sat);
             }
         }
+
+        /* ── Write ops: toolbar buttons ─────────────────────────────────────── */
+        .mkdir-btn, .trash-btn {
+            background:transparent; border:1px solid var(--line-2); color:var(--text-2);
+            font:inherit; font-size:12px; padding:5px 9px; border-radius:2px; cursor:pointer;
+            white-space:nowrap; letter-spacing:.02em;
+        }
+        .mkdir-btn:hover, .trash-btn:hover { color:var(--text-1); border-color:var(--ares); }
+        .mkdir-btn:disabled { opacity:.35; cursor:not-allowed; }
+
+        /* ── Locked (protected island) entries ──────────────────────────────── */
+        .fg-tile.locked, .ft-row.locked { opacity:.55; }
+        .fg-tile.locked { cursor:default; }
+        .fg-lock { position:absolute; top:6px; right:6px; font-size:11px; opacity:.8; pointer-events:none; }
+        .fg-tile { position:relative; }
+
+        /* ── Drag-move affordances ──────────────────────────────────────────── */
+        .fg-tile.drag-src, .ft-row.drag-src { opacity:.4; }
+        .fg-tile.drop-hot { outline:2px solid var(--ares); outline-offset:-2px; background:rgba(var(--ares-rgb),.10); }
+        .ft-row.drop-hot  { outline:2px solid var(--ares); outline-offset:-2px; }
+        .tree-node.drop-hot > .tree-row { outline:2px solid var(--ares); outline-offset:-2px; border-radius:2px; }
+        .drop-nope { outline:2px dashed var(--amber) !important; }
+
+        /* ── Upload drop overlay ────────────────────────────────────────────── */
+        .files-mod { position:relative; }
+        .drop-overlay {
+            position:absolute; inset:0; z-index:40; display:none;
+            align-items:center; justify-content:center; text-align:center;
+            background:rgba(var(--ares-rgb),.08); backdrop-filter:blur(2px);
+            border:2px dashed var(--ares); border-radius:3px; pointer-events:none;
+            color:var(--text-1); font-size:15px; letter-spacing:.04em;
+        }
+        .drop-overlay.show { display:flex; }
+        .drop-overlay.nope { background:rgba(var(--amber-rgb,168,85,247),.10); border-color:var(--amber); }
+
+        /* ── Upload progress dock ───────────────────────────────────────────── */
+        .upload-dock {
+            position:fixed; right:16px; bottom:16px; z-index:1200; width:320px;
+            background:rgba(var(--panel-rgb),.97); border:1px solid var(--line-2);
+            border-radius:3px; padding:12px 14px; display:none; box-shadow:0 8px 30px rgba(0,0,0,.5);
+        }
+        .upload-dock.show { display:block; }
+        .upload-dock .ud-title { font-size:12px; color:var(--text-1); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+        .upload-dock .ud-close { background:none; border:none; color:var(--text-3); cursor:pointer; font-size:14px; }
+        .upload-dock .ud-bar { height:6px; background:rgba(var(--ares-rgb),.14); border-radius:3px; overflow:hidden; margin-bottom:7px; }
+        .upload-dock .ud-fill { height:100%; width:0; background:var(--ares); transition:width .18s ease; }
+        .upload-dock.paused .ud-fill { background:var(--amber); }
+        .upload-dock .ud-status { font-size:11px; color:var(--text-2); }
+        .upload-dock.paused .ud-status { color:var(--amber); }
+        .upload-dock .ud-fails { font-size:11px; color:var(--amber); margin-top:6px; max-height:96px; overflow:auto; }
+        .upload-dock .ud-fails div { padding:1px 0; word-break:break-all; }
+        .upload-dock .ud-retry, .upload-dock .ud-resume {
+            margin-top:8px; background:transparent; border:1px solid var(--ares); color:var(--ares);
+            font:inherit; font-size:11px; padding:4px 10px; border-radius:2px; cursor:pointer;
+        }
+
+        /* ── Toast ──────────────────────────────────────────────────────────── */
+        #toast-stack { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:1400; display:flex; flex-direction:column; gap:8px; align-items:center; }
+        .toast {
+            background:rgba(var(--panel-rgb),.98); border:1px solid var(--line-2); color:var(--text-1);
+            font-size:12px; padding:9px 14px; border-radius:3px; box-shadow:0 6px 24px rgba(0,0,0,.5);
+            display:flex; gap:12px; align-items:center; max-width:80vw;
+        }
+        .toast.err { border-color:var(--amber); color:var(--amber); }
+        .toast button { background:none; border:1px solid currentColor; color:inherit; font:inherit; font-size:11px; padding:3px 9px; border-radius:2px; cursor:pointer; }
+
+        /* ── Context menu ───────────────────────────────────────────────────── */
+        .ctx-menu {
+            position:fixed; z-index:1500; min-width:160px; display:none;
+            background:rgba(var(--panel-rgb),.99); border:1px solid var(--line-2); border-radius:3px;
+            box-shadow:0 8px 30px rgba(0,0,0,.55); padding:4px;
+        }
+        .ctx-menu.show { display:block; }
+        .ctx-menu button {
+            display:block; width:100%; text-align:left; background:none; border:none; color:var(--text-1);
+            font:inherit; font-size:12px; padding:7px 10px; border-radius:2px; cursor:pointer;
+        }
+        .ctx-menu button:hover { background:rgba(var(--ares-rgb),.14); }
+        .ctx-menu button.danger { color:var(--amber); }
+        .ctx-menu .ctx-sep { height:1px; background:var(--line-1); margin:4px 2px; }
+
+        /* ── Modal (confirm / prompt / trash) ───────────────────────────────── */
+        .modal-back {
+            position:fixed; inset:0; z-index:1600; display:none; align-items:center; justify-content:center;
+            background:rgba(0,0,0,.55); padding:20px;
+        }
+        .modal-back.show { display:flex; }
+        .modal-box {
+            background:rgba(var(--panel-rgb),.99); border:1px solid var(--line-2); border-radius:4px;
+            width:min(560px,94vw); max-height:86vh; overflow:auto; padding:18px 20px;
+        }
+        .modal-box h3 { font-size:14px; color:var(--text-1); margin:0 0 10px; }
+        .modal-box p  { font-size:12.5px; color:var(--text-2); margin:0 0 14px; line-height:1.5; }
+        .modal-box input.modal-input {
+            width:100%; background:rgba(var(--ares-rgb),.06); border:1px solid var(--line-2); color:var(--text-1);
+            font:inherit; font-size:13px; padding:8px 10px; border-radius:2px; margin-bottom:14px;
+        }
+        .modal-actions { display:flex; gap:10px; justify-content:flex-end; }
+        .modal-actions button {
+            background:transparent; border:1px solid var(--line-2); color:var(--text-2);
+            font:inherit; font-size:12px; padding:7px 14px; border-radius:2px; cursor:pointer;
+        }
+        .modal-actions button.primary { border-color:var(--ares); color:var(--ares); }
+        .modal-actions button.danger  { border-color:var(--amber); color:var(--amber); }
+        .trash-list { display:flex; flex-direction:column; gap:6px; }
+        .trash-item { display:flex; gap:10px; align-items:center; justify-content:space-between; padding:8px 10px; border:1px solid var(--line-1); border-radius:2px; }
+        .trash-item .ti-meta { min-width:0; }
+        .trash-item .ti-name { font-size:12.5px; color:var(--text-1); word-break:break-all; }
+        .trash-item .ti-sub  { font-size:10.5px; color:var(--text-3); }
+        .trash-item .ti-acts { display:flex; gap:6px; flex:0 0 auto; }
+        .trash-item .ti-acts button { font-size:11px; padding:4px 8px; border-radius:2px; background:none; border:1px solid var(--line-2); color:var(--text-2); cursor:pointer; }
+        .trash-item .ti-acts button.restore:hover { color:var(--ares); border-color:var(--ares); }
+        .trash-item .ti-acts button.purge { color:var(--amber); border-color:var(--amber); }
     </style>
     <script>window.__NODE="ARES"</script>
     <script src="/static/node-switcher.js" defer></script>
@@ -825,6 +938,8 @@
                             List
                         </button>
                     </div>
+                    <button class="mkdir-btn" id="mkdir-btn" title="New folder in this directory">＋ Folder</button>
+                    <button class="trash-btn" id="trash-btn" title="Show recycle bin">⌫ Trash</button>
                     <button class="ask-toggle" id="ask-toggle" title="Ask about files">✦ Ask</button>
                 </div>
                   </div>
@@ -835,6 +950,7 @@
                 </div>
 
                 <div class="mod c-tl c-tr c-bl c-br files-mod">
+                  <div class="drop-overlay" id="drop-overlay"></div>
                   <div class="mod-body">
                 <!-- grid view -->
                 <div id="grid-view" style="display:none">
@@ -1130,13 +1246,22 @@ function renderGrid(sorted) {
         const canThumb = !entry.is_dir && (kind === 'image' || kind === 'video' || kind === 'pdf');
         const isSelected = !entry.is_dir && epath === selectedPath;
 
+        const locked = isLocked(epath);
         const tile = document.createElement('div');
-        tile.className = 'fg-tile' + (isSelected ? ' selected' : '');
+        tile.className = 'fg-tile' + (isSelected ? ' selected' : '') + (locked ? ' locked' : '');
         // data attrs — safe because we read them back as JS strings, never innerHTML
         tile.dataset.name  = entry.name;
         tile.dataset.kind  = kind;
         tile.dataset.path  = epath;
         tile.dataset.isdir = entry.is_dir ? '1' : '0';
+        tile.draggable = !locked;                 // drag-to-move (islands cannot be moved)
+        if (locked) {
+            const lk = document.createElement('span');
+            lk.className = 'fg-lock';
+            lk.title = 'Read-only (protected area)';
+            lk.textContent = '🔒';
+            tile.appendChild(lk);
+        }
 
         // thumb or icon
         const thumbWrap = document.createElement('div');
@@ -1235,11 +1360,12 @@ function renderList(sorted) {
         const szStr = entry.is_dir ? '—' : fmtSize(entry.size);
         const dtStr = fmtDate(entry.mtime);
         const sel   = (!entry.is_dir && epath === selectedPath) ? ' selected' : '';
+        const locked = isLocked(epath);
         // esc() on every user-controlled string injected into HTML
         html +=
-            '<div class="ft-row' + sel + '" data-name="' + esc(entry.name) + '" data-kind="' + esc(kind) + '" data-path="' + esc(epath) + '" data-isdir="' + (entry.is_dir ? '1' : '0') + '">' +
+            '<div class="ft-row' + sel + (locked ? ' locked' : '') + '" draggable="' + (locked ? 'false' : 'true') + '" data-name="' + esc(entry.name) + '" data-kind="' + esc(kind) + '" data-path="' + esc(epath) + '" data-isdir="' + (entry.is_dir ? '1' : '0') + '">' +
                 '<span class="ft-icon kind-' + esc(kind) + '">' + (ICONS[kind] || ICONS.file) + '</span>' +
-                '<span class="ft-name" title="' + esc(entry.name) + '">' + esc(entry.name) + '</span>' +
+                '<span class="ft-name" title="' + esc(entry.name) + '">' + esc(entry.name) + (locked ? ' 🔒' : '') + '</span>' +
                 '<span class="ft-size">' + esc(szStr) + '</span>' +
                 '<span class="ft-date">' + esc(dtStr) + '</span>' +
             '</div>';
@@ -1300,6 +1426,7 @@ async function navigate(path) {
         renderBreadcrumb(currentPath);
         truncEl.style.display = data.truncated ? '' : 'none';
         syncTreeActive(currentPath);
+        if (window.updateWriteUI) window.updateWriteUI();
         rerender();
     } catch (e) {
         const err = '<div class="loading" style="color:var(--amber)">error · ' + esc(e.message) + '</div>';
@@ -1858,6 +1985,606 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
     });
 
 }());
+
+// ══════════════════════════════════════════════════════════════════════════════
+// WRITE FEATURES — drag-drop upload, move, mkdir, rename, delete, trash.
+// Top-level scope: isLocked()/writeFetch() are called from renderGrid/renderList.
+// Every mutating request carries X-ARES-Write:1 (CSRF); the server re-validates
+// confinement + protected islands, so the client checks below are UX only.
+// ══════════════════════════════════════════════════════════════════════════════
+'use strict';
+
+const WRITE_ISLANDS = ['PHOTOS', 'MORDOR', 'PROJECTS/ARES-DASHBOARD'];
+const UP_MAX_ENTRIES = 5000;   // files per dropped folder (matches server intent)
+const UP_MAX_DEPTH   = 32;
+const UP_POOL        = 3;      // concurrent uploads (server is 1-worker/32-thread)
+const UP_STALL_MS    = 20000;  // no progress this long => "connection lost"
+
+// A path is read-only if it is a protected island or anything beneath one.
+function isLocked(path) {
+    if (!path) return false;
+    for (const isl of WRITE_ISLANDS) {
+        if (path === isl || path.startsWith(isl + '/')) return true;
+    }
+    return false;
+}
+
+// fetch() wrapper for mutating calls. opts.json -> JSON body; opts.body passes
+// through (FormData). Always adds the CSRF header.
+function writeFetch(url, opts) {
+    opts = opts || {};
+    const headers = Object.assign({ 'X-ARES-Write': '1' }, opts.headers || {});
+    const init = { method: opts.method || 'POST', headers };
+    if (opts.json !== undefined) {
+        headers['Content-Type'] = 'application/json';
+        init.body = JSON.stringify(opts.json);
+    } else if (opts.body !== undefined) {
+        init.body = opts.body;           // FormData: browser sets multipart boundary
+    }
+    if (opts.signal) init.signal = opts.signal;
+    return fetch(url, init);
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, opts) {
+    opts = opts || {};
+    let stack = document.getElementById('toast-stack');
+    if (!stack) {
+        stack = document.createElement('div');
+        stack.id = 'toast-stack';
+        document.body.appendChild(stack);
+    }
+    const el = document.createElement('div');
+    el.className = 'toast' + (opts.error ? ' err' : '');
+    const span = document.createElement('span');
+    span.textContent = msg;
+    el.appendChild(span);
+    if (opts.actionLabel && opts.onAction) {
+        const b = document.createElement('button');
+        b.textContent = opts.actionLabel;
+        b.addEventListener('click', () => { opts.onAction(); el.remove(); });
+        el.appendChild(b);
+    }
+    stack.appendChild(el);
+    const ttl = opts.timeout || (opts.actionLabel ? 8000 : 4000);
+    setTimeout(() => el.remove(), ttl);
+}
+
+// ── Modal helpers (confirm / prompt / custom) ─────────────────────────────────
+function ensureModal() {
+    let back = document.getElementById('modal-back');
+    if (!back) {
+        back = document.createElement('div');
+        back.className = 'modal-back';
+        back.id = 'modal-back';
+        back.innerHTML = '<div class="modal-box" id="modal-box"></div>';
+        document.body.appendChild(back);
+        back.addEventListener('click', (e) => { if (e.target === back) closeModal(); });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && back.classList.contains('show')) closeModal();
+        });
+    }
+    return back;
+}
+function closeModal() {
+    const back = document.getElementById('modal-back');
+    if (back) back.classList.remove('show');
+}
+function showModal(html) {
+    const back = ensureModal();
+    document.getElementById('modal-box').innerHTML = html;
+    back.classList.add('show');
+    return document.getElementById('modal-box');
+}
+
+function promptModal(title, body, initial, okLabel) {
+    return new Promise((resolve) => {
+        const box = showModal(
+            '<h3>' + esc(title) + '</h3>' +
+            (body ? '<p>' + esc(body) + '</p>' : '') +
+            '<input class="modal-input" id="modal-input" type="text">' +
+            '<div class="modal-actions">' +
+              '<button id="modal-cancel">Cancel</button>' +
+              '<button class="primary" id="modal-ok">' + esc(okLabel || 'OK') + '</button>' +
+            '</div>');
+        const inp = box.querySelector('#modal-input');
+        inp.value = initial || '';
+        inp.focus(); inp.select();
+        const done = (v) => { closeModal(); resolve(v); };
+        box.querySelector('#modal-cancel').onclick = () => done(null);
+        box.querySelector('#modal-ok').onclick = () => done(inp.value.trim());
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(inp.value.trim()); });
+    });
+}
+
+function confirmModal(title, body, okLabel, danger) {
+    return new Promise((resolve) => {
+        const box = showModal(
+            '<h3>' + esc(title) + '</h3>' +
+            '<p>' + esc(body) + '</p>' +
+            '<div class="modal-actions">' +
+              '<button id="modal-cancel">Cancel</button>' +
+              '<button class="' + (danger ? 'danger' : 'primary') + '" id="modal-ok">' + esc(okLabel || 'OK') + '</button>' +
+            '</div>');
+        box.querySelector('#modal-cancel').onclick = () => { closeModal(); resolve(false); };
+        box.querySelector('#modal-ok').onclick = () => { closeModal(); resolve(true); };
+    });
+}
+
+// ── mkdir ─────────────────────────────────────────────────────────────────────
+async function doMkdir() {
+    if (isLocked(currentPath)) { toast('This folder is read-only', { error: true }); return; }
+    const name = await promptModal('New folder', 'Create a folder in ' + (currentPath || '/ root'), 'New folder', 'Create');
+    if (!name) return;
+    try {
+        const r = await writeFetch('/api/files/mkdir', { json: { path: currentPath, name } });
+        const d = await r.json();
+        if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        toast('Created ' + d.name);
+        navigate(currentPath);
+    } catch (e) { toast('Could not create folder: ' + e.message, { error: true }); }
+}
+
+// ── rename ────────────────────────────────────────────────────────────────────
+async function doRename(path, name) {
+    if (isLocked(path)) { toast('This item is read-only', { error: true }); return; }
+    const next = await promptModal('Rename', 'Rename "' + name + '"', name, 'Rename');
+    if (!next || next === name) return;
+    try {
+        const r = await writeFetch('/api/files/rename', { json: { path, new_name: next } });
+        const d = await r.json();
+        if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        if (d.name !== next) toast('Renamed to ' + d.name + ' — a name like that already existed');
+        else toast('Renamed to ' + d.name);
+        selectedPath = d.path;         // keep the item highlighted where it went
+        navigate(currentPath);
+    } catch (e) { toast('Could not rename: ' + e.message, { error: true }); }
+}
+
+// ── move ──────────────────────────────────────────────────────────────────────
+async function doMove(srcPath, dstDir) {
+    if (isLocked(srcPath)) { toast('This item is read-only', { error: true }); return; }
+    if (isLocked(dstDir)) { toast(dstDir.split('/')[0] + ' is read-only — can’t move here', { error: true }); return; }
+    if (srcPath === dstDir) return;
+    try {
+        const r = await writeFetch('/api/files/move', { json: { src: srcPath, dst_dir: dstDir } });
+        const d = await r.json();
+        if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        if (d.noop) return;
+        if (d.name !== srcPath.split('/').pop())
+            toast('Moved as ' + d.name + ' — a file with that name existed');
+        else toast('Moved to ' + (dstDir || '/ root'));
+        selectedPath = d.path;
+        navigate(currentPath);
+    } catch (e) { toast('Could not move: ' + e.message, { error: true }); }
+}
+
+// ── delete (to trash) ─────────────────────────────────────────────────────────
+async function doDelete(path, name, isDir) {
+    if (isLocked(path)) { toast('This item is read-only', { error: true }); return; }
+    const ok = await confirmModal(
+        'Move to Trash?',
+        'Move "' + name + '" to the Trash. ' +
+        (isDir ? 'The whole folder and its contents move together. ' : '') +
+        'Moved items can be restored from Trash (kept 30 days).',
+        'Move to Trash', true);
+    if (!ok) return;
+    try {
+        const r = await writeFetch('/api/files/delete', { json: { path } });
+        const d = await r.json();
+        if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        toast('Moved to Trash', {
+            actionLabel: 'Undo',
+            onAction: () => restoreFromTrash(d.trash_name, true),
+        });
+        navigate(currentPath);
+    } catch (e) { toast('Could not delete: ' + e.message, { error: true }); }
+}
+
+async function restoreFromTrash(trashName, reloadAfter) {
+    try {
+        const r = await writeFetch('/api/files/trash/restore', { json: { trash_name: trashName } });
+        const d = await r.json();
+        if (!r.ok || !d.success) throw new Error(d.error || ('HTTP ' + r.status));
+        toast('Restored');
+        if (reloadAfter) navigate(currentPath);
+        return true;
+    } catch (e) { toast('Could not restore: ' + e.message, { error: true }); return false; }
+}
+
+// ── Context menu ──────────────────────────────────────────────────────────────
+function ensureCtxMenu() {
+    let m = document.getElementById('ctx-menu');
+    if (!m) {
+        m = document.createElement('div');
+        m.className = 'ctx-menu';
+        m.id = 'ctx-menu';
+        document.body.appendChild(m);
+        document.addEventListener('click', () => m.classList.remove('show'));
+        document.addEventListener('scroll', () => m.classList.remove('show'), true);
+    }
+    return m;
+}
+function showCtxMenu(x, y, items) {
+    const m = ensureCtxMenu();
+    m.innerHTML = '';
+    items.forEach(it => {
+        if (it.sep) { const s = document.createElement('div'); s.className = 'ctx-sep'; m.appendChild(s); return; }
+        const b = document.createElement('button');
+        b.textContent = it.label;
+        if (it.danger) b.className = 'danger';
+        b.addEventListener('click', () => { m.classList.remove('show'); it.action(); });
+        m.appendChild(b);
+    });
+    m.style.left = Math.min(x, window.innerWidth - 180) + 'px';
+    m.style.top  = Math.min(y, window.innerHeight - (items.length * 34 + 16)) + 'px';
+    m.classList.add('show');
+}
+
+function ctxForEntry(el, e) {
+    const path = el.dataset.path, name = el.dataset.name, isDir = el.dataset.isdir === '1';
+    const locked = isLocked(path);
+    const items = [];
+    if (!isDir) {
+        items.push({ label: 'Open', action: () => window.open(rawUrl(path, false), '_blank', 'noopener') });
+        items.push({ label: 'Download', action: () => window.open(rawUrl(path, true), '_blank', 'noopener') });
+    } else {
+        items.push({ label: 'Open', action: () => navigate(path) });
+    }
+    if (!locked) {
+        items.push({ sep: true });
+        items.push({ label: 'Rename', action: () => doRename(path, name) });
+        items.push({ label: 'Delete', danger: true, action: () => doDelete(path, name, isDir) });
+    }
+    showCtxMenu(e.clientX, e.clientY, items);
+}
+
+// ── Trash view ────────────────────────────────────────────────────────────────
+function fmtKeptUntil(trashedAt, purgeIn) {
+    // "Kept until Oct 16, then removed" — a date reads calmer than a countdown.
+    try {
+        const d = new Date(trashedAt);
+        d.setDate(d.getDate() + 30);
+        return 'Kept until ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', then removed';
+    } catch (e) { return (purgeIn != null ? ('Removed in ' + purgeIn + ' days') : ''); }
+}
+async function openTrashView() {
+    const box = showModal('<h3>Trash</h3><p>Loading…</p>');
+    let items = [];
+    try {
+        const r = await fetch('/api/trash');
+        items = await r.json();
+    } catch (e) { box.innerHTML = '<h3>Trash</h3><p>Could not load trash: ' + esc(e.message) + '</p>'; return; }
+    renderTrash(box, items);
+}
+function renderTrash(box, items) {
+    let html = '<h3>Trash <span style="color:var(--text-3);font-weight:400">(' + items.length + ')</span></h3>';
+    if (!items.length) html += '<p>Trash is empty.</p>';
+    else {
+        html += '<div class="trash-list">';
+        items.forEach(it => {
+            const name = (it.original_path || it.trash_name || '').split('/').pop();
+            html += '<div class="trash-item" data-tn="' + esc(it.trash_name) + '">' +
+                '<div class="ti-meta">' +
+                    '<div class="ti-name">' + esc(name) + '</div>' +
+                    '<div class="ti-sub">' + esc(it.original_path || '') + ' · ' + esc(fmtKeptUntil(it.trashed_at, it.purge_in)) + '</div>' +
+                '</div>' +
+                '<div class="ti-acts">' +
+                    '<button class="restore" data-act="restore">Restore</button>' +
+                '</div>' +
+            '</div>';
+        });
+        html += '</div>';
+    }
+    html += '<div class="modal-actions" style="margin-top:16px"><button id="trash-close">Close</button></div>';
+    box.innerHTML = html;
+    box.querySelector('#trash-close').onclick = closeModal;
+    box.querySelectorAll('.trash-item').forEach(row => {
+        const tn = row.dataset.tn;
+        row.querySelector('[data-act="restore"]').onclick = async () => {
+            const ok = await restoreFromTrash(tn, false);
+            if (ok) { row.remove(); navigate(currentPath); }
+        };
+    });
+}
+
+// ── Upload dock ───────────────────────────────────────────────────────────────
+function ensureDock() {
+    let d = document.getElementById('upload-dock');
+    if (!d) {
+        d = document.createElement('div');
+        d.className = 'upload-dock';
+        d.id = 'upload-dock';
+        d.innerHTML =
+            '<div class="ud-title"><span id="ud-head">Uploading…</span><button class="ud-close" id="ud-close">✕</button></div>' +
+            '<div class="ud-bar"><div class="ud-fill" id="ud-fill"></div></div>' +
+            '<div class="ud-status" id="ud-status">—</div>' +
+            '<div class="ud-fails" id="ud-fails"></div>';
+        document.body.appendChild(d);
+        d.querySelector('#ud-close').onclick = () => d.classList.remove('show');
+    }
+    return d;
+}
+function updateDock(state) {
+    const d = ensureDock();
+    d.classList.add('show');
+    const okCount = state.status.filter(s => s === 'ok').length;
+    const failCount = state.status.filter(s => s === 'fail').length;
+    const done = okCount + failCount;
+    d.querySelector('#ud-fill').style.width = state.total ? (done / state.total * 100) + '%' : '0';
+    d.querySelector('#ud-head').textContent = done >= state.total ? 'Upload complete' : 'Uploading…';
+    d.querySelector('#ud-status').textContent =
+        done + ' / ' + state.total + ' · ' + okCount + ' uploaded' +
+        (failCount ? (' · ' + failCount + ' failed') : '');
+    d.classList.toggle('paused', !!state.paused);
+    if (state.paused) d.querySelector('#ud-head').textContent = 'Upload paused — connection lost';
+}
+function dockSummary(state) {
+    const d = ensureDock();
+    const failEl = d.querySelector('#ud-fails');
+    failEl.innerHTML = '';
+    const fails = [];
+    state.status.forEach((s, i) => { if (s === 'fail') fails.push(i); });
+    if (fails.length) {
+        failEl.innerHTML = '<div style="margin-bottom:4px">Failed:</div>' +
+            fails.slice(0, 20).map(i => '<div>' + esc(state.files[i].relpath) + '</div>').join('') +
+            (fails.length > 20 ? ('<div>…and ' + (fails.length - 20) + ' more</div>') : '');
+        const btn = document.createElement('button');
+        btn.className = 'ud-retry';
+        btn.textContent = 'Retry failed (' + fails.length + ')';
+        btn.onclick = () => runUpload(state, fails);
+        failEl.appendChild(btn);
+    }
+}
+
+async function runUpload(state, indices) {
+    // indices: which file rows to (re)upload. Fresh AbortController each run so a
+    // stalled run can be superseded by Retry.
+    state.paused = false;
+    state.ctrl = new AbortController();
+    state.lastTs = Date.now();
+    indices.forEach(i => { state.status[i] = 'pending'; });
+    updateDock(state);
+
+    const dockEl = ensureDock();
+    if (state.stallTimer) clearInterval(state.stallTimer);
+    state.stallTimer = setInterval(() => {
+        const anyPending = state.status.some(s => s === 'pending');
+        if (anyPending && Date.now() - state.lastTs > UP_STALL_MS && !state.paused) {
+            state.paused = true;
+            updateDock(state);
+            const failEl = dockEl.querySelector('#ud-fails');
+            failEl.innerHTML = '';
+            const btn = document.createElement('button');
+            btn.className = 'ud-resume';
+            btn.textContent = 'Resume';
+            btn.onclick = () => {
+                if (state.ctrl) state.ctrl.abort();
+                const remaining = [];
+                state.status.forEach((s, i) => { if (s !== 'ok') remaining.push(i); });
+                runUpload(state, remaining);
+            };
+            failEl.appendChild(btn);
+        }
+    }, 3000);
+
+    let cursor = 0;
+    const worker = async () => {
+        while (true) {
+            const k = cursor++;
+            if (k >= indices.length) break;
+            const i = indices[k];
+            const { file, relpath } = state.files[i];
+            try {
+                const fd = new FormData();
+                fd.append('dir', state.dir);
+                fd.append('relpath', relpath);
+                fd.append('file', file, file.name);
+                const r = await writeFetch('/api/files/upload', { body: fd, signal: state.ctrl.signal });
+                state.status[i] = r.ok ? 'ok' : 'fail';
+            } catch (e) {
+                state.status[i] = (e.name === 'AbortError') ? 'pending' : 'fail';
+            }
+            state.lastTs = Date.now();
+            updateDock(state);
+        }
+    };
+    const pool = [];
+    for (let i = 0; i < UP_POOL; i++) pool.push(worker());
+    await Promise.all(pool);
+
+    if (state.stallTimer) { clearInterval(state.stallTimer); state.stallTimer = null; }
+    if (!state.status.some(s => s === 'pending')) {
+        state.paused = false;
+        updateDock(state);
+        dockSummary(state);
+        navigate(currentPath);
+    }
+}
+
+// BFS walk of a dropped DataTransferItem tree. No recursion; bounded. Drains each
+// directory reader fully (readEntries returns <=100 per call).
+async function walkDropEntries(rootEntries) {
+    const files = [];
+    const queue = rootEntries.map(en => ({ en, prefix: '' }));
+    let truncated = false, iter = 0;
+    while (queue.length && iter < 500000) {
+        iter++;
+        if (files.length >= UP_MAX_ENTRIES) { truncated = true; break; }
+        const { en, prefix } = queue.shift();
+        if (en.isFile) {
+            if (en.name.startsWith('.')) continue;   // dotfiles (e.g. .DS_Store) skipped
+            const rel = prefix ? prefix + '/' + en.name : en.name;
+            if (rel.split('/').length > UP_MAX_DEPTH) { truncated = true; continue; }
+            try {
+                const file = await new Promise((res, rej) => en.file(res, rej));
+                files.push({ file, relpath: rel });
+            } catch (e) { /* unreadable file: skip */ }
+        } else if (en.isDirectory) {
+            const childPrefix = prefix ? prefix + '/' + en.name : en.name;
+            if (childPrefix.split('/').length >= UP_MAX_DEPTH) { truncated = true; continue; }
+            const reader = en.createReader();
+            let drain = 0, batch;
+            do {
+                batch = await new Promise((res) => reader.readEntries(res, () => res([])));
+                for (const c of batch) queue.push({ en: c, prefix: childPrefix });
+                drain++;
+            } while (batch.length > 0 && drain < 10000);
+        }
+    }
+    return { files, truncated };
+}
+
+async function startUpload(dirRel, rootEntries, plainFiles) {
+    if (isLocked(dirRel)) { toast(dirRel.split('/')[0] + ' is read-only — can’t upload here', { error: true }); return; }
+    let files = [];
+    let truncated = false;
+    if (rootEntries && rootEntries.length) {
+        const res = await walkDropEntries(rootEntries);
+        files = res.files; truncated = res.truncated;
+    } else if (plainFiles && plainFiles.length) {
+        for (const f of plainFiles) if (!f.name.startsWith('.')) files.push({ file: f, relpath: f.name });
+    }
+    if (!files.length) { toast('Nothing to upload', { error: true }); return; }
+    if (truncated) toast('Large drop — uploading the first ' + files.length + ' files', { timeout: 6000 });
+    const state = { dir: dirRel, files, status: files.map(() => 'pending'), total: files.length,
+                    paused: false, ctrl: null, lastTs: 0, stallTimer: null };
+    runUpload(state, files.map((_, i) => i));
+}
+
+// ── Wire everything up ────────────────────────────────────────────────────────
+(function initWriteFeatures() {
+    const filesMod = document.querySelector('.files-mod');
+    const overlay  = document.getElementById('drop-overlay');
+    let dragSrcPath = null;   // internal move source
+
+    // toolbar buttons
+    const mkdirBtn = document.getElementById('mkdir-btn');
+    const trashBtn = document.getElementById('trash-btn');
+    if (mkdirBtn) mkdirBtn.addEventListener('click', doMkdir);
+    if (trashBtn) trashBtn.addEventListener('click', openTrashView);
+
+    // reflect the current folder's writability on the toolbar (called from navigate)
+    window.updateWriteUI = function () {
+        if (mkdirBtn) mkdirBtn.disabled = isLocked(currentPath);
+    };
+    window.updateWriteUI();
+
+    function entryEl(t) { return t.closest ? (t.closest('.fg-tile') || t.closest('.ft-row')) : null; }
+    function folderTarget(t) {
+        const el = entryEl(t);
+        if (el && el.dataset.isdir === '1') return el;
+        return null;
+    }
+
+    // context menu on entries
+    [gridEl, rowsEl].forEach(container => {
+        container.addEventListener('contextmenu', (e) => {
+            const el = entryEl(e.target);
+            if (!el) return;
+            e.preventDefault();
+            ctxForEntry(el, e);
+        });
+        // internal move: dragstart
+        container.addEventListener('dragstart', (e) => {
+            const el = entryEl(e.target);
+            if (!el || isLocked(el.dataset.path)) { e.preventDefault(); return; }
+            dragSrcPath = el.dataset.path;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/ares-path', dragSrcPath);
+            el.classList.add('drag-src');
+        });
+        container.addEventListener('dragend', (e) => {
+            const el = entryEl(e.target);
+            if (el) el.classList.remove('drag-src');
+            dragSrcPath = null;
+            container.querySelectorAll('.drop-hot').forEach(x => x.classList.remove('drop-hot'));
+        });
+        // internal move: dragover a folder tile/row
+        container.addEventListener('dragover', (e) => {
+            if (!dragSrcPath) return;              // external file drags handled below
+            const tgt = folderTarget(e.target);
+            container.querySelectorAll('.drop-hot').forEach(x => x.classList.remove('drop-hot'));
+            if (tgt && !isLocked(tgt.dataset.path) && tgt.dataset.path !== dragSrcPath) {
+                e.preventDefault();
+                tgt.classList.add('drop-hot');
+            }
+        });
+        container.addEventListener('drop', (e) => {
+            if (!dragSrcPath) return;
+            const tgt = folderTarget(e.target);
+            container.querySelectorAll('.drop-hot').forEach(x => x.classList.remove('drop-hot'));
+            if (tgt && tgt.dataset.path !== dragSrcPath) {
+                e.preventDefault();
+                doMove(dragSrcPath, tgt.dataset.path);
+            }
+            dragSrcPath = null;
+        });
+    });
+
+    // tree nodes as move drop targets
+    treeRootEl.addEventListener('dragover', (e) => {
+        if (!dragSrcPath) return;
+        const li = e.target.closest && e.target.closest('.tree-node');
+        treeRootEl.querySelectorAll('.drop-hot').forEach(x => x.classList.remove('drop-hot'));
+        if (li && !isLocked(li.dataset.path) && li.dataset.path !== dragSrcPath) {
+            e.preventDefault();
+            li.classList.add('drop-hot');
+        }
+    });
+    treeRootEl.addEventListener('drop', (e) => {
+        if (!dragSrcPath) return;
+        const li = e.target.closest && e.target.closest('.tree-node');
+        treeRootEl.querySelectorAll('.drop-hot').forEach(x => x.classList.remove('drop-hot'));
+        if (li && li.dataset.path !== dragSrcPath) { e.preventDefault(); doMove(dragSrcPath, li.dataset.path); }
+        dragSrcPath = null;
+    });
+
+    // external file/folder drop -> upload
+    let dragDepth = 0;
+    function hasFiles(e) { return e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files'); }
+    filesMod.addEventListener('dragenter', (e) => {
+        if (dragSrcPath || !hasFiles(e)) return;
+        e.preventDefault();
+        dragDepth++;
+        const locked = isLocked(currentPath);
+        overlay.textContent = locked ? (currentPath.split('/')[0] + ' is read-only — can’t upload here')
+                                      : ('Drop to upload into ' + (currentPath || '/ root'));
+        overlay.classList.toggle('nope', locked);
+        overlay.classList.add('show');
+    });
+    filesMod.addEventListener('dragover', (e) => {
+        if (dragSrcPath || !hasFiles(e)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = isLocked(currentPath) ? 'none' : 'copy';
+    });
+    filesMod.addEventListener('dragleave', (e) => {
+        if (dragSrcPath || !hasFiles(e)) return;
+        dragDepth--;
+        if (dragDepth <= 0) { dragDepth = 0; overlay.classList.remove('show'); }
+    });
+    filesMod.addEventListener('drop', (e) => {
+        if (dragSrcPath || !hasFiles(e)) return;
+        e.preventDefault();
+        dragDepth = 0;
+        overlay.classList.remove('show');
+        // capture entries synchronously before any await
+        let dest = currentPath;
+        const tgt = folderTarget(e.target);
+        if (tgt && !isLocked(tgt.dataset.path)) dest = tgt.dataset.path;
+        const items = e.dataTransfer.items;
+        const entries = [];
+        if (items && items.length && items[0].webkitGetAsEntry) {
+            for (let i = 0; i < items.length; i++) {
+                const en = items[i].webkitGetAsEntry();
+                if (en) entries.push(en);
+            }
+        }
+        const plain = entries.length ? null : Array.from(e.dataTransfer.files || []);
+        startUpload(dest, entries, plain);
+    });
+})();
+
 </script>
 </body>
 </html>
