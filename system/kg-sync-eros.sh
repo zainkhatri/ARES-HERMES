@@ -6,12 +6,17 @@ set -u
 export HOME=/root
 MNEMO="/mnt/nvme/PROMETHEUS/PROJECTS/more projects/atlas"
 CENTRAL="$MNEMO/data/homelab_kg.db"
-ERO=root@10.0.1.69
+# EROS's LAN address (10.0.1.69, its "janjee" WiFi) is only reachable when ARES
+# also has a live radio on that network -- it normally does not (wired-only,
+# see ares-wifi-uplink). Tailscale reaches EROS regardless, so route over the
+# `eros` SSH alias (~/.ssh/config: ProxyCommand tailscale nc %h %p) instead of
+# the raw LAN IP.
+ERO=eros
 REMOTE=/opt/atlas
 EROS_ROOTS="/root /srv /mnt"     # EROS's meaningful areas
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new"
 
-ping -c1 -W2 10.0.1.69 >/dev/null 2>&1 || { echo "kg-sync-eros: EROS unreachable"; exit 1; }
+$SSH "$ERO" true 2>/dev/null || { echo "kg-sync-eros: EROS unreachable"; exit 1; }
 
 # 1. ship the package (stdlib only, small)
 rsync -a --delete -e "$SSH" "$MNEMO/atlas" "$ERO:$REMOTE/" || { echo "kg-sync-eros: rsync push failed"; exit 1; }
