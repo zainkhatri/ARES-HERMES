@@ -625,6 +625,12 @@ def girlfriend_day():
     return send_from_directory("websites/friends/girlfriend", "index.html")
 
 
+@app.route("/followups")
+def followup_guide():
+    """Public — FAI Field Follow-Up System simple guide (Tailscale-only host)."""
+    return send_from_directory("websites/followup", "index.html")
+
+
 @app.route("/")
 @require_auth
 def home():
@@ -1191,6 +1197,21 @@ def kayla_page():
 @require_auth
 def josh_page():
     return render_template("josh.html")
+
+@app.route("/thursday")
+@require_auth
+def thursday_page():
+    return render_template("thursday.html")
+
+@app.route("/thursday-deck")
+@require_auth
+def thursday_deck_page():
+    return render_template("thursday-deck.html")
+
+@app.route("/fai-work")
+@require_auth
+def fai_work_page():
+    return render_template("fai-work.html")
 
 @app.route("/yc")
 @require_auth
@@ -4769,11 +4790,25 @@ def vault_regen_thumbs():
     done = skipped = errors = 0
     for tk in keys:
         item_dir = os.path.join(_VAULT_ENC_DIR, tk)
-        thumb_path = os.path.join(item_dir, "thumb.enc")
-        orig_path = os.path.join(item_dir, "orig.enc")
-        if os.path.exists(thumb_path) or not os.path.exists(orig_path):
+        thumb_path   = os.path.join(item_dir, "thumb.enc")
+        preview_path = os.path.join(item_dir, "preview.enc")
+        orig_path    = os.path.join(item_dir, "orig.enc")
+        if not os.path.exists(orig_path):
             skipped += 1
             continue
+        with _vault_state_lock:
+            entry = _vault_state["items"].get(tk, {})
+        is_video = entry.get("type") == "video"
+        # For videos: only need thumb.enc/hq.enc (poster frame). Skip if already done.
+        # For images: need thumb.enc, hq.enc, preview.enc, max.enc. Skip if all present.
+        if is_video:
+            if os.path.exists(thumb_path):
+                skipped += 1
+                continue
+        else:
+            if os.path.exists(thumb_path) and os.path.exists(preview_path):
+                skipped += 1
+                continue
         try:
             with open(orig_path, "rb") as fh:
                 plain = _vault_decrypt(key, fh.read())
@@ -4781,13 +4816,32 @@ def vault_regen_thumbs():
             errors += 1
             continue
         def _write_enc(name, data_bytes, _dir=item_dir, _key=key):
-            from cryptography.hazmat.primitives.ciphers.aead import AESGCM as _AESGCM
-            import os as _os2
             tmp = _dir + "/" + name + ".tmp"
             with open(tmp, "wb") as fh:
                 fh.write(_vault_encrypt(_key, data_bytes))
-            _os2.replace(tmp, os.path.join(_dir, name))
-        ok = _vault_gen_video_thumb(plain, _write_enc, tk)
+            os.replace(tmp, os.path.join(_dir, name))
+        ok = False
+        if is_video:
+            ok = _vault_gen_video_thumb(plain, _write_enc, tk)
+        else:
+            try:
+                from PIL import Image, ImageOps
+                import io as _io_r
+                def _thumb_r(px, q=82):
+                    im = ImageOps.exif_transpose(Image.open(_io_r.BytesIO(plain))).convert("RGB")
+                    im.thumbnail((px, px), Image.LANCZOS)
+                    buf = _io_r.BytesIO(); im.save(buf, "JPEG", quality=q); return buf.getvalue()
+                if not os.path.exists(thumb_path):
+                    _write_enc("thumb.enc",   _thumb_r(400))
+                if not os.path.exists(os.path.join(item_dir, "hq.enc")):
+                    _write_enc("hq.enc",      _thumb_r(1600))
+                if not os.path.exists(preview_path):
+                    _write_enc("preview.enc", _thumb_r(2048))
+                if not os.path.exists(os.path.join(item_dir, "max.enc")):
+                    _write_enc("max.enc",     _thumb_r(2560, q=85))
+                ok = True
+            except Exception as e:
+                app.logger.warning("[vault/regen] image thumb gen failed %s: %s", tk, e)
         if ok:
             done += 1
             with _vault_state_lock:
@@ -4856,12 +4910,14 @@ def vault_upload():
     if not is_video:
         try:
             from PIL import Image, ImageOps
-            def _thumb(px):
+            def _thumb(px, q=82):
                 im = ImageOps.exif_transpose(Image.open(_io.BytesIO(data))).convert("RGB")
                 im.thumbnail((px, px), Image.LANCZOS)
-                buf = _io.BytesIO(); im.save(buf, "JPEG", quality=82); return buf.getvalue()
-            _write_enc("thumb.enc", _thumb(400))
-            _write_enc("hq.enc", _thumb(1600))
+                buf = _io.BytesIO(); im.save(buf, "JPEG", quality=q); return buf.getvalue()
+            _write_enc("thumb.enc",   _thumb(400))
+            _write_enc("hq.enc",      _thumb(1600))
+            _write_enc("preview.enc", _thumb(2048))
+            _write_enc("max.enc",     _thumb(2560, q=85))
             made_thumb = True
         except Exception as e:
             app.logger.warning("[vault/upload] thumb gen failed %s: %s", thumb_key, e)
@@ -5896,11 +5952,22 @@ def _serve_vault_thumb(tier, thumb_key):
         abort(404)
 
     # Encrypted items: decrypt the requested tier in memory with session or token key.
+    # Fallback chain: if a higher-res enc file doesn't exist yet (items uploaded before the
+    # preview/max tier was added), serve the next available lower-res tier.
     if entry.get("enc"):
-        fmap = {"thumb": "thumb.enc", "thumb_hq": "hq.enc",
-                "thumb_preview": "thumb.enc", "thumb_max": "hq.enc"}
-        encfile = os.path.join(_VAULT_ENC_DIR, thumb_key, fmap.get(tier, "thumb.enc"))
-        if not os.path.exists(encfile):
+        candidates = {
+            "thumb":         ["thumb.enc"],
+            "thumb_hq":      ["hq.enc",      "thumb.enc"],
+            "thumb_preview": ["preview.enc",  "hq.enc",     "thumb.enc"],
+            "thumb_max":     ["max.enc",      "preview.enc", "hq.enc", "thumb.enc"],
+        }.get(tier, ["thumb.enc"])
+        encfile = None
+        for candidate in candidates:
+            p = os.path.join(_VAULT_ENC_DIR, thumb_key, candidate)
+            if os.path.exists(p):
+                encfile = p
+                break
+        if not encfile:
             abort(404)
         try:
             with open(encfile, "rb") as fh:
@@ -7249,6 +7316,97 @@ def _video_cache_cleanup_partials():
         pass
     if pruned_part or pruned_tiny or pruned_hls:
         print(f"[video-prewarm] startup cleanup: {pruned_part} .part, {pruned_tiny} corrupt .mp4, {pruned_hls} orphan hls dirs removed", flush=True)
+
+
+_THUMB_PREVIEW_PREWARM_INTERVAL = 21600  # 6h between full re-scans — photos change far
+                                          # less often than the video library does
+_THUMB_PREVIEW_PREWARM_MAX_PASSES = 1_000_000  # bounded — runs for years of passes
+
+
+def _ensure_thumb_preview_cached(item):
+    """Generate static/thumbs_preview for one item if missing. Returns
+    'done'|'skipped'|'failed'. Images only — videos get their lightbox preview
+    via the existing on-demand ffmpeg frame-grab path, out of scope here.
+
+    Uses item["path"] directly rather than the _hash_to_path reverse-index
+    (unlike the on-demand HTTP handler, which only has a filename to work
+    from). Verified during build: _hash_to_path can lag freshly-scanned
+    photos until the next full rebuild, which would silently under-cover a
+    batch pass relying on it — going straight from the item dict sidesteps
+    that entirely."""
+    assert isinstance(item, dict), "item must be dict"
+    if item.get("type") == "video":
+        return "skipped"
+    thumb_url = item.get("thumb") or item.get("thumb_hq") or ""
+    if not thumb_url:
+        return "skipped"
+    name = secure_filename(thumb_url.rsplit("/", 1)[-1])
+    if not name:
+        return "skipped"
+    out_path = os.path.join(_THUMB_PREVIEW_DIR, name)
+    if os.path.exists(out_path):
+        return "skipped"
+    orig_path = _resolve_photo_path(item.get("path", ""))
+    if not orig_path:
+        return "failed"
+    ok = gen_thumb(orig_path, out_path, 2048, 1, False)
+    return "done" if ok else "failed"
+
+
+def _thumb_preview_prewarm_pass(pass_idx):
+    """One full pass over the photo index, backfilling static/thumbs_preview
+    (the lightbox tier) for images that were never opened yet. Idempotent —
+    _ensure_thumb_preview_cached skips anything already on disk, so a re-run
+    only does work for newly-added photos.
+
+    Root cause this closes: unlike video_cache/hls (kept ~100% warm by
+    _video_prewarm_loop below), thumbs_preview had no proactive backfill —
+    it only filled one photo at a time, on first lightbox open, paying a
+    synchronous PIL decode+resize cost on that request (_serve_thumb_on_demand
+    in app.py). Measured 2026-09-17: 81% backfilled (70,457/87,017); this loop
+    closes the remaining gap in the background instead of on the user's click."""
+    if _gpu_on_loan():
+        print(f"[preview-prewarm] pass={pass_idx} skipped — GPU on loan to a VM (deferring CPU work)")
+        return {"done": 0, "skipped": 0, "failed": 0}
+    items = load_photo_index()
+    assert isinstance(items, list), "photo index must be list"
+    images = [i for i in items if i.get("type") != "video"]
+    MAX_IMAGES = 200000
+    n = min(len(images), MAX_IMAGES)
+    counts = {"done": 0, "skipped": 0, "failed": 0}
+    counts_lock = threading.Lock()
+    progress = {"i": 0}
+    def _do(item):
+        try:
+            outcome = _ensure_thumb_preview_cached(item)
+        except Exception as e:
+            print(f"[preview-prewarm] error on {item.get('path','?')}: {e}")
+            outcome = "failed"
+        with counts_lock:
+            counts[outcome] = counts.get(outcome, 0) + 1
+            progress["i"] += 1
+            if progress["i"] % 1000 == 0:
+                print(f"[preview-prewarm] pass={pass_idx} {progress['i']}/{n} {dict(counts)}", flush=True)
+    # 4 workers: this is plain CPU-bound PIL decode/resize (no GPU/NVENC contention
+    # to throttle for), kept modest so it doesn't compete with foreground request
+    # threads on the LXC's cores while a pass is running.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(_do, images[:n]))
+    print(f"[preview-prewarm] pass {pass_idx} complete: {counts}", flush=True)
+    return counts
+
+
+def _thumb_preview_prewarm_loop():
+    """Recurring backfill for static/thumbs_preview. Runs forever (bounded
+    loop count, mirrors _video_prewarm_loop). Starts after the video prewarm's
+    initial settle delay so the two don't both hammer CPU at boot."""
+    time.sleep(180)
+    for pass_idx in range(1, _THUMB_PREVIEW_PREWARM_MAX_PASSES + 1):
+        try:
+            _thumb_preview_prewarm_pass(pass_idx)
+        except Exception as e:
+            print(f"[preview-prewarm] pass {pass_idx} crashed: {e}")
+        time.sleep(_THUMB_PREVIEW_PREWARM_INTERVAL)
 
 
 def _video_prewarm_loop():
@@ -10853,6 +11011,7 @@ def _start_background_threads():
     threading.Thread(target=_run_startup_tasks, daemon=True).start()
     threading.Thread(target=_mc_auto_shutdown, daemon=True).start()
     threading.Thread(target=_video_prewarm_loop, daemon=True).start()
+    threading.Thread(target=_thumb_preview_prewarm_loop, daemon=True).start()
     # One-shot: warm the system-info caches in the serving worker so the first
     # dashboard load is instant (caches are stale-while-revalidate thereafter).
     threading.Thread(target=_sysinfo_prewarm, daemon=True).start()
