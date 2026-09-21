@@ -10,7 +10,7 @@ INCIDENT_ID="$1"; SIGNATURE="$2"; SOURCE="$3"; DETAIL_FILE="$4"
 DAILY_CAP_FILE="/tmp/ares-autofix-daily-count-$(date +%F)"
 MAX_DAILY=20
 TIMEOUT_SECS=1800   # 30 min wall-clock
-MAX_TURNS=40
+MAX_BUDGET_USD=10   # hard per-diagnosis spend cap (the CLI dropped --max-turns)
 
 count=$(cat "$DAILY_CAP_FILE" 2>/dev/null || echo 0)
 if [ "$count" -ge "$MAX_DAILY" ]; then
@@ -19,9 +19,19 @@ if [ "$count" -ge "$MAX_DAILY" ]; then
 fi
 echo $((count + 1)) > "$DAILY_CAP_FILE"
 
+REPO=/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD
+# -c safe.directory pins the whitelist to the git invocation itself, so a
+# service launcher with no HOME (and a repo whose .git is owned by a UID with
+# no passwd entry, which recurs after cross-box rsync) cannot trip git's
+# dubious-ownership guard and kill this script under `set -e`.
+GITSAFE="-c safe.directory=$REPO"
 WORKTREE="/tmp/ares-autofix-worktree-$INCIDENT_ID"
 rm -rf "$WORKTREE"
-git -C /mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD worktree add --detach "$WORKTREE" HEAD
+# prune stale registrations + force: a prior run killed between `add` and the
+# cleanup `remove` below leaves the path registered-but-missing, which would
+# otherwise permanently block every re-diagnosis of this same incident.
+git $GITSAFE -C "$REPO" worktree prune
+git $GITSAFE -C "$REPO" worktree add -f --detach "$WORKTREE" HEAD
 
 PROMPT_FILE=$(mktemp)
 {
@@ -62,13 +72,19 @@ PROMPT_FILE=$(mktemp)
   echo '  reasoning: your diagnosis, in plain text, starting with a one-sentence summary'
 } > "$PROMPT_FILE"
 
-timeout "$TIMEOUT_SECS" claude -p "$(cat "$PROMPT_FILE")" \
-  --max-turns "$MAX_TURNS" \
-  --cwd "$WORKTREE" \
-  > "/tmp/ares-autofix-log-$INCIDENT_ID.log" 2>&1
+# claude uses the worktree as its cwd (the CLI dropped --cwd and --max-turns;
+# the wall-clock timeout and --max-budget-usd are the bounds now). set +e around
+# the call so a non-zero claude exit still falls through to finalize below,
+# which records a terminal diagnosis_timeout instead of letting `set -e` abort
+# the script before any status is written.
+set +e
+( cd "$WORKTREE" && timeout "$TIMEOUT_SECS" claude -p "$(cat "$PROMPT_FILE")" \
+    --max-budget-usd "$MAX_BUDGET_USD" \
+    > "/tmp/ares-autofix-log-$INCIDENT_ID.log" 2>&1 )
 RC=$?
+set -e
 
-git -C /mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD worktree remove --force "$WORKTREE" || true
+git $GITSAFE -C "$REPO" worktree remove --force "$WORKTREE" || true
 rm -f "$PROMPT_FILE"
 
 if [ "$RC" -eq 124 ]; then

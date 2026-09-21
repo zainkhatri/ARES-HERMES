@@ -45,6 +45,14 @@
             text-transform: uppercase; padding: 14px 24px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
         .btn-reject:hover { background: rgba(248, 81, 73, 0.1); }
         .btn-reject:disabled { opacity: 0.5; cursor: default; }
+        .btn-resolve { background: transparent; border: 1px solid var(--green); color: var(--green); font-family: inherit; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.1em; padding: 14px 24px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+        .btn-resolve:hover { background: rgba(63, 185, 80, 0.1); }
+        .btn-resolve:disabled { opacity: 0.5; cursor: default; }
+        .btn-redigest { background: transparent; border: 1px solid var(--ares-bright, #ff7a45); color: var(--ares-bright, #ff7a45); font-family: inherit; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.1em; padding: 14px 24px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+        .btn-redigest:hover { background: rgba(255, 122, 69, 0.1); }
+        .btn-redigest:disabled { opacity: 0.5; cursor: default; }
 
         .hero-title { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(44px, 5.5vw, 68px);
             line-height: 1.0; letter-spacing: -0.03em; color: var(--text-1); text-shadow: 0 0 40px rgba(var(--ares-rgb), 0.3); }
@@ -118,11 +126,12 @@
 ╚██████╔╝███████║
  ╚═════╝ ╚══════╝</pre>
             </div>
-            <div class="ml-auto flex items-center gap-4">
-                {% if show_approve_reject %}
-                <button class="btn-reject" onclick="autofixAct('reject','{{ incident_id }}',this)">Reject</button>
-                <button class="btn-merge" onclick="autofixAct('approve','{{ incident_id }}',this)">Merge</button>
-                {% endif %}
+            <div class="ml-auto flex items-center gap-3">
+                {% if can_dismiss %}<button class="btn-reject" onclick="autofixAct('reject','{{ incident_id }}',this)">Dismiss</button>{% endif %}
+                {% if can_redigest %}<button class="btn-redigest" onclick="autofixAct('redigest','{{ incident_id }}',this)">Re-diagnose</button>{% endif %}
+                {% if can_resolve %}<button class="btn-resolve" onclick="autofixAct('resolve','{{ incident_id }}',this)">Mark done</button>{% endif %}
+                {% if can_merge %}<button class="btn-reject" onclick="autofixAct('reject','{{ incident_id }}',this)">Reject</button>
+                <button class="btn-merge" onclick="autofixAct('approve','{{ incident_id }}',this)">Merge</button>{% endif %}
             </div>
         </header>
 
@@ -184,19 +193,30 @@
             </div>
             {% endif %}
 
-            <!-- Merge (footer, when actionable) -->
-            {% if show_approve_reject %}
+            <!-- Actions (footer) -->
+            {% if can_merge %}
             <div class="flex justify-center gap-4 mb-8">
                 <button class="btn-merge" style="font-size:17px; padding:18px 56px" onclick="autofixAct('approve','{{ incident_id }}',this)">Merge This Fix</button>
                 <button class="btn-reject" onclick="autofixAct('reject','{{ incident_id }}',this)">Reject</button>
             </div>
+            {% elif can_resolve or can_redigest or can_dismiss %}
+            <div class="flex flex-col items-center gap-3 mb-8">
+                <div class="flex justify-center gap-3 flex-wrap">
+                    {% if can_resolve %}<button class="btn-resolve" style="font-size:15px; padding:16px 40px" onclick="autofixAct('resolve','{{ incident_id }}',this)">Mark done</button>{% endif %}
+                    {% if can_redigest %}<button class="btn-redigest" style="font-size:15px; padding:16px 40px" onclick="autofixAct('redigest','{{ incident_id }}',this)">Re-diagnose</button>{% endif %}
+                    {% if can_dismiss %}<button class="btn-reject" onclick="autofixAct('reject','{{ incident_id }}',this)">Dismiss</button>{% endif %}
+                </div>
+                <p class="text-[#8d6259] text-[12px] leading-relaxed max-w-[520px] text-center">
+                    {% if can_resolve %}<b>Mark done</b> if you already applied this by hand. {% endif %}<b>Re-diagnose</b> re-runs the fixer so it can come back as a one-click Merge. <b>Dismiss</b> drops it.
+                </p>
+            </div>
             {% endif %}
         </main>
     </div>
-{% if show_approve_reject %}
+{% if has_actions %}
 <script>
 async function autofixAct(action, id, btn) {
-    document.querySelectorAll('.btn-merge, .btn-reject').forEach(function(b){ b.disabled = true; });
+    document.querySelectorAll('.btn-merge, .btn-reject, .btn-resolve, .btn-redigest').forEach(function(b){ b.disabled = true; });
     try {
         var r = await fetch('/api/autofix/' + action + '/' + id, { method: 'POST' });
         var d = await r.json();

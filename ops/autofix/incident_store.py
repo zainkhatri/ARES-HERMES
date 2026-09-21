@@ -11,6 +11,9 @@ VALID_STATUSES = {
     "new", "triaged_skip", "escalated", "diagnosed", "diagnosis_timeout",
     "council_approved", "council_held", "stale_diff_needs_human",
     "resolved", "rejected", "revert_failed_needs_human",
+    # a command-based fix whose shell commands failed at execution time
+    # (run_commands returns this; the commands path can now reach set_status)
+    "command_execution_failed",
     # audit-only: a finding with no applicable diff (e.g. a remote-host
     # config recommendation on EROS/ZEUS) -- council-reviewed but nothing to
     # Approve/apply, it's read-only guidance for a human to act on manually.

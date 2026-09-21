@@ -70,8 +70,14 @@ def git_commit_applied(live_file_path, incident):
     robot commits distinct from human ones. Never pushes. A commit failure does
     NOT fail the apply -- the fix is already live and healthy; we just log it."""
     assert live_file_path, "live_file_path required"
+    # -c safe.directory=* pins git's dubious-ownership whitelist to each
+    # invocation, so this keeps working when launched by a service with no HOME
+    # over a repo whose .git is owned by a UID with no passwd entry. Without it
+    # every call below fails silently and the revert trail is lost. '*' (not a
+    # fixed path) because the repo root is only known after the first rev-parse.
+    SAFE = ["-c", "safe.directory=*"]
     try:
-        top = subprocess.run(["git", "-C", os.path.dirname(live_file_path),
+        top = subprocess.run(["git", *SAFE, "-C", os.path.dirname(live_file_path),
                               "rev-parse", "--show-toplevel"],
                              capture_output=True, text=True, timeout=15)
         repo = top.stdout.strip()
@@ -84,15 +90,15 @@ def git_commit_applied(live_file_path, incident):
         # subject-only message (no body, no Co-Authored-By) carrying the audit trail
         subject = (f"[autofix] {diag.get('fix_title', 'applied fix')} "
                    f"(incident {incident.get('id', '?')}, council {yes}/{len(votes)}, hash {short})")
-        subprocess.run(["git", "-C", repo, "add", "--", live_file_path],
+        subprocess.run(["git", *SAFE, "-C", repo, "add", "--", live_file_path],
                        capture_output=True, timeout=15)
-        r = subprocess.run(["git", "-C", repo,
+        r = subprocess.run(["git", *SAFE, "-C", repo,
                             "-c", "user.name=ARES Autofix", "-c", "user.email=autofix@ares.local",
                             "commit", "--no-verify", "-m", subject, "--", live_file_path],
                            capture_output=True, text=True, timeout=20)
         if r.returncode != 0:
             return None
-        sha = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+        sha = subprocess.run(["git", *SAFE, "-C", repo, "rev-parse", "HEAD"],
                             capture_output=True, text=True, timeout=10).stdout.strip()
         return sha or None
     except (OSError, subprocess.TimeoutExpired):
@@ -308,6 +314,38 @@ if __name__ == "__main__":
             return jsonify({"error": "unauthorized"}), 401
         store.set_status(incident_id, "rejected")
         return jsonify({"status": "rejected"})
+
+    @app.route("/resolve/<incident_id>", methods=["POST"])
+    def resolve_route(incident_id):
+        """Human acted on a prose recommendation by hand -- mark it done so it
+        leaves 'Needs You'. No fix is applied here; nothing to execute."""
+        if not _authorized(request):
+            return jsonify({"error": "unauthorized"}), 401
+        store.set_status(incident_id, "resolved")
+        return jsonify({"status": "resolved"})
+
+    @app.route("/redigest/<incident_id>", methods=["POST"])
+    def redigest_route(incident_id):
+        """Re-run diagnosis on an incident (e.g. a prose recommendation that
+        should become a real diff/commands, or a stale/failed one). Resets to
+        'escalated' and fire-and-forget re-launches escalate.sh with the
+        incident's stored signature/source/detail -- the same path the watcher
+        uses. escalate.sh enforces its own daily cap/timeout."""
+        import subprocess
+        if not _authorized(request):
+            return jsonify({"error": "unauthorized"}), 401
+        data = store.load()
+        incident = next((i for i in data["incidents"] if i["id"] == incident_id), None)
+        if incident is None:
+            return jsonify({"error": "no such incident"}), 404
+        escalate_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "escalate.sh")
+        detail_file = f"/tmp/ares-autofix-detail-{incident_id}.txt"
+        with open(detail_file, "w") as f:
+            f.write(incident.get("detail", ""))
+        store.set_status(incident_id, "escalated")
+        subprocess.Popen(["bash", escalate_script, incident_id,
+                          incident.get("signature", ""), incident.get("source", ""), detail_file])
+        return jsonify({"status": "escalated"})
 
     # Bound to the host's LAN IP (not 0.0.0.0) so LXC 101 can reach it over the
     # existing host<->LXC bridge (same reachability path already used for
