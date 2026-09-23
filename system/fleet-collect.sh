@@ -8,7 +8,7 @@ set -u
 
 OUT="/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/ai_data/fleet.json"
 TMP="${OUT}.tmp"
-ERO_IP="10.0.1.69"
+ERO_IP="100.90.30.81"
 ZEUS_IP="100.100.29.36"
 ARES_BK_STATUS="/var/log/ares-backup-to-hermes.status"   # RETIRED (old push); kept for reference
 HORCRUX_STAMP="/mnt/nvme/PROMETHEUS/INFRA/status/zeus-backup-stamp"  # the real backup: ZEUS pulls ARES+EROS at 4am
