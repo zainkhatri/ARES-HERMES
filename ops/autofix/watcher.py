@@ -14,6 +14,17 @@ import triage
 PENDING_STATUSES = {"new", "escalated", "diagnosed", "council_approved"}
 ESCALATE_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "escalate.sh")
 
+# After this many prior triaged_skip incidents for the same signature, a fresh
+# skip verdict is overridden: the issue keeps recurring, so hand it to a human
+# instead of skipping it a fourth time into hidden limbo.
+SKIP_RATCHET_N = 3
+
+# Sources with a live local signal we re-poll every run. An incident from one
+# of these that is no longer failing can be auto-closed (fixed out-of-band).
+# recommendation_ready (remote EROS/ZEUS guidance) has no such signal.
+POLLABLE_SOURCES = {"systemd_failed", "dashboard_job", "alert_file"}
+AUTO_CLOSE_STATUSES = {"council_approved", "recurring_needs_human"}
+
 
 def _run_systemctl_failed():
     r = subprocess.run(
@@ -92,21 +103,67 @@ def _worth_escalating(unit_label, detail, triage_reason):
     return council.ask(prompt)
 
 
-def _triage_and_route(store, incident_id, signature, source, unit_label, detail):
+def _skip_or_ratchet(store, incident_id, skip_count):
+    """A skip verdict lands in triaged_skip -- UNLESS this signature has already
+    been skipped SKIP_RATCHET_N times, in which case it is promoted to
+    recurring_needs_human so a recurring real issue cannot rot in hidden limbo."""
+    assert skip_count >= 0, "skip_count cannot be negative"
+    assert incident_id, "incident_id required"
+    if skip_count >= SKIP_RATCHET_N:
+        store.write_diagnosis(incident_id, skipped_n_times=skip_count)
+        store.set_status(incident_id, "recurring_needs_human")
+    else:
+        store.set_status(incident_id, "triaged_skip")
+
+
+def _triage_and_route(store, incident_id, signature, source, unit_label, detail, skip_count=0):
     """The only place triage.py and escalate.sh get invoked from -- without
-    this, watcher.py would only ever create incidents stuck at status=new."""
+    this, watcher.py would only ever create incidents stuck at status=new.
+    skip_count feeds the repeat-skip ratchet (see _skip_or_ratchet)."""
     result = triage.triage(unit_label, detail[:4000])
     store.write_diagnosis(incident_id, triage_reason=result["reason"])
     if result["escalate"]:
         worth_it, verdict = _worth_escalating(unit_label, detail, result["reason"])
         store.write_diagnosis(incident_id, pre_escalation_council_verdict=verdict)
         if not worth_it:
-            store.set_status(incident_id, "triaged_skip")
+            _skip_or_ratchet(store, incident_id, skip_count)
             return
         store.set_status(incident_id, "escalated")
         _launch_escalation(incident_id, signature, source, detail)
     else:
-        store.set_status(incident_id, "triaged_skip")
+        _skip_or_ratchet(store, incident_id, skip_count)
+
+
+def _route_incident(store, signature, source, unit_label, detail, title):
+    """Create + route one incident, applying the recurrence ratchet. A signature
+    whose most-recent prior incident was `resolved` and is failing again is a
+    regression ("the fix did not hold"): it goes straight to recurring_needs_human
+    with no fresh diagnosis, because the identical fix already failed. Returns the
+    new incident id."""
+    ctx = store.recurrence_context(signature)
+    prior = store.find_by_signature(signature)  # most-recent prior, before we add ours
+    iid = store.new_incident(signature, source, detail, title=title)
+    if ctx["last_status"] == "resolved":
+        store.write_diagnosis(iid, regressed_from=prior["id"] if prior else None)
+        store.set_status(iid, "recurring_needs_human")
+    else:
+        _triage_and_route(store, iid, signature, source, unit_label, detail,
+                          skip_count=ctx["skip_count"])
+    return iid
+
+
+def _auto_close_healthy(store, current_signatures):
+    """Fixed out-of-band: any pollable incident awaiting a human whose signature
+    is no longer in the current failing set is closed as resolved. Never touches
+    recommendation_ready (remote guidance has no local signal to re-check)."""
+    assert isinstance(current_signatures, set), "current_signatures must be a set"
+    data = store.load()
+    for inc in data["incidents"][:incident_store.MAX_INCIDENT_SCAN]:
+        if (inc["source"] in POLLABLE_SOURCES
+                and inc["status"] in AUTO_CLOSE_STATUSES
+                and inc["signature"] not in current_signatures):
+            store.write_diagnosis(inc["id"], cleared_out_of_band=True)
+            store.set_status(inc["id"], "resolved")
 
 
 _ERROR_LINE_RE = None  # set below, avoids importing re at module top for one use
@@ -152,6 +209,7 @@ def run_once(store, kill_switch_path, host_crons_path="/mnt/nvme/PROMETHEUS/PROJ
         return 0
 
     created = 0
+    current_signatures = set()  # every signature failing this run, for auto-close
     for unit_info in collect_failed_units():
         unit = unit_info.get("unit", "")
         if not unit:
@@ -159,37 +217,38 @@ def run_once(store, kill_switch_path, host_crons_path="/mnt/nvme/PROMETHEUS/PROJ
         excerpt = _unit_log_excerpt(unit)
         first_line = next((l for l in excerpt.splitlines() if l.strip()), "")
         signature = dedup.normalize_signature(unit, first_line)
+        current_signatures.add(signature)
         existing = store.find_by_signature(signature)
         if existing and existing["status"] in PENDING_STATUSES:
             continue
         detail = excerpt[-4000:]
-        iid = store.new_incident(signature, "systemd_failed", detail, title=_incident_title(unit, excerpt))
-        _triage_and_route(store, iid, signature, "systemd_failed", unit, detail)
+        _route_incident(store, signature, "systemd_failed", unit, detail, _incident_title(unit, excerpt))
         created += 1
 
     for job in collect_stale_jobs(host_crons_path):
         unit_label = job.get("unit", job.get("name", "unknown"))
         signature = dedup.normalize_signature(unit_label, "job not ok")
+        current_signatures.add(signature)
         existing = store.find_by_signature(signature)
         if existing and existing["status"] in PENDING_STATUSES:
             continue
         detail = json.dumps(job)
         title = f"{unit_label} — scheduled job not ok"
-        iid = store.new_incident(signature, "dashboard_job", detail, title=title)
-        _triage_and_route(store, iid, signature, "dashboard_job", unit_label, detail)
+        _route_incident(store, signature, "dashboard_job", unit_label, detail, title)
         created += 1
 
     for alert in collect_alert_files(alert_paths):
         signature = dedup.normalize_signature(alert["path"], alert["content"][:200])
+        current_signatures.add(signature)
         existing = store.find_by_signature(signature)
         if existing and existing["status"] in PENDING_STATUSES:
             continue
         detail = alert["content"][:4000]
         title = f"{os.path.basename(alert['path'])} — alert"
-        iid = store.new_incident(signature, "alert_file", detail, title=title)
-        _triage_and_route(store, iid, signature, "alert_file", alert["path"], detail)
+        _route_incident(store, signature, "alert_file", alert["path"], detail, title)
         created += 1
 
+    _auto_close_healthy(store, current_signatures)
     return created
 
 
