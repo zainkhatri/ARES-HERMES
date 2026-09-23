@@ -18,7 +18,14 @@ VALID_STATUSES = {
     # config recommendation on EROS/ZEUS) -- council-reviewed but nothing to
     # Approve/apply, it's read-only guidance for a human to act on manually.
     "recommendation_ready",
+    # ratchet outcome: a real issue skipped too many times, OR a resolved fix
+    # whose failure came back ("did not hold"). Never auto-fixed again; always
+    # shown in the dashboard "Needs You" bucket for a human to act on.
+    "recurring_needs_human",
 }
+
+# Power-of-Ten rule 2: bound the scan so a corrupt/huge store cannot spin.
+MAX_INCIDENT_SCAN = 100000
 
 
 class CorruptStoreError(Exception):
@@ -99,3 +106,16 @@ class IncidentStore:
         data = self.load()
         matches = [i for i in data["incidents"] if i["signature"] == signature]
         return matches[-1] if matches else None
+
+    def recurrence_context(self, signature):
+        """Read-only recurrence summary for a signature, used by the watcher
+        ratchet. skip_count = prior incidents left in triaged_skip;
+        last_status = status of the most-recent prior incident (None if new)."""
+        assert isinstance(signature, str) and signature, "signature must be a non-empty str"
+        data = self.load()
+        matches = [i for i in data["incidents"][:MAX_INCIDENT_SCAN]
+                   if i["signature"] == signature]
+        skip_count = sum(1 for i in matches if i["status"] == "triaged_skip")
+        last_status = matches[-1]["status"] if matches else None
+        assert skip_count >= 0, "skip_count cannot be negative"
+        return {"skip_count": skip_count, "last_status": last_status}

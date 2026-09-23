@@ -220,13 +220,13 @@
                 {% set diag = inc.diagnosis or {} %}
                 {% set votes = diag.council_votes or [] %}
                 {% set yes = votes | selectattr('approve') | list | length %}
-                {% set dot = 'resolved' if st == 'resolved' else ('held' if st in ['council_held','stale_diff_needs_human','revert_failed_needs_human','diagnosis_timeout','rejected','command_execution_failed'] else 'pending') %}
+                {% set dot = 'resolved' if st == 'resolved' else ('held' if st in ['council_held','stale_diff_needs_human','revert_failed_needs_human','diagnosis_timeout','rejected','command_execution_failed','recurring_needs_human'] else 'pending') %}
                 <a href="/logs/incident/{{ inc.id }}" class="mod c-tl c-tr c-bl c-br p-6 flex items-center gap-6 {{ 'opacity-80 hover:opacity-100 transition-opacity' if st == 'resolved' else ('opacity-70 hover:opacity-100' if dot == 'held') }}">
                     <div class="dot {{ dot }}"></div>
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-3 mb-1 flex-wrap">
                             <span class="text-[10px] font-bold text-[#8d6259] tracking-widest uppercase">BOX: {{ diag.box or 'ARES' }} / {{ inc.title or inc.signature }}</span>
-                            {% if st == 'council_approved' %}<span class="merge-chip">Merge Ready</span>{% elif st == 'resolved' %}<span class="merge-chip" style="background: var(--text-3)">Merged</span>{% endif %}
+                            {% if st == 'council_approved' %}<span class="merge-chip">Merge Ready</span>{% elif st == 'resolved' %}<span class="merge-chip" style="background: var(--text-3)">Merged</span>{% elif st == 'recurring_needs_human' %}<span class="merge-chip" style="background: var(--ares-bright)">{{ 'Fix Did Not Hold' if diag.regressed_from else 'Recurring ×%d' % (diag.skipped_n_times or 0) }}</span>{% endif %}
                         </div>
                         <h2 class="row-title">{{ diag.fix_title or inc.title or inc.id }}</h2>
                         {% set summary = (diag.council_summary or {}).get('simple_explanation') or diag.triage_reason %}
