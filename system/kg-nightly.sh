@@ -19,11 +19,11 @@ env KG_DB="$CENTRAL" KG_MAX_DEPTH=4 OLLAMA_HOST=http://127.0.0.1:11434 PYTHONPAT
   python3 -m atlas.cli reindex /mnt/nvme/PROMETHEUS --box ARES \
   && echo "kg-nightly: ARES reindex ok" || echo "kg-nightly: ARES reindex FAILED"
 
-# 1b) index Claude Code chats (ARES) + the ChatGPT archive — STRUCTURE only (searchable now);
-#     summaries fill in progressively via 1d. Budget 0 = no Ollama in the index step.
-env KG_DB="$CENTRAL" PYTHONPATH="$MNEMO" \
-  python3 -m atlas.cli index-chats --box ARES --summary-budget 0 \
-  && echo "kg-nightly: ARES chats indexed" || echo "kg-nightly: ARES chat index FAILED"
+# 1b) Claude Code sessions from EVERY box: archive + whole-transcript index + redacted
+#     OpenRouter summaries. Same script as the hourly kg-sessions.timer (flock-guarded;
+#     its own log is /var/log/kg-sessions.log). Then the ChatGPT archive, structure only.
+/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/system/kg-sync-sessions.sh \
+  && echo "kg-nightly: sessions synced" || echo "kg-nightly: session sync FAILED"
 env KG_DB="$CENTRAL" PYTHONPATH="$MNEMO" \
   python3 -m atlas.cli index-gpt --box ARES --summary-budget 0 \
   && echo "kg-nightly: GPT archive indexed" || echo "kg-nightly: GPT index FAILED"
@@ -39,19 +39,21 @@ env KG_DB="$CENTRAL" PYTHONPATH="$MNEMO" \
   python3 -m atlas.cli index-env --box ARES \
   && echo "kg-nightly: env (skills+mcps) indexed" || true
 
-# 1d) progressive Ollama summaries for still-raw chat/gpt nodes (GPT + ZEUS backfill), budgeted
-#     so a ~9k-conversation backfill spreads across nights instead of blocking. gpu-loan guarded.
-env KG_DB="$CENTRAL" OLLAMA_HOST=http://127.0.0.1:11434 PYTHONPATH="$MNEMO" \
-  python3 -m atlas.cli summarize-pending --budget 900 \
-  && echo "kg-nightly: summaries batch ok" || echo "kg-nightly: summaries FAILED"
-
 # 2) EROS over the tailnet (best-effort; the script self-skips if EROS is unreachable)
 /mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/system/kg-sync-eros.sh \
   && echo "kg-nightly: EROS sync ok" || echo "kg-nightly: EROS sync skipped/failed"
 
-# 3) dashboard picks up the fresh graph
+# 3) dashboard picks up the fresh graph — done BEFORE the slow summary backfill below so a
+#    graph refresh + restart always lands inside the timeout even if summaries run long.
 pct exec 101 -- systemctl restart ares 2>/dev/null && echo "kg-nightly: ares restarted" || true
 
-# 4) report final size
+# 4) report size so far
 sqlite3 "$CENTRAL" "SELECT 'kg-nightly: '||box||'='||count(*) FROM nodes GROUP BY box;"
+
+# 1d) summaries for still-raw GPT / claude.ai nodes and orphaned Claude Code chats (source file
+#     gone). Redacted OpenRouter when a key exists (~1s/call), else Ollama (gpu-loan guarded).
+env KG_DB="$CENTRAL" OLLAMA_HOST=http://127.0.0.1:11434 PYTHONPATH="$MNEMO" \
+  python3 -m atlas.cli summarize-pending --budget 1500 \
+  && echo "kg-nightly: summaries batch ok" || echo "kg-nightly: summaries FAILED"
+
 echo "=== kg-nightly done $(date -Is) ==="
