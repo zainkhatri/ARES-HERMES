@@ -101,4 +101,8 @@ done
 env KG_DB="$DB" PYTHONPATH="$ATLAS" python3 -m atlas.cli link-workdirs \
   | sed "s/^/kg-sync-sessions: workdirs /" || echo "kg-sync-sessions: workdirs FAILED"
 
+# readable names for sessions whose first prompt was a bare /command (e.g. /resume)
+env KG_DB="$DB" PYTHONPATH="$ATLAS" python3 -m atlas.cli fix-names \
+  | sed "s/^/kg-sync-sessions: names /" || echo "kg-sync-sessions: fix-names FAILED"
+
 echo "=== kg-sync-sessions done $(date -Is) ==="
