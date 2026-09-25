@@ -97,4 +97,8 @@ for dir in "$ARCH"/*/; do
     | sed "s/^/kg-sync-sessions: $src history /" || echo "kg-sync-sessions: $src history FAILED"
 done
 
+# attach every chat to a folder (creates light workdir nodes for ZEUS/Mac paths; maps Mac mounts)
+env KG_DB="$DB" PYTHONPATH="$ATLAS" python3 -m atlas.cli link-workdirs \
+  | sed "s/^/kg-sync-sessions: workdirs /" || echo "kg-sync-sessions: workdirs FAILED"
+
 echo "=== kg-sync-sessions done $(date -Is) ==="
