@@ -31,6 +31,16 @@ keep_py() {
   printf '%s' "import json,os;p=os.path.expanduser('$1');os.makedirs(os.path.dirname(p),exist_ok=True);d=json.load(open(p)) if os.path.exists(p) else {};d.get('cleanupPeriodDays')==$KEEP or (d.update(cleanupPeriodDays=$KEEP) or json.dump(d,open(p,'w'),indent=2)) ;print('keep ok',p)"
 }
 
+# history.jsonl (prompt log; outlives deleted transcripts) — union-merge, never shrink
+merge_hist() {
+  local dir="$1" in="$1/.history.incoming"
+  [ -s "$in" ] || { rm -f "$in"; return 0; }
+  touch "$dir/history.jsonl"
+  awk '!seen[$0]++' "$dir/history.jsonl" "$in" > "$dir/.history.tmp" \
+    && mv "$dir/.history.tmp" "$dir/history.jsonl"
+  rm -f "$in"
+}
+
 # pull SRC SSH_CMD DEST REMOTE_PROJECTS REMOTE_SETTINGS
 pull() {
   local src="$1" ssh="$2" dest="$3" rproj="$4" rset="$5"
@@ -40,12 +50,15 @@ pull() {
   mkdir -p "$ARCH/$src"
   timeout 1800 rsync -a -e "$ssh" "$dest:$rproj/" "$ARCH/$src/" \
     && echo "kg-sync-sessions: $src archived" || echo "kg-sync-sessions: $src rsync FAILED"
+  timeout 300 rsync -a -e "$ssh" "$dest:${rproj%/projects}/history.jsonl" "$ARCH/$src/.history.incoming" 2>/dev/null
+  merge_hist "$ARCH/$src"
   timeout 30 $ssh "$dest" "python3 -c \"$(keep_py "$rset")\"" || echo "kg-sync-sessions: $src keep-setting FAILED"
 }
 
 # --- 1+2) archive -------------------------------------------------------------
 mkdir -p "$ARCH/ARES"
 rsync -a /root/.claude/projects/ "$ARCH/ARES/" && echo "kg-sync-sessions: ARES archived"
+cp /root/.claude/history.jsonl "$ARCH/ARES/.history.incoming" 2>/dev/null; merge_hist "$ARCH/ARES"
 python3 -c "$(keep_py /root/.claude/settings.json)"
 
 LXC_PID=$(lxc-info -n 101 -p -H 2>/dev/null)
@@ -53,6 +66,8 @@ if [ -n "$LXC_PID" ] && [ -d "/proc/$LXC_PID/root/root/.claude/projects" ]; then
   mkdir -p "$ARCH/ARES-LXC101"
   rsync -a "/proc/$LXC_PID/root/root/.claude/projects/" "$ARCH/ARES-LXC101/" \
     && echo "kg-sync-sessions: ARES-LXC101 archived"
+  cp "/proc/$LXC_PID/root/root/.claude/history.jsonl" "$ARCH/ARES-LXC101/.history.incoming" 2>/dev/null
+  merge_hist "$ARCH/ARES-LXC101"
   pct exec 101 -- python3 -c "$(keep_py /root/.claude/settings.json)"
 fi
 
@@ -71,6 +86,15 @@ for dir in "$ARCH"/*/; do
   env KG_DB="$DB" OLLAMA_HOST=http://127.0.0.1:11434 PYTHONPATH="$ATLAS" \
     python3 -m atlas.cli index-chats --box "$box" --root "$dir" --summary-budget "$BUDGET" \
     | sed "s/^/kg-sync-sessions: $src /" || echo "kg-sync-sessions: $src index FAILED"
+done
+# sessions that only survive in a prompt log (transcript deleted before the archive existed).
+# Runs AFTER index-chats so any session with a real transcript already has its node.
+for dir in "$ARCH"/*/; do
+  src=$(basename "$dir"); box=${src%%-*}
+  [ -s "$dir/history.jsonl" ] || continue
+  env KG_DB="$DB" OLLAMA_HOST=http://127.0.0.1:11434 PYTHONPATH="$ATLAS" \
+    python3 -m atlas.cli index-history --box "$box" --file "$dir/history.jsonl" --summary-budget "$BUDGET" \
+    | sed "s/^/kg-sync-sessions: $src history /" || echo "kg-sync-sessions: $src history FAILED"
 done
 
 echo "=== kg-sync-sessions done $(date -Is) ==="
