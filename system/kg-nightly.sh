@@ -56,4 +56,9 @@ env KG_DB="$CENTRAL" OLLAMA_HOST=http://127.0.0.1:11434 PYTHONPATH="$MNEMO" \
   python3 -m atlas.cli summarize-pending --budget 1500 \
   && echo "kg-nightly: summaries batch ok" || echo "kg-nightly: summaries FAILED"
 
+# 1e) search vectors for summarized chats that missed one (Ollama down / GPU on loan when summarized)
+env KG_DB="$CENTRAL" OLLAMA_HOST=http://127.0.0.1:11434 PYTHONPATH="$MNEMO" \
+  python3 -m atlas.cli embed-pending --budget 5000 \
+  && echo "kg-nightly: embeddings backfilled" || echo "kg-nightly: embed-pending FAILED"
+
 echo "=== kg-nightly done $(date -Is) ==="
