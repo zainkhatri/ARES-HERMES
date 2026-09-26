@@ -3101,6 +3101,8 @@ def api_kg_children():
 def system_info():
     info = get_system_info()
     info["api_usage"] = get_usage_stats()
+    if request.args.get("lite") == "1":
+        info = {k: v for k, v in info.items() if k != "autofix_incidents"}
     return jsonify(info)
 
 
