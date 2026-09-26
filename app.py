@@ -5928,6 +5928,84 @@ def vault_delete():
     return jsonify({"deleted": deleted})
 
 
+# On-demand regeneration of missing high-res tiers from orig.enc (items uploaded before
+# the preview/max tiers existed). tier -> (file name, long edge px, JPEG quality).
+_VAULT_REGEN_TIERS = {
+    "thumb_preview": ("preview.enc", 2048, 88),
+    "thumb_max":     ("max.enc",     2560, 90),
+}
+_VAULT_REGEN_LOCKS = {}
+_VAULT_REGEN_LOCKS_GUARD = threading.Lock()
+_VAULT_REGEN_LOCKS_MAX = 256
+_VAULT_REGEN_NOT_IMAGE = set()  # keys whose orig is not an image (videos); bounded below
+
+
+def _vault_regen_lock(thumb_key):
+    """Return a per-item lock. The lock table is bounded; it is cleared when full."""
+    assert thumb_key, "thumb_key required"
+    with _VAULT_REGEN_LOCKS_GUARD:
+        lk = _VAULT_REGEN_LOCKS.get(thumb_key)
+        if lk is None:
+            if len(_VAULT_REGEN_LOCKS) >= _VAULT_REGEN_LOCKS_MAX:
+                _VAULT_REGEN_LOCKS.clear()
+            lk = _VAULT_REGEN_LOCKS[thumb_key] = threading.Lock()
+        return lk
+
+
+def _regen_vault_tier(thumb_key, tier, enc_key):
+    """Build a missing preview/max tier from orig.enc, write it encrypted, return JPEG bytes.
+    Returns None (caller keeps the old fallback chain) for videos, bad keys, or any error."""
+    spec = _VAULT_REGEN_TIERS.get(tier)
+    if spec is None or not thumb_key or enc_key is None:
+        return None
+    name, edge, quality = spec
+    item_dir = os.path.join(_VAULT_ENC_DIR, thumb_key)
+    dst = os.path.join(item_dir, name)
+    src = os.path.join(item_dir, "orig.enc")
+    with _vault_regen_lock(thumb_key):
+        tmp = dst + ".%d.tmp" % threading.get_ident()
+        try:
+            if os.path.exists(dst):  # another request generated it while we waited
+                with open(dst, "rb") as fh:
+                    return _vault_decrypt(enc_key, fh.read())
+            if not os.path.exists(src) or thumb_key in _VAULT_REGEN_NOT_IMAGE:
+                return None
+            import io as _io_rg
+            from PIL import Image as _Img_rg, ImageOps as _IOps_rg
+            try:
+                import pillow_heif
+                pillow_heif.register_heif_opener()
+            except Exception:
+                pass
+            with open(src, "rb") as fh:
+                orig = _vault_decrypt(enc_key, fh.read())
+            try:
+                im0 = _Img_rg.open(_io_rg.BytesIO(orig))
+            except _Img_rg.UnidentifiedImageError:
+                if len(_VAULT_REGEN_NOT_IMAGE) >= 4096:
+                    _VAULT_REGEN_NOT_IMAGE.clear()
+                _VAULT_REGEN_NOT_IMAGE.add(thumb_key)
+                return None
+            with im0 as im:
+                im = _IOps_rg.exif_transpose(im)
+                im.thumbnail((edge, edge), _Img_rg.LANCZOS)  # never upscales
+                im = im.convert("RGB")
+                buf = _io_rg.BytesIO()
+                im.save(buf, "JPEG", quality=quality, optimize=True)
+            out = buf.getvalue()
+            with open(tmp, "wb") as fh:
+                fh.write(_vault_encrypt(enc_key, out))
+            os.replace(tmp, dst)
+            return out
+        except Exception as e:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            print(f"[vault] tier regen skipped for {tier}: {type(e).__name__}", flush=True)
+            return None
+
+
 def _serve_vault_thumb(tier, thumb_key):
     """Generic vault thumb server — requires vault session or ?vt= token."""
     vt_param = request.args.get("vt", "")
@@ -5963,6 +6041,12 @@ def _serve_vault_thumb(tier, thumb_key):
             "thumb_preview": ["preview.enc",  "hq.enc",     "thumb.enc"],
             "thumb_max":     ["max.enc",      "preview.enc", "hq.enc", "thumb.enc"],
         }.get(tier, ["thumb.enc"])
+        regen = _VAULT_REGEN_TIERS.get(tier)
+        if regen and not os.path.exists(os.path.join(_VAULT_ENC_DIR, thumb_key, regen[0])):
+            fresh = _regen_vault_tier(thumb_key, tier, enc_key)
+            if fresh is not None:
+                import io as _io_rg2
+                return send_file(_io_rg2.BytesIO(fresh), mimetype="image/jpeg", max_age=0)
         encfile = None
         for candidate in candidates:
             p = os.path.join(_VAULT_ENC_DIR, thumb_key, candidate)
