@@ -5934,27 +5934,69 @@ _VAULT_REGEN_TIERS = {
     "thumb_preview": ("preview.enc", 2048, 88),
     "thumb_max":     ("max.enc",     2560, 90),
 }
-_VAULT_REGEN_LOCKS = {}
+_VAULT_REGEN_LOCKS = OrderedDict()
 _VAULT_REGEN_LOCKS_GUARD = threading.Lock()
-_VAULT_REGEN_LOCKS_MAX = 256
+_VAULT_REGEN_LOCKS_MAX = 256    # soft size: idle locks are evicted oldest-first above this
+_VAULT_REGEN_LOCKS_HARD = 512   # hard cap: if every lock is held, growth stops here
 _VAULT_REGEN_NOT_IMAGE = set()  # keys whose orig is not an image (videos); bounded below
+_VAULT_REGEN_SEM = threading.BoundedSemaphore(2)  # max concurrent decode+resize jobs
+_VAULT_REGEN_SEM_TIMEOUT = 20
 
 
 def _vault_regen_lock(thumb_key):
-    """Return a per-item lock. The lock table is bounded; it is cleared when full."""
+    """Return the per-item lock, or None if the table is full of held locks.
+    Eviction removes only idle locks, oldest first, so a held lock is never replaced."""
     assert thumb_key, "thumb_key required"
     with _VAULT_REGEN_LOCKS_GUARD:
         lk = _VAULT_REGEN_LOCKS.get(thumb_key)
-        if lk is None:
-            if len(_VAULT_REGEN_LOCKS) >= _VAULT_REGEN_LOCKS_MAX:
-                _VAULT_REGEN_LOCKS.clear()
-            lk = _VAULT_REGEN_LOCKS[thumb_key] = threading.Lock()
+        if lk is not None:
+            _VAULT_REGEN_LOCKS.move_to_end(thumb_key)
+            return lk
+        excess = len(_VAULT_REGEN_LOCKS) - _VAULT_REGEN_LOCKS_MAX + 1
+        if excess > 0:
+            idle = [k for k, v in _VAULT_REGEN_LOCKS.items() if not v.locked()][:excess]
+            for k in idle:
+                del _VAULT_REGEN_LOCKS[k]
+        if len(_VAULT_REGEN_LOCKS) >= _VAULT_REGEN_LOCKS_HARD:
+            return None
+        lk = _VAULT_REGEN_LOCKS[thumb_key] = threading.Lock()
+        assert len(_VAULT_REGEN_LOCKS) <= _VAULT_REGEN_LOCKS_HARD
         return lk
+
+
+def _vault_regen_build(src, edge, quality, enc_key, thumb_key):
+    """Decrypt orig.enc and return a resized JPEG, or None if the orig is not an image."""
+    assert edge > 0 and 0 < quality <= 100, "bad tier spec"
+    import io as _io_rg
+    from PIL import Image as _Img_rg, ImageOps as _IOps_rg
+    try:
+        import pillow_heif
+        pillow_heif.register_heif_opener()
+    except Exception:
+        pass
+    with open(src, "rb") as fh:
+        orig = _vault_decrypt(enc_key, fh.read())
+    try:
+        im0 = _Img_rg.open(_io_rg.BytesIO(orig))
+    except _Img_rg.UnidentifiedImageError:
+        if len(_VAULT_REGEN_NOT_IMAGE) >= 4096:
+            _VAULT_REGEN_NOT_IMAGE.clear()
+        _VAULT_REGEN_NOT_IMAGE.add(thumb_key)
+        return None
+    with im0 as im:
+        if im.format == "JPEG":
+            im.draft("RGB", (edge, edge))  # DCT downscale on decode; stays >= edge
+        im = _IOps_rg.exif_transpose(im)
+        im.thumbnail((edge, edge), _Img_rg.LANCZOS)  # never upscales
+        im = im.convert("RGB")
+        buf = _io_rg.BytesIO()
+        im.save(buf, "JPEG", quality=quality)
+    return buf.getvalue()
 
 
 def _regen_vault_tier(thumb_key, tier, enc_key):
     """Build a missing preview/max tier from orig.enc, write it encrypted, return JPEG bytes.
-    Returns None (caller keeps the old fallback chain) for videos, bad keys, or any error."""
+    Returns None (caller keeps the old fallback chain) for videos, bad keys, busy, or any error."""
     spec = _VAULT_REGEN_TIERS.get(tier)
     if spec is None or not thumb_key or enc_key is None:
         return None
@@ -5962,7 +6004,10 @@ def _regen_vault_tier(thumb_key, tier, enc_key):
     item_dir = os.path.join(_VAULT_ENC_DIR, thumb_key)
     dst = os.path.join(item_dir, name)
     src = os.path.join(item_dir, "orig.enc")
-    with _vault_regen_lock(thumb_key):
+    item_lock = _vault_regen_lock(thumb_key)
+    if item_lock is None:
+        return None
+    with item_lock:
         tmp = dst + ".%d.tmp" % threading.get_ident()
         try:
             if os.path.exists(dst):  # another request generated it while we waited
@@ -5970,29 +6015,15 @@ def _regen_vault_tier(thumb_key, tier, enc_key):
                     return _vault_decrypt(enc_key, fh.read())
             if not os.path.exists(src) or thumb_key in _VAULT_REGEN_NOT_IMAGE:
                 return None
-            import io as _io_rg
-            from PIL import Image as _Img_rg, ImageOps as _IOps_rg
-            try:
-                import pillow_heif
-                pillow_heif.register_heif_opener()
-            except Exception:
-                pass
-            with open(src, "rb") as fh:
-                orig = _vault_decrypt(enc_key, fh.read())
-            try:
-                im0 = _Img_rg.open(_io_rg.BytesIO(orig))
-            except _Img_rg.UnidentifiedImageError:
-                if len(_VAULT_REGEN_NOT_IMAGE) >= 4096:
-                    _VAULT_REGEN_NOT_IMAGE.clear()
-                _VAULT_REGEN_NOT_IMAGE.add(thumb_key)
+            sem = _VAULT_REGEN_SEM
+            if not sem.acquire(timeout=_VAULT_REGEN_SEM_TIMEOUT):
                 return None
-            with im0 as im:
-                im = _IOps_rg.exif_transpose(im)
-                im.thumbnail((edge, edge), _Img_rg.LANCZOS)  # never upscales
-                im = im.convert("RGB")
-                buf = _io_rg.BytesIO()
-                im.save(buf, "JPEG", quality=quality, optimize=True)
-            out = buf.getvalue()
+            try:
+                out = _vault_regen_build(src, edge, quality, enc_key, thumb_key)
+            finally:
+                sem.release()
+            if out is None:
+                return None
             with open(tmp, "wb") as fh:
                 fh.write(_vault_encrypt(enc_key, out))
             os.replace(tmp, dst)

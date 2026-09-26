@@ -70,3 +70,46 @@ def test_unknown_tier_returns_none(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "_VAULT_ENC_DIR", str(tmp_path))
     _make_item(str(tmp_path), "k6", _jpeg(4000, 3000))
     assert app._regen_vault_tier("k6", "thumb_hq", KEY) is None
+
+
+def test_eviction_never_drops_held_lock(monkeypatch):
+    monkeypatch.setattr(app, "_VAULT_REGEN_LOCKS", app.OrderedDict())
+    held = app._vault_regen_lock("held-key")
+    assert held.acquire(blocking=False)
+    try:
+        for i in range(600):
+            assert app._vault_regen_lock("flood-%d" % i) is not None
+        assert app._vault_regen_lock("held-key") is held
+        assert len(app._VAULT_REGEN_LOCKS) <= app._VAULT_REGEN_LOCKS_HARD
+    finally:
+        held.release()
+
+
+def test_all_locks_held_hits_hard_cap(monkeypatch):
+    monkeypatch.setattr(app, "_VAULT_REGEN_LOCKS", app.OrderedDict())
+    locks = []
+    for i in range(app._VAULT_REGEN_LOCKS_HARD):
+        lk = app._vault_regen_lock("h-%d" % i)
+        lk.acquire()
+        locks.append(lk)
+    try:
+        assert app._vault_regen_lock("one-more") is None
+    finally:
+        for lk in locks:
+            lk.release()
+
+
+class _BusySem:
+    def acquire(self, timeout=None):
+        return False
+
+    def release(self):
+        raise AssertionError("release without acquire")
+
+
+def test_semaphore_timeout_returns_none(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "_VAULT_ENC_DIR", str(tmp_path))
+    monkeypatch.setattr(app, "_VAULT_REGEN_SEM", _BusySem())
+    d = _make_item(str(tmp_path), "k7", _jpeg(4000, 3000))
+    assert app._regen_vault_tier("k7", "thumb_max", KEY) is None
+    assert not os.path.exists(os.path.join(d, "max.enc"))
