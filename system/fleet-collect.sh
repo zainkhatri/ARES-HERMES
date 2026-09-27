@@ -114,15 +114,18 @@ zeus_disks='[]'; disks_epoch=0
 if [ "$zeus_reach" = true ]; then
   dp=$(timeout 14 ssh -o BatchMode=yes -o ConnectTimeout=6 -o StrictHostKeyChecking=accept-new root@"$ZEUS_IP" '
     for d in $(lsblk -dno NAME,TYPE 2>/dev/null | awk "\$2==\"disk\"{print \$1}" | grep -E "^sd" | head -3); do
-      h=$(smartctl -H -d sat /dev/$d 2>/dev/null | grep -ioE "PASSED|FAILED|OK" | head -1)
-      A=$(smartctl -A -d sat /dev/$d 2>/dev/null)
-      tp=$(echo "$A" | awk "/Temperature_Celsius|Airflow_Temperature_Cel/{print \$10; exit}")
+      # Auto-detect first: the T7/T9 are NVMe behind a USB bridge that rejects -d sat (its error
+      # text contains "failed", which used to be read as the health result). Fall back to -d sat.
+      A=$(smartctl -a /dev/$d 2>/dev/null)
+      echo "$A" | grep -qiE "self-assessment test result|SMART Health Status" || { A=$(smartctl -a -d sat /dev/$d 2>/dev/null); }
+      h=$(echo "$A" | grep -iE "self-assessment test result|SMART Health Status" | grep -oiE "PASSED|FAILED|OK" | head -1)
+      tp=$(echo "$A" | awk "/Temperature_Celsius|Airflow_Temperature_Cel/{print \$10; exit} /^Temperature:/{print \$2; exit}")
       # SSD lifespan remaining %: prefer NVMe Percentage Used, else Wear_Leveling/Media_Wearout normalized VALUE (100=new)
-      pu=$(smartctl -A -d sat /dev/$d 2>/dev/null | grep -iE "Percentage Used" | grep -oE "[0-9]+" | head -1)
+      pu=$(echo "$A" | grep -iE "Percentage Used" | grep -oE "[0-9]+" | head -1)
       wl=$(echo "$A" | awk "/Wear_Leveling_Count/{print \$4; exit}")
       mw=$(echo "$A" | awk "/Media_Wearout_Indicator/{print \$4; exit}")
       life=""; if [ -n "$pu" ]; then life=$((100-10#$pu)); elif [ -n "$wl" ]; then life=$((10#$wl)); elif [ -n "$mw" ]; then life=$((10#$mw)); fi
-      full=$(smartctl -i -d sat /dev/$d 2>/dev/null | awk -F: "/Device Model|Model Number/{gsub(/^ +/,\"\",\$2);print \$2;exit}")
+      full=$(echo "$A" | awk -F: "/Device Model|Model Number/{gsub(/^ +/,\"\",\$2);print \$2;exit}")
       short=$(echo "$full" | grep -oiE "T[0-9]+" | head -1); [ -z "$short" ] && short=$(lsblk -dno MODEL /dev/$d 2>/dev/null | awk "{print \$1}")
       mp=$(lsblk -rno MOUNTPOINT /dev/$d 2>/dev/null | grep -E "/mnt|/srv" | head -1)
       us=$(df -P "${mp:-/}" 2>/dev/null | awk "NR==2{print \$5}" | tr -d %)
