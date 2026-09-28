@@ -627,8 +627,21 @@ def girlfriend_day():
 
 @app.route("/followups")
 def followup_guide():
-    """Public — FAI Field Follow-Up System simple guide (Tailscale-only host)."""
-    return send_from_directory("websites/followup", "index.html")
+    """Public — FAI Field Follow-Up System simple guide (Tailscale-only host).
+    max_age=0 so edits show on reload (app default is a 7-day cache)."""
+    resp = make_response(send_from_directory("websites/followup", "index.html", max_age=0))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
+
+
+@app.route("/followups.pdf")
+def followup_guide_pdf():
+    """Public — the same guide as an openable/downloadable PDF. No-cache so a
+    regenerated PDF isn't masked by the browser's stale copy."""
+    resp = make_response(send_from_directory("websites/followup", "field-followup-guide.pdf",
+                                             mimetype="application/pdf", max_age=0))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
 
 
 @app.route("/")
@@ -918,6 +931,18 @@ def incident_log_page(incident_id):
     problem = summary.get("problem") or " ".join(_paragraphize(diag.get("reasoning"))) or diag.get("triage_reason", "")
     solution = summary.get("solution") or summary.get("simple_explanation") or summary.get("what_happens") or diag.get("fix_title", "")
 
+    # Which actions the detail page offers, by status. Only council_approved
+    # has a real Merge (an executable, council-cleared fix). Everything else
+    # that isn't already terminal gets escape hatches so no item is a dead end:
+    # Mark done (a prose recommendation you handled by hand), Re-diagnose (retry
+    # so it can come back as a mergeable fix), and Dismiss.
+    _retryable = {"recommendation_ready", "council_held", "diagnosis_timeout",
+                  "stale_diff_needs_human", "revert_failed_needs_human",
+                  "command_execution_failed"}
+    can_merge = status == "council_approved"
+    can_resolve = status == "recommendation_ready"
+    can_redigest = status in _retryable
+    can_dismiss = status in _retryable
     return render_template("log_view.html", boot=get_system_info(),
                             title=diag.get("fix_title") or inc.get("title", incident_id),
                             subtitle=inc.get("title", "") if diag.get("fix_title") else "",
@@ -927,7 +952,11 @@ def incident_log_page(incident_id):
                             council_discussion=diag.get("council_discussion", []),
                             council_verdict=diag.get("council_verdict", ""),
                             box=diag.get("box", "ARES"), when=when,
-                            show_approve_reject=(status == "council_approved"), incident_id=incident_id)
+                            show_approve_reject=can_merge,
+                            can_merge=can_merge, can_resolve=can_resolve,
+                            can_redigest=can_redigest, can_dismiss=can_dismiss,
+                            has_actions=(can_merge or can_resolve or can_redigest or can_dismiss),
+                            incident_id=incident_id)
 
 
 @app.route("/api/autofix/approve/<incident_id>", methods=["POST"])
@@ -949,14 +978,36 @@ def autofix_approve(incident_id):
 @app.route("/api/autofix/reject/<incident_id>", methods=["POST"])
 @require_auth
 def autofix_reject(incident_id):
+    return _autofix_proxy("reject", incident_id, timeout=15)
+
+
+@app.route("/api/autofix/resolve/<incident_id>", methods=["POST"])
+@require_auth
+def autofix_resolve(incident_id):
+    """Mark a prose recommendation done (human acted on it manually)."""
+    return _autofix_proxy("resolve", incident_id, timeout=15)
+
+
+@app.route("/api/autofix/redigest/<incident_id>", methods=["POST"])
+@require_auth
+def autofix_redigest(incident_id):
+    """Re-run diagnosis on an incident so it can come back as a real, mergeable
+    fix (fire-and-forget headless session on the host)."""
+    return _autofix_proxy("redigest", incident_id, timeout=15)
+
+
+def _autofix_proxy(action, incident_id, timeout):
+    """Shared proxy to the host apply service for the non-apply actions
+    (reject/resolve/redigest). autofix_approve stays separate: it has a longer
+    timeout because /apply runs the fix synchronously."""
     import requests as _rq
     try:
         token = _autofix_token()
     except OSError:
         return jsonify({"error": "autofix apply service not installed"}), 503
     try:
-        r = _rq.post(f"{_AUTOFIX_APPLY_URL}/reject/{incident_id}",
-                     headers={"Authorization": f"Bearer {token}"}, timeout=15)
+        r = _rq.post(f"{_AUTOFIX_APPLY_URL}/{action}/{incident_id}",
+                     headers={"Authorization": f"Bearer {token}"}, timeout=timeout)
         return jsonify(r.json()), r.status_code
     except _rq.exceptions.RequestException as e:
         return jsonify({"error": f"apply service unreachable: {e}"}), 502
@@ -1208,10 +1259,36 @@ def thursday_page():
 def thursday_deck_page():
     return render_template("thursday-deck.html")
 
+@app.route("/thursday-deck.pdf")
+@require_auth
+def thursday_deck_pdf():
+    """GTM Engineer notes as a downloadable PDF. No-cache so a regenerated
+    PDF isn't masked by the browser's stale copy."""
+    resp = make_response(send_from_directory("websites/gtm", "GTM-Engineer-Role-Proposal.pdf",
+                                             mimetype="application/pdf", max_age=0,
+                                             as_attachment=True))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
+
 @app.route("/fai-work")
 @require_auth
 def fai_work_page():
     return render_template("fai-work.html")
+
+@app.route("/zac-cheatsheet")
+@require_auth
+def zac_cheatsheet_page():
+    return render_template("zac-cheatsheet.html")
+
+@app.route("/arianna-cheatsheet")
+@require_auth
+def arianna_cheatsheet_page():
+    return render_template("arianna-cheatsheet.html")
+
+@app.route("/arianna-pdf")
+@require_auth
+def arianna_pdf():
+    return send_from_directory("private_docs", "GTM-x-Marketing-Zain.pdf", mimetype="application/pdf")
 
 @app.route("/yc")
 @require_auth
@@ -2919,7 +2996,14 @@ def journal_page_image(name, page):
 def hermes_alerts():
     """ZEUS health, pulled by the hermes-watchdog cron on the PVE host
     (/usr/local/bin/hermes-watchdog.sh) every 2 min. A stale file means the
-    watchdog/ARES side is dead, which is itself critical."""
+    watchdog/ARES side is dead, which is itself critical.
+
+    ZEUS sleeps about 23.5 hours each day by design. It wakes only for the
+    nightly backup. Therefore the SSH probe fails almost all day. This is the
+    expected state, not an outage. Do NOT map an unreachable ZEUS to a red
+    alert -- that hides real alerts (alarm fatigue). ZEUS backup health is
+    tracked separately by zeus-backup-stamp and zeus-wake-check.sh. Run the
+    host resource checks below only when SSH is up (the nightly wake window)."""
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_data", "hermes_health.json")
     try:
         with open(path) as f:
@@ -2935,9 +3019,7 @@ def hermes_alerts():
             level[0] = l
     if age > 300:
         worse("red"); reasons.append("watchdog stale (%ds old) — ARES probe not running" % int(age))
-    if not d.get("ssh_ok"):
-        worse("red"); reasons.append("ZEUS unreachable over SSH")
-    else:
+    if d.get("ssh_ok"):
         l1 = d.get("load1") or 0
         if l1 > 20: worse("red"); reasons.append("load %s" % l1)
         elif l1 > 8: worse("amber"); reasons.append("load %s" % l1)
@@ -2945,9 +3027,8 @@ def hermes_alerts():
         if ren > 400: worse("red"); reasons.append("%d chrome renderers (leak)" % ren)
         down = [n for n, s in (d.get("containers") or {}).items() if s != "running"]
         if down: worse("red"); reasons.append("containers down: " + ", ".join(down))
-        lo = d.get("linkedout") or {}
-        if lo.get("oom_killed"): worse("red"); reasons.append("linkedout OOM-killed")
-        elif (lo.get("restart_count") or 0) > 0: worse("amber"); reasons.append("linkedout restarts: %d" % lo["restart_count"])
+    else:
+        reasons.append("ZEUS asleep (expected — wakes nightly for backup)")
     return jsonify({"level": level[0], "reasons": reasons, "age_s": int(age), "data": d})
 
 
@@ -8071,6 +8152,40 @@ def register_ios_ids():
     if added:
         threading.Thread(target=_save_ios_ids, daemon=True).start()
     return jsonify({"registered": added, "total_known": len(_ios_ids)})
+
+
+VERIFY_IOS_IDS_MAX = 20000
+
+
+def _verified_ios_ids(ids):
+    """iOS PHAsset ids whose exact file ARES holds right now: id -> content SHA -> stored path ->
+    a non-empty file on disk. The phone deletes ONLY these when freeing space, so a photo whose
+    ARES copy was removed (or never fully stored) is never deleted from the phone."""
+    if not isinstance(ids, list):
+        return []
+    with _ios_ids_lock:
+        id_to_sha = dict(_ios_ids)
+    with _content_hashes_lock:
+        sha_to_path = dict(_content_hashes)
+    out = []
+    for ios_id in ids[:VERIFY_IOS_IDS_MAX]:
+        if not isinstance(ios_id, str):
+            continue
+        path = sha_to_path.get(id_to_sha.get(ios_id, ""), "")
+        try:
+            if path and os.path.isfile(path) and os.path.getsize(path) > 0:
+                out.append(ios_id)
+        except OSError:
+            continue
+    return out
+
+
+@app.route("/api/photos/verify-ios-ids", methods=["POST"])
+@require_auth
+def verify_ios_ids():
+    """Body: {"ids": [...]}. Returns {"verified": [...]} — the ids safe to delete from the phone."""
+    body = request.get_json(silent=True) or {}
+    return jsonify({"verified": _verified_ios_ids(body.get("ids"))})
 
 
 _SCRATCH_DIR = os.path.join(_APP_DIR, "..", "..", "PROJECTS", "_scratch")
