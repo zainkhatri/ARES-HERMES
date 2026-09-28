@@ -8,6 +8,16 @@ window.KGGraph = function (el, opts) {
   var DETAIL_INLINE = opts.detailInline !== false;  // false = host renders detail elsewhere (a slot) via onNode
   var onNodeCb = null, rafId = null, alive = true, api = null, pollId = null;
 
+  // ---- Look = the ARES iPhone app's graph (Vitals/KGSpin.swift): only linked nodes, sized by
+  // degree, laid out once in 3D (seeded Fruchterman–Reingold), slowly spinning with a fixed tilt
+  // and perspective, depth read as 3 opacity bands, thin edges in the source node's colour,
+  // over a soft accent glow. No ambient labels; hover/selection show one. ----
+  var TILT = 0.38, CAMERA = 3.2, SPIN_RAD_PER_S = 6 * Math.PI / 180;
+  var MAX_EDGES = opts.maxEdges || Math.round(LIMIT * 1.5);
+  var BAND_ALPHA = [0.30, 0.62, 1.0];
+  var FPS_MS = 1000 / 30;          // a slow spin needs no more (the app runs at 30 fps too)
+  var sceneKey = '';
+
   // read brand once at construction time
   var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUpperCase();
 
@@ -41,18 +51,29 @@ window.KGGraph = function (el, opts) {
   // instead of generic node kinds. Group is derived from the node's id (a path)
   // and kind. ----
   var GRP = {}, GRPCOL = {};
-  // Red-primary ARES palette: reds/maroons/oranges/golds + white, ordered by prominence
-  // (biggest group = brightest red). Warm family only — distinct but no blue/green/purple.
-  var GPAL = ['239,68,68',   // red
-              '124,20,20',   // maroon
-              '249,115,22',  // orange
-              '245,158,11',  // amber
-              '250,204,21',  // gold/yellow
-              '240,240,240', // white
-              '159,18,57',   // crimson
-              '251,146,110', // coral
-              '146,64,14',   // brown
-              '253,186,116'];// peach
+  // Fixed category colors (stable across reindexes — NOT ranked by node count, which
+  // used to reshuffle every group's color whenever the biggest group changed size).
+  // Claude ecosystem = orange family, GPT archive = white, ZEUS = blue, EROS = yellow.
+  var CAT_COL = {
+    'Claude Code': '249,115,22',   // orange-500
+    'Skills':      '251,146,60',   // orange-400
+    'MCP':         '234,88,12',    // orange-600
+    'Agents':      '253,186,116',  // orange-300
+    'Claude.ai':   '194,65,12',    // orange-700
+    'GPT':         '240,240,240',  // white
+    'ZEUS':        '56,189,248',   // blue
+    'EROS':        '250,204,21',   // yellow
+  };
+  // Everything else is a real folder/file group (PHOTOS, PROJECTS, WORK, PERSONAL,
+  // MORDOR, …) — red family, cycled alphabetically so a given folder keeps its shade
+  // across reindexes instead of jumping around with node-count rank.
+  var FOLDER_RED = ['239,68,68',   // red
+                     '124,20,20',  // maroon
+                     '185,28,28',  // red-700
+                     '252,165,165',// red-300
+                     '159,18,57',  // crimson
+                     '220,38,38',  // red-600
+                     '127,29,29'];// red-900
   function groupOf(n){
     if ((n.id||'').indexOf('EROS:') === 0) return 'EROS';   // EROS nodes folded into the ARES graph → one group
     var k = n.kind, nm = (n.name||'').toLowerCase();
@@ -78,11 +99,13 @@ window.KGGraph = function (el, opts) {
   function assignGroups(){
     var cnt = {};
     for (var i=0;i<N.length;i++){ var g = groupOf(N[i]); GRP[N[i].id] = g; cnt[g] = (cnt[g]||0)+1; }
-    // rank groups by size — biggest gets GPAL[0] (red), then white/orange/yellow… so the
-    // most common groups get the strongest colors and every group is a distinct hue.
-    var ranked = Object.keys(cnt).sort(function(a,b){ return cnt[b]-cnt[a]; });
+    // Known categories get their fixed color; anything left is a real folder/file
+    // group and gets a stable red shade (alphabetical, not size-ranked — a group's
+    // color no longer shuffles just because another group grew past it).
+    var folders = Object.keys(cnt).filter(function(g){ return !CAT_COL[g]; }).sort();
     GRPCOL = {};
-    for (var r=0;r<ranked.length;r++) GRPCOL[ranked[r]] = GPAL[r % GPAL.length];
+    Object.keys(CAT_COL).forEach(function(g){ if (cnt[g]) GRPCOL[g] = CAT_COL[g]; });
+    folders.forEach(function(g, i){ GRPCOL[g] = FOLDER_RED[i % FOLDER_RED.length]; });
   }
   function gcol(n){ return GRPCOL[GRP[n.id]] || PAL._default; }
 
@@ -93,10 +116,11 @@ window.KGGraph = function (el, opts) {
   // ponytail: don't override el.style.position — caller's HTML sets it (absolute/relative)
   if (!el.style.position) el.style.position = 'relative';
   el.appendChild(cv);
-  var ctx = cv.getContext('2d'), dpr = 1;
+  cv.style.willChange = 'transform';   // own compositor layer: redraws never re-raster the page
+  var ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1);
   var N = [], L = [], byId = {}, nbr = new Map();
   var spin = 0, hover = null, mx = -1, my = -1, selId = null;
-  var zoom = 1, userYaw = 0, pitch = .42, panX = 0, panY = 0;
+  var zoom = 1, userYaw = 0, pitch = TILT, panX = 0, panY = 0;
   var drag = false, pan = false, lx = 0, ly = 0;
   var pdx = 0, pdy = 0;  // pointer delta for click-vs-drag
   var alpha = 1, fitted = false;
@@ -116,7 +140,7 @@ window.KGGraph = function (el, opts) {
   var hintEl = null;
   if (TRAVERSABLE) {
     hintEl = document.createElement('div');
-    hintEl.style.cssText = 'position:absolute;bottom:8px;left:50%;transform:translateX(-50%);z-index:10;color:rgba(255,255,255,0.38);font:10px ui-monospace,monospace;pointer-events:none;white-space:nowrap';
+    hintEl.style.cssText = 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);z-index:10;color:rgba(255,255,255,0.38);font:10px ui-monospace,monospace;pointer-events:none;white-space:nowrap';
     hintEl.textContent = 'drag rotate · scroll zoom · click a node · Esc exit';
     el.appendChild(hintEl);
   }
@@ -132,20 +156,29 @@ window.KGGraph = function (el, opts) {
   ].join(';');
   el.appendChild(panel);
 
+  // 5 buckets only — Claude Code/Skills/MCP/Agents/Claude.ai all read as one "Claude"
+  // entry, every real folder/file group reads as one "Files" entry. Individual nodes
+  // still get their own shade within the bucket (see CAT_COL/FOLDER_RED above) so the
+  // graph itself has visual variety, but the legend stays exactly the 5 lines asked for.
+  var BUCKET_ORDER = ['Claude', 'Files', 'GPT', 'ZEUS', 'EROS'];
+  var BUCKET_COL = { Claude:'249,115,22', Files:'239,68,68', GPT:'240,240,240',
+                      ZEUS:'56,189,248', EROS:'250,204,21' };
+  function bucketOf(g) {
+    if (g === 'GPT' || g === 'ZEUS' || g === 'EROS') return g;
+    if (CAT_COL[g]) return 'Claude';
+    return 'Files';
+  }
   function updateLegend() {
-    // count nodes per GROUP (root folder / chat category), biggest first
-    var cnt = {};
-    N.forEach(function(n){ var g = GRP[n.id]; if (g) cnt[g] = (cnt[g]||0)+1; });
-    var keys = Object.keys(cnt).sort(function(a,b){ return cnt[b]-cnt[a]; });
-    keys = keys.slice(0, GPAL.length);   // cap at palette size so no two legend items share a color
-    var chips = keys.map(function(g){
+    var present = {};
+    N.forEach(function(n){ var g = GRP[n.id]; if (g) present[bucketOf(g)] = true; });
+    var chips = BUCKET_ORDER.filter(function(b){ return present[b]; }).map(function(b){
       return '<span style="display:inline-flex;align-items:center;gap:4px;color:rgba(255,255,255,0.82);white-space:nowrap">' +
-        '<i style="width:8px;height:8px;border-radius:2px;flex:none;background:rgb('+(GRPCOL[g]||PAL._default)+')"></i>' + esc(g) + '</span>';
+        '<i style="width:8px;height:8px;flex:none;background:rgb('+BUCKET_COL[b]+')"></i>' + esc(b) + '</span>';
     }).join('');
     // legend is ALWAYS visible (no collapse) — the graph is only readable with the key present
     legEl.innerHTML =
       '<div style="display:flex;flex-wrap:wrap;gap:3px 10px;max-width:'+(TRAVERSABLE?'62vw':'100%')+';' +
-      'background:rgba(0,0,0,0.62);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 8px">' + chips + '</div>';
+      'background:rgba(0,0,0,0.62);border:1px solid rgba(255,255,255,0.1);padding:5px 8px">' + chips + '</div>';
   }
 
   function showPanel(n, childCount) {
@@ -202,8 +235,10 @@ window.KGGraph = function (el, opts) {
         x:(p.x!=null?p.x:(Math.random()-.5)*6), y:(p.y!=null?p.y:(Math.random()-.5)*6),
         z:(p.z!=null?p.z:(Math.random()-.5)*6), vx:0, vy:0, vz:0 }; });
     byId = {}; N.forEach(function(n){ byId[n.id] = n; });
-    L = d.edges.filter(function(e){ return byId[e.src] && byId[e.dst]; })
-               .map(function(e){ return { a:byId[e.src], b:byId[e.dst] }; });
+    L = linkedEdges(d.edges);
+    // Only nodes with a link in the sample (a bare dot reads as noise), as in the app.
+    var linked = {}; L.forEach(function(e){ linked[e.a.id] = 1; linked[e.b.id] = 1; });
+    if (L.length) { N = N.filter(function(n){ return linked[n.id]; }); byId = {}; N.forEach(function(n){ byId[n.id] = n; }); }
     // build neighbor index
     nbr = new Map();
     N.forEach(function(n){ nbr.set(n.id, new Set()); });
@@ -215,7 +250,33 @@ window.KGGraph = function (el, opts) {
     // also update legacy count/legend elements if they exist on the page
     var cc = document.getElementById('zg-count'); if (cc) cc.textContent = d.shown+'/'+d.total_nodes+' nodes · '+d.total_edges+' edges';
     assignGroups(); updateLegend();
-    settle(N.length > 250 ? 95 : 170); alpha = 0; fitView(); fitted = true;
+    relayout(); fitView(); fitted = true;
+  }
+
+  // Deduped edges between known nodes, capped at MAX_EDGES (first come, like the app).
+  function linkedEdges(edges) {
+    var out = [], seen = {};
+    for (var i = 0; i < edges.length && out.length < MAX_EDGES; i++) {
+      var e = edges[i], a = byId[e.src], b = byId[e.dst];
+      if (!a || !b || a === b) continue;
+      var key = a.id < b.id ? a.id + '\u0001' + b.id : b.id + '\u0001' + a.id;
+      if (seen[key]) continue;
+      seen[key] = 1; out.push({ a:a, b:b });
+    }
+    return out;
+  }
+
+  // Degree + 3D layout. Skipped when the graph did not change (the 60 s poll re-sends it).
+  function relayout() {
+    var deg = {}; L.forEach(function(e){ deg[e.a.id] = (deg[e.a.id]||0) + 1; deg[e.b.id] = (deg[e.b.id]||0) + 1; });
+    N.forEach(function(n){ n.deg = deg[n.id] || 0; n.r = 1.3 + Math.min(3.2, Math.sqrt(n.deg) * 0.45); });
+    var key = N.length + ':' + L.length + ':' + (N.length ? N[0].id + N[N.length-1].id : '');
+    if (key === sceneKey && N.every(function(n){ return n.px != null; })) return;
+    sceneKey = key;
+    var idx = {}; N.forEach(function(n, i){ idx[n.id] = i; });
+    var pairs = L.map(function(e){ return [idx[e.a.id], idx[e.b.id]]; });
+    var pos = layout3d(N.length, pairs, N.length > 500 ? 110 : 160, 11);
+    N.forEach(function(n, i){ n.px = pos[i][0]; n.py = pos[i][1]; n.pz = pos[i][2]; });
   }
 
   // per-box localStorage cache so a box's graph paints INSTANTLY from the last
@@ -251,129 +312,166 @@ window.KGGraph = function (el, opts) {
     nbr = new Map(); N.forEach(function(n){ nbr.set(n.id, new Set()); });
     d.edges.forEach(function(e){ if (byId[e.src]&&byId[e.dst]) L.push({ a:byId[e.src], b:byId[e.dst] }); });
     L.forEach(function(e){ var s=nbr.get(e.a.id),t=nbr.get(e.b.id); if(s)s.add(e.b.id); if(t)t.add(e.a.id); });
-    assignGroups(); updateLegend(); settle(60);
+    sceneKey = '';                     // new nodes: lay the whole (deterministic) scene out again
+    assignGroups(); updateLegend(); relayout();
   }
 
-  function step() {
-    var i, j;
-    for (i=0;i<N.length;i++){ N[i].fx=0; N[i].fy=0; N[i].fz=0; }
-    for (i=0;i<N.length;i++) for (j=i+1;j<N.length;j++){ var a=N[i],b=N[j];
-      var dx=a.x-b.x,dy=a.y-b.y,dz=a.z-b.z,d2=dx*dx+dy*dy+dz*dz+.5,dd=Math.sqrt(d2),f=1.1/d2;
-      dx/=dd;dy/=dd;dz/=dd; a.fx+=dx*f;a.fy+=dy*f;a.fz+=dz*f; b.fx-=dx*f;b.fy-=dy*f;b.fz-=dz*f; }
-    for (var k=0;k<L.length;k++){ var e=L[k],edx=e.b.x-e.a.x,edy=e.b.y-e.a.y,edz=e.b.z-e.a.z,dd=Math.sqrt(edx*edx+edy*edy+edz*edz)+.001,f=.09*(dd-1.2)/dd;
-      e.a.fx+=edx*f;e.a.fy+=edy*f;e.a.fz+=edz*f; e.b.fx-=edx*f;e.b.fy-=edy*f;e.b.fz-=edz*f; }
-    for (i=0;i<N.length;i++){ var n=N[i]; n.fx+=-n.x*.02; n.fy+=-n.y*.02; n.fz+=-n.z*.02;
-      n.vx=(n.vx+n.fx*.1)*.85; n.vy=(n.vy+n.fy*.1)*.85; n.vz=(n.vz+n.fz*.1)*.85;
-      n.x+=n.vx; n.y+=n.vy; n.z+=n.vz;
-      var rr=Math.sqrt(n.x*n.x+n.y*n.y+n.z*n.z); if (rr>11){ var sc=11/rr; n.x*=sc; n.y*=sc; n.z*=sc; } }
+  // Seeded Fruchterman–Reingold in 3D (port of KGSpin.layout): gravity to the centre,
+  // pairwise repulsion, edge attraction, capped moves with cooling. Deterministic per seed.
+  function layout3d(n, pairs, iters, seed) {
+    var st = (seed >>> 0) || 0x9E3779B9;
+    function rand() { st ^= st << 13; st >>>= 0; st ^= st >>> 17; st ^= st << 5; st >>>= 0; return (st % 20000) / 10000 - 1; }
+    var x = new Float64Array(n), y = new Float64Array(n), z = new Float64Array(n);
+    var fx = new Float64Array(n), fy = new Float64Array(n), fz = new Float64Array(n);
+    for (var i = 0; i < n; i++) { x[i] = rand(); y[i] = rand(); z[i] = rand(); }
+    var k = 2 / Math.sqrt(Math.max(1, n)), k2 = k * k, temp = 0.25, cool = temp / (iters + 1);
+    for (var it = 0; it < iters; it++) {
+      for (i = 0; i < n; i++) { fx[i] = -x[i] * 0.6; fy[i] = -y[i] * 0.6; fz[i] = -z[i] * 0.6; }
+      for (i = 0; i < n; i++) {
+        var xi = x[i], yi = y[i], zi = z[i], ax = 0, ay = 0, az = 0;
+        for (var j = i + 1; j < n; j++) {
+          var dx = xi - x[j], dy = yi - y[j], dz = zi - z[j];
+          var s2 = k2 / Math.max(1e-6, dx*dx + dy*dy + dz*dz);
+          ax += dx*s2; ay += dy*s2; az += dz*s2; fx[j] -= dx*s2; fy[j] -= dy*s2; fz[j] -= dz*s2;
+        }
+        fx[i] += ax; fy[i] += ay; fz[i] += az;
+      }
+      for (var q = 0; q < pairs.length; q++) {
+        var a = pairs[q][0], b = pairs[q][1];
+        var ex = x[a]-x[b], ey = y[a]-y[b], ez = z[a]-z[b];
+        var len = Math.max(1e-3, Math.sqrt(ex*ex + ey*ey + ez*ez)), m = len / k;
+        fx[a] -= ex*m; fy[a] -= ey*m; fz[a] -= ez*m; fx[b] += ex*m; fy[b] += ey*m; fz[b] += ez*m;
+      }
+      for (i = 0; i < n; i++) {
+        var fl = Math.max(1e-3, Math.sqrt(fx[i]*fx[i] + fy[i]*fy[i] + fz[i]*fz[i])), sc = Math.min(fl, temp) / fl;
+        x[i] += fx[i]*sc; y[i] += fy[i]*sc; z[i] += fz[i]*sc;
+      }
+      temp = Math.max(0.002, temp - cool);
+    }
+    return normalize3d(x, y, z);
   }
 
-  function settle(iters){ for (var s=0;s<iters;s++) step(); }
+  // Centre on the mean; the 85th-percentile radius sits at 0.92 and outliers are clamped onto the
+  // unit sphere as a halo, so the dense core fills the panel (port of KGSpin.normalized).
+  function normalize3d(x, y, z) {
+    var n = x.length, mx0 = 0, my0 = 0, mz0 = 0, i;
+    if (!n) return [];
+    for (i = 0; i < n; i++) { mx0 += x[i]; my0 += y[i]; mz0 += z[i]; }
+    mx0 /= n; my0 /= n; mz0 /= n;
+    var radii = [];
+    for (i = 0; i < n; i++) radii.push(Math.hypot(x[i]-mx0, y[i]-my0, z[i]-mz0));
+    radii.sort(function(a, b){ return a - b; });
+    var r85 = radii[Math.min(n - 1, Math.floor(n * 0.85))], ref = r85 > 1e-9 ? r85 / 0.92 : radii[n - 1];
+    var s = ref > 1e-9 && isFinite(ref) ? 1 / ref : 0, out = [];
+    for (i = 0; i < n; i++) {
+      var px = (x[i]-mx0)*s, py = (y[i]-my0)*s, pz = (z[i]-mz0)*s, l = Math.hypot(px, py, pz);
+      if (l > 1) { px /= l; py /= l; pz /= l; }
+      out.push(isFinite(px + py + pz) ? [px, py, pz] : [0, 0, 0]);
+    }
+    return out;
+  }
 
+  // Rotate around Y (spin + drag), tilt around X, perspective (port of KGSpin.project).
+  // Returns [x, y, perspective scale, depth in -1..1 (1 = nearest)].
+  var FIT_K = CAMERA / Math.sqrt(CAMERA * CAMERA - 1);
   function proj(n, W, H){
-    var yaw = spin + userYaw, c = Math.cos(yaw), s = Math.sin(yaw);
-    var x1 = n.x*c - n.z*s, z1 = n.x*s + n.z*c;
-    var y1 = n.y*Math.cos(pitch) - z1*Math.sin(pitch), z2 = n.y*Math.sin(pitch) + z1*Math.cos(pitch);
-    var K2 = 15, ooz = 1/(K2+z2), Kp = Math.min(W,H)*0.9*zoom;
-    return [W/2+panX+Kp*ooz*x1, H/2+panY-Kp*ooz*y1, ooz];
+    var yaw = spin + userYaw, ca = Math.cos(yaw), sa = Math.sin(yaw);
+    var x = n.px || 0, y = n.py || 0, z = n.pz || 0;
+    var x1 = x*ca + z*sa, z1 = -x*sa + z*ca;
+    var ct = Math.cos(pitch), st = Math.sin(pitch);
+    var y2 = y*ct - z1*st, z2 = y*st + z1*ct;
+    var sc = CAMERA / (CAMERA - z2), fit = Math.min(W, H) * 0.48 / FIT_K * zoom;
+    return [W/2 + panX + x1*sc*fit, H/2 + panY + y2*sc*fit, sc, Math.max(-1, Math.min(1, z2))];
   }
 
+  // The unit sphere always fits (the projection is sized for it); just centre above the legend.
   function fitView() {
-    if (!N.length) return;
-    var d = size(), W = d[0]/dpr, H = d[1]/dpr;
-    zoom = 1; panX = 0; panY = 0;
-    var minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9;
-    for (var i=0;i<N.length;i++){ var p=proj(N[i],W,H); if(p[0]<minx)minx=p[0]; if(p[0]>maxx)maxx=p[0]; if(p[1]<miny)miny=p[1]; if(p[1]>maxy)maxy=p[1]; }
-    // reserve the legend's footprint at the bottom so the graph fits ABOVE it (no clash)
     var reserve = (legEl && legEl.offsetHeight ? legEl.offsetHeight : 22) + 16;
-    var Heff = Math.max(40, H - reserve);
-    // card = fit with margin (fully visible, not edge-clipped, lighter); fullscreen fills
-    var fw = TRAVERSABLE ? 0.94 : 0.80, fh = TRAVERSABLE ? 0.92 : 0.80;
-    var z = Math.min(W*fw/Math.max(1,maxx-minx), Heff*fh/Math.max(1,maxy-miny));
-    z = Math.max(0.02, Math.min(6, z));
-    var cx=(minx+maxx)/2, cy=(miny+maxy)/2;
-    zoom=z; panX=-(cx-W/2)*z; panY=-(cy-Heff/2)*z;   // vertically centre in the region above the legend
+    zoom = 1; panX = 0; panY = TRAVERSABLE ? 0 : -reserve / 2;
     camTarget = null;
   }
 
-  function frame() {
+  // One frame, drawn like the app's KGSpinCanvas: glow, one stroked path per colour for edges,
+  // one filled path per (depth band, colour) for nodes; then the hovered/selected node on top.
+  var lastFrame = 0, lastSpinAt = 0, onScreen = true;
+  function frame(now) {
     if (!alive) return;
     rafId = requestAnimationFrame(frame);
-    var d = size(), W = d[0]/dpr, H = d[1]/dpr;
-    ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+    now = now || performance.now();
+    if (!onScreen || document.hidden || now - lastFrame < FPS_MS) return;
+    var dt = lastSpinAt ? Math.min(0.1, (now - lastSpinAt) / 1000) : 0;
+    lastFrame = now; lastSpinAt = now;
+    if (now - lastInteract > 5000) spin += dt * SPIN_RAD_PER_S;   // pauses 5 s after interaction
 
-    // sim step while hot
-    if (N.length && alpha > 0.02){ step(); alpha *= 0.97; if (!fitted && alpha < 0.25){ fitView(); fitted = true; } }
-
-    // auto-spin: advances every frame regardless of alpha; pauses 5s after interaction
-    var now = performance.now();
-    if (now - lastInteract > 5000) { spin += 0.0016; }
-
-    // camera ease toward target
     if (camTarget) {
       var tz = camTarget.zoom != null ? camTarget.zoom : zoom;
-      zoom   += (tz - zoom)   * 0.09;
-      panX   += (camTarget.panX - panX) * 0.09;
-      panY   += (camTarget.panY - panY) * 0.09;
-      if (Math.abs(tz-zoom)<0.001 && Math.abs(camTarget.panX-panX)<0.5 && Math.abs(camTarget.panY-panY)<0.5) {
+      zoom += (tz - zoom) * 0.18; panX += (camTarget.panX - panX) * 0.18; panY += (camTarget.panY - panY) * 0.18;
+      if (Math.abs(tz-zoom) < 0.001 && Math.abs(camTarget.panX-panX) < 0.5 && Math.abs(camTarget.panY-panY) < 0.5) {
         zoom = tz; panX = camTarget.panX; panY = camTarget.panY; camTarget = null;
       }
     }
 
-    // compute lit set alpha for spotlight
+    var d = size(), W = d[0]/dpr, H = d[1]/dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+    var glow = ctx.createRadialGradient(W/2, H/2 + panY, 0, W/2, H/2 + panY, Math.min(W, H) * 0.57);
+    glow.addColorStop(0, 'rgba(' + ACCENT + ',0.10)'); glow.addColorStop(1, 'rgba(' + ACCENT + ',0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+    if (!N.length) return;
+
     var hasFocus = TRAVERSABLE && focusId != null && litSet != null;
+    var P = {}; for (var i = 0; i < N.length; i++) P[N[i].id] = proj(N[i], W, H);
 
-    // edges — colored by kind: gradient from parent-kind color to child-kind color
-    for (var k=0;k<L.length;k++){
-      var ka = L[k].a, kb = L[k].b;
-      var pa = proj(ka,W,H), pb = proj(kb,W,H);
-      var oz = (pa[2]+pb[2])/2, ea = Math.max(.14, Math.min(.68,(oz-0.05)*7));
-      var dimEdge = hasFocus && !(litSet.has(ka.id) && litSet.has(kb.id));
-      ctx.globalAlpha = dimEdge ? 0.05 : ea;
-      // solid color by child's group (cheap — a per-edge gradient every frame janks the whole page)
-      var chN = (ka.depth||0) >= (kb.depth||0) ? ka : kb;
-      ctx.strokeStyle = 'rgb('+gcol(chN)+')';
-      ctx.lineWidth = Math.max(.5, oz*10*zoom);
-      ctx.beginPath(); ctx.moveTo(pa[0],pa[1]); ctx.lineTo(pb[0],pb[1]); ctx.stroke();
+    // edges: source node's colour, 0.42 alpha, 0.9 px (dimmed outside the focus spotlight)
+    var ep = {}, dimEdges = new Path2D();
+    for (var k = 0; k < L.length; k++) {
+      var a = L[k].a, b = L[k].b, pa = P[a.id], pb = P[b.id];
+      var path;
+      if (hasFocus && !(litSet.has(a.id) && litSet.has(b.id))) path = dimEdges;
+      else { var ck = gcol(a); path = ep[ck] || (ep[ck] = new Path2D()); }
+      path.moveTo(pa[0], pa[1]); path.lineTo(pb[0], pb[1]);
     }
-    ctx.globalAlpha = 1;
+    ctx.lineWidth = 0.9;
+    ctx.globalAlpha = 0.05; ctx.strokeStyle = 'rgb(' + ACCENT + ')'; ctx.stroke(dimEdges);
+    ctx.globalAlpha = 0.42;
+    for (var ck2 in ep) { ctx.strokeStyle = 'rgb(' + ck2 + ')'; ctx.stroke(ep[ck2]); }
 
-    // nodes
-    var order = N.map(function(n){ return {n:n, p:proj(n,W,H)}; }).sort(function(a,b){ return a.p[2]-b.p[2]; });
+    // nodes: radius by degree × perspective, batched per depth band and colour
     hover = null; var best = 280;
-    if (mx >= 0) order.forEach(function(o){ var dxp=o.p[0]-mx,dyp=o.p[1]-my,dm=dxp*dxp+dyp*dyp; if(dm<best){best=dm;hover=o.n;} });
-
-    for (var oi=0; oi<order.length; oi++){
-      var o = order[oi], n = o.n, p = o.p;
-      var c = gcol(n);
-      var sel = (n.id === selId), hot = (n === hover || sel);
-      var dim = hasFocus && !litSet.has(n.id);
-      var bk = n.kind, ds = n.depth || 5;
-      var base = bk==='file-cluster' ? 1.35 : bk==='vault' ? 2.3 : (bk==='box'||bk==='host') ? 5.4
-               : bk==='project' ? 3.0 : ds<=3 ? 5.0 : ds===4 ? 4.2 : ds===5 ? 3.1 : ds===6 ? 2.3 : 1.7;
-      var r = Math.min(26, (hot ? base*1.5 : base) * (p[2]*10));
-      ctx.globalAlpha = dim ? 0.10 : 1;
-      if (hot && !dim){ ctx.shadowColor = 'rgb('+c+')'; ctx.shadowBlur = 14; }
-      ctx.fillStyle = 'rgb('+c+')';
-      ctx.beginPath(); ctx.arc(p[0],p[1],Math.max(1.2,r),0,6.29); ctx.fill();
-      if (hot && !dim) ctx.shadowBlur = 0;
-      if (sel && !dim){
-        ctx.strokeStyle = 'rgba('+c+',.85)'; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.arc(p[0],p[1],Math.max(1.2,r)+4,0,6.29); ctx.stroke();
-      }
-      var showLabel = !dim && (n.kind==='project'||n.kind==='box'||n.kind==='dataset'||(n.depth||9)<=4||hot||(hasFocus&&litSet.has(n.id)));
-      if (showLabel){
-        ctx.globalAlpha = hot ? 1 : (dim ? 0 : 0.72);
-        ctx.fillStyle = 'rgb('+c+')';
-        ctx.font = (hot?'bold 12px':'9px')+" 'JetBrains Mono',ui-monospace,monospace";
-        ctx.textAlign = 'center'; ctx.fillText(n.name, p[0], p[1]-9); ctx.textAlign = 'start';
-      }
-      ctx.globalAlpha = 1;
+    var np = [{}, {}, {}], dimNodes = new Path2D(), grow = Math.sqrt(zoom);
+    for (i = 0; i < N.length; i++) {
+      var n = N[i], p = P[n.id], r = n.r * p[2] * grow;
+      if (mx >= 0) { var dxp = p[0]-mx, dyp = p[1]-my, dm = dxp*dxp + dyp*dyp; if (dm < best) { best = dm; hover = n; } }
+      var target;
+      if (hasFocus && !litSet.has(n.id)) target = dimNodes;
+      else { var band = p[3] < -0.33 ? 0 : (p[3] < 0.33 ? 1 : 2), c = gcol(n); target = np[band][c] || (np[band][c] = new Path2D()); }
+      target.moveTo(p[0] + r, p[1]); target.arc(p[0], p[1], r, 0, 6.2832);
+    }
+    ctx.globalAlpha = 0.10; ctx.fillStyle = 'rgb(' + ACCENT + ')'; ctx.fill(dimNodes);
+    for (var bnd = 0; bnd < 3; bnd++) {
+      ctx.globalAlpha = BAND_ALPHA[bnd];
+      for (var c2 in np[bnd]) { ctx.fillStyle = 'rgb(' + c2 + ')'; ctx.fill(np[bnd][c2]); }
     }
 
-    // hover tooltip (legacy element if present)
+    // labels: fullscreen spotlight neighbours (small), then hovered / selected (bold, glowing)
+    ctx.textAlign = 'center';
+    if (hasFocus) {
+      ctx.globalAlpha = 0.72; ctx.font = "9px 'JetBrains Mono',ui-monospace,monospace";
+      litSet.forEach(function(id){ var ln = byId[id], lp = P[id]; if (ln && lp && ln !== hover && id !== selId) { ctx.fillStyle = 'rgb(' + gcol(ln) + ')'; ctx.fillText(ln.name, lp[0], lp[1] - 8); } });
+    }
+    [hover, selId ? byId[selId] : null].forEach(function(hn, ix){
+      if (!hn || (ix === 1 && hn === hover)) return;
+      var hp = P[hn.id]; if (!hp) return;
+      var hc = gcol(hn), hr = Math.max(2.4, hn.r * hp[2] * grow * 1.5);
+      ctx.globalAlpha = 1; ctx.shadowColor = 'rgb(' + hc + ')'; ctx.shadowBlur = 14;
+      ctx.fillStyle = 'rgb(' + hc + ')'; ctx.beginPath(); ctx.arc(hp[0], hp[1], hr, 0, 6.2832); ctx.fill();
+      ctx.shadowBlur = 0;
+      if (hn.id === selId) { ctx.strokeStyle = 'rgba(' + hc + ',.85)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(hp[0], hp[1], hr + 4, 0, 6.2832); ctx.stroke(); }
+      ctx.font = "bold 12px 'JetBrains Mono',ui-monospace,monospace"; ctx.fillText(hn.name, hp[0], hp[1] - hr - 6);
+    });
+    ctx.textAlign = 'start'; ctx.globalAlpha = 1;
+
     var tip = document.getElementById('zg-tip');
-    if (tip){ if (hover && !drag){ var pp=proj(hover,W,H); tip.style.display='block'; tip.style.left=Math.min(window.innerWidth-290,pp[0]+12)+'px'; tip.style.top=(pp[1]+12)+'px';
+    if (tip){ if (hover && !drag){ var pp = P[hover.id]; tip.style.display='block'; tip.style.left=Math.min(window.innerWidth-290,pp[0]+12)+'px'; tip.style.top=(pp[1]+12)+'px';
       tip.innerHTML='<div class="kk">'+esc(hover.kind)+'</div><b>'+esc(hover.name)+'</b><br>'+esc(hover.u||'—'); }
     else tip.style.display='none'; }
   }
@@ -391,10 +489,12 @@ window.KGGraph = function (el, opts) {
     var ns = nbr.get(id); if (ns) ns.forEach(function(nid){ litSet.add(nid); });
     // compute screen position to ease camera toward focused node
     var d = size(), W = d[0]/dpr, H = d[1]/dpr;
-    var p = proj(n, W, H);
-    var tpanX = panX + (W/2 - p[0]) * zoom;
-    var tpanY = panY + (H/2 - p[1]) * zoom;
-    camTarget = { zoom: Math.max(zoom, 1.2), panX: tpanX, panY: tpanY };
+    // Offset of the node from the view centre scales with zoom, so solve the pan that puts it
+    // dead centre at the target zoom.
+    var p = proj(n, W, H), tz = Math.max(zoom, 1.2), g = tz / zoom;
+    var tpanX = -(p[0] - W/2 - panX) * g;
+    var tpanY = -(p[1] - H/2 - panY) * g;
+    camTarget = { zoom: tz, panX: tpanX, panY: tpanY };
     var cc = countChildren(id);
     showPanel(n, cc);
     if (onNodeCb) onNodeCb(id);
@@ -454,7 +554,7 @@ window.KGGraph = function (el, opts) {
     markInteract();
     var r = cv.getBoundingClientRect(), n = nodeAt(e.clientX-r.left, e.clientY-r.top);
     if (n && api && api.expand){ api.expand(n.id); }
-    else { userYaw=0; pitch=.42; fitView(); }
+    else { userYaw=0; pitch=TILT; fitView(); }
   });
   document.addEventListener('keydown', function(e){
     if (e.key === 'Escape' && TRAVERSABLE && focusId != null){ clearFocus(); }
@@ -478,6 +578,10 @@ window.KGGraph = function (el, opts) {
   loadCache();   // instant paint from last visit; reload() then refreshes in the background
   reload(); pollId = setInterval(reload, 60000); rafId = requestAnimationFrame(frame);
 
+  // Draw only while the graph is on screen (the page keeps scrolling/animating smoothly).
+  if (typeof IntersectionObserver !== 'undefined') {
+    new IntersectionObserver(function(es){ onScreen = es[0].isIntersecting; }).observe(el);
+  }
   if (typeof ResizeObserver !== 'undefined') {
     var ro = new ResizeObserver(function(){ if (fitted) fitView(); });
     ro.observe(el);
