@@ -5,9 +5,12 @@ reading the kill-switch path means "treat as disabled"."""
 import json
 import os
 import subprocess
+import sys
+import time
 
 import council
 import dedup
+import heartbeat
 import incident_store
 import triage
 
@@ -252,7 +255,28 @@ def run_once(store, kill_switch_path, host_crons_path="/mnt/nvme/PROMETHEUS/PROJ
     return created
 
 
-if __name__ == "__main__":
-    s = incident_store.IncidentStore("/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/ops/autofix/incidents.json")
-    n = run_once(s, "/root/ares-autofix-disabled")
+def main(store, kill_switch_path="/root/ares-autofix-disabled", hb_dir=heartbeat.HEARTBEAT_DIR):
+    """Detection + triage do not need claude; escalation does. So the
+    watcher still does its non-agent work when claude is missing, but it
+    reports that outage through the heartbeat and a failed exit -- never
+    by escalating (claude cannot diagnose its own absence)."""
+    started = time.time()
+    if _kill_switch_engaged(kill_switch_path):
+        heartbeat.write("watcher", ok=False, reason=f"paused: kill switch engaged ({kill_switch_path})",
+                        duration=0, hb_dir=hb_dir)
+        return 0
+    missing = heartbeat.preflight()
+    n = run_once(store, kill_switch_path)
     print(f"watcher: {n} new incident(s)")
+    duration = round(time.time() - started, 1)
+    if missing:
+        print(f"watcher: ESCALATION DISABLED -- {missing}")
+        heartbeat.write("watcher", ok=False, reason=f"{n} new incident(s), but escalation cannot run: {missing}",
+                        duration=duration, hb_dir=hb_dir)
+        return 1
+    heartbeat.write("watcher", ok=True, reason=f"{n} new incident(s)", duration=duration, hb_dir=hb_dir)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(incident_store.IncidentStore("/mnt/nvme/PROMETHEUS/PROJECTS/ARES-DASHBOARD/ops/autofix/incidents.json")))

@@ -129,6 +129,23 @@
         .mod.c-bl::after  { bottom: -2px; left: -2px; border-right: 0; border-top: 0; }
         .mod.c-br::after  { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
 
+        .pipe-active { color: var(--text-1); }
+        .pipe-down { color: var(--red); }
+        .pipe-paused, .pipe-unverified { color: var(--orange); }
+        .hb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1px; background: var(--ember-dim); border: 1px solid var(--ember-dim); margin: 0 0 32px; }
+        .hb-tile { background: var(--bg-1); padding: 14px 16px 14px 19px; position: relative; min-width: 0; }
+        .hb-tile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--text-3); }
+        .hb-ok::before { background: var(--green); }
+        .hb-failed::before, .hb-stale::before { background: var(--red); }
+        .hb-paused::before, .hb-missing::before { background: var(--orange); }
+        .hb-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+        .hb-name { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); }
+        .hb-state { font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+        .hb-ok .hb-state { color: var(--green); }
+        .hb-failed .hb-state, .hb-stale .hb-state { color: var(--red); }
+        .hb-paused .hb-state, .hb-missing .hb-state { color: var(--orange); }
+        .hb-meta { font-size: 10px; color: var(--text-3); margin-top: 6px; text-transform: uppercase; letter-spacing: .06em; }
+        .hb-reason { font-size: 12px; color: var(--text-2); margin-top: 6px; overflow-wrap: anywhere; }
         .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
         .dot.resolved { background: var(--green); box-shadow: 0 0 10px var(--green); }
         .dot.pending { background: var(--orange); box-shadow: 0 0 10px var(--orange); animation: pulse 2s infinite; }
@@ -210,7 +227,7 @@
             <div class="ml-auto flex items-center gap-6">
                 <div class="hidden md:flex flex-col text-right">
                     <span class="text-[9px] uppercase tracking-widest text-orange-400 font-bold">Live Pipeline</span>
-                    <span class="text-[11px] font-bold tracking-tight text-[#f6ece9]">AUTONOMOUS-MODE-ACTIVE</span>
+                    <span class="text-[11px] font-bold tracking-tight pipe-{{ (pipeline_state or 'UNVERIFIED')|lower }}">AUTONOMOUS-MODE-{{ pipeline_state or 'UNVERIFIED' }}</span>
                 </div>
             </div>
         </header>
@@ -247,6 +264,22 @@
                 <span>Autonomous SWE - All Fixes</span>
                 <span class="count">{{ '%03d' % total }} INCIDENTS TRACKED</span>
             </div>
+
+            {% if heartbeats %}
+            <div class="hb-grid">
+                {% for hb in heartbeats %}
+                {% set st = 'paused' if hb.paused else hb.state %}
+                <div class="hb-tile hb-{{ st }}">
+                    <div class="hb-top">
+                        <span class="hb-name">{{ 'Watcher · 05:00' if hb.agent == 'watcher' else 'Fleet audit · 06:00' }}</span>
+                        <span class="hb-state">{{ {'ok': 'Healthy', 'failed': 'Down', 'stale': 'Silent', 'missing': 'No signal', 'paused': 'Paused'}[st] }}</span>
+                    </div>
+                    <div class="hb-meta">last run {{ hb.ts_human }}{% if hb.duration is not none %} · {{ hb.duration }}s{% endif %}{% if st != 'ok' %} · last good {{ hb.last_ok_human }}{% endif %}</div>
+                    <div class="hb-reason">{{ (hb.reason or '')[:220] }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
 
             {% if not total %}
             <div class="text-center text-[#8d6259] italic py-24">no incidents yet</div>

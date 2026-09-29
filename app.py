@@ -755,9 +755,42 @@ def logs_index_page():
     merge_ready = sorted((i for i in incidents if i.get("status") == "council_approved"), key=_recent)
     merged = sorted((i for i in incidents if i.get("status") == "resolved"), key=_recent)
     needs_you = sorted((i for i in incidents if i.get("status") not in ("council_approved", "resolved")), key=_recent)
+    heartbeats = _autofix_heartbeats()
     return render_template("logs_index.html", boot=get_system_info(),
                            merge_ready=merge_ready, needs_you=needs_you, merged=merged,
-                           total=len(incidents))
+                           total=len(incidents), heartbeats=heartbeats,
+                           pipeline_state=_pipeline_state(heartbeats))
+
+
+_HB_MODULE = None
+
+
+def _autofix_heartbeats():
+    """ops/autofix/heartbeat.status() rows + human times. The module lives
+    outside the app package (host-side pipeline), so load it by path once."""
+    global _HB_MODULE
+    if _HB_MODULE is None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "autofix_heartbeat", os.path.join(_APP_DIR, "ops", "autofix", "heartbeat.py"))
+        _HB_MODULE = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_HB_MODULE)
+    rows = _HB_MODULE.status()
+    fmt = lambda ts: datetime.fromtimestamp(ts, tz=_GALLERY_TZ).strftime("%b %-d, %-I:%M %p") if ts else "never"
+    for r in rows:
+        r["ts_human"], r["last_ok_human"] = fmt(r.get("ts")), fmt(r.get("last_ok_ts"))
+        r["paused"] = str(r.get("reason", "")).startswith("paused")
+    return rows
+
+
+def _pipeline_state(rows):
+    """Header label: ACTIVE only when every agent's last run truly worked."""
+    states = {r["state"] for r in rows}
+    if states == {"ok"}:
+        return "ACTIVE"
+    if all(r.get("paused") for r in rows if r["state"] != "ok"):
+        return "PAUSED"
+    return "DOWN" if states & {"failed", "stale"} else "UNVERIFIED"
 
 
 @app.route("/logs/job/<unit>")
