@@ -1312,6 +1312,42 @@ def terminal():
     return resp
 
 
+@app.route("/code")
+@require_auth
+def code_page():
+    # Code = the ARES iPhone app's Claude chat, on the web: the same ares-code server
+    # (host :7688, reached through Caddy /code/*) and the same live Claude tabs.
+    resp = make_response(render_template("code.html", code_v=_code_asset_v()))
+    resp.headers["Cache-Control"] = "no-store, must-revalidate"
+    return resp
+
+
+def _code_asset_v():
+    stamps = []
+    for name in ("code-chat.js", "code-chat.css", "code-store.js", "code-md.js"):
+        try:
+            stamps.append(int(os.path.getmtime(os.path.join(_STATIC_DIR, name))))
+        except OSError:
+            stamps.append(0)
+    return max(stamps)
+
+
+@app.route("/api/code/ticket", methods=["POST"])
+@require_auth
+def code_ticket():
+    # A browser can't put a Bearer header on a WebSocket, so it gets a 60 s ticket that
+    # ares-code checks (ares_code/tickets.py): "<expiry>.<hmac(ARES_API_TOKEN)>". The token
+    # itself never leaves the server.
+    import hashlib, hmac as _hmac
+    if not API_TOKEN:
+        return jsonify({"ok": False, "error": "ARES_API_TOKEN is not set"}), 503
+    exp = int(time.time()) + 60
+    mac = _hmac.new(API_TOKEN.encode(), f"ares-code-ws:{exp}".encode(), hashlib.sha256).hexdigest()
+    resp = jsonify({"ok": True, "ticket": f"{exp}.{mac}"})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @app.route("/breakdown")
 @require_auth
 def breakdown_page():
