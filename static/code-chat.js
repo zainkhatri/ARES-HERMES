@@ -240,7 +240,7 @@
     }
     if (!want.length) {
       want.push({ id: '__empty', cls: 'empty', html: st.sid ? '<div class="sub">Loading this chat…</div>'
-        : '<div class="big">What should ARES work on?</div><div class="sub">ARES finds the right project in the knowledge graph,<br>opens a Claude tab there and works like it does on your phone.</div>' });
+        : '<img class="logo" src="/static/ares-mark.svg" alt=""><div class="big">What should ARES work on?</div><div class="sub">ARES finds the right project in the knowledge graph,<br>opens a Claude tab there and works like it does on your phone.</div>' });
     }
     const stick = nearBottom();
     const keep = new Set(want.map((w) => w.id));

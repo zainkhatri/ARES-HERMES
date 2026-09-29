@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ARES & ZEUS</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=2">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon-ares.svg?v=3">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="apple-touch-icon" href="/static/icon-180.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -542,6 +542,7 @@
 <body>
 <div id="page-fx"></div>   <!-- fades out on load -->
 <div class="boxdate" id="box-date"></div>
+{% if (boot.hostname if boot else 'ARES')|upper == 'ARES' %}<style>.boxdate::before{content:"";display:inline-block;width:1.3em;height:1.3em;margin-right:.7em;vertical-align:-.3em;background:url(/static/ares-mark.svg) center/contain no-repeat}</style>{% endif %}
 <div class="boxclock" id="box-clock"></div>
 <style>
 .boxsw{position:fixed;top:10px;left:16px;z-index:9000;display:flex;overflow:hidden;border:1px solid var(--ember-dim);background:rgba(var(--panel-rgb),.85);backdrop-filter:blur(4px);box-shadow:inset 0 0 22px rgba(var(--ares-rgb),.045),0 0 12px rgba(var(--ares-rgb),.06);font-family:'JetBrains Mono',monospace}

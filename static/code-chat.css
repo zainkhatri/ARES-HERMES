@@ -110,6 +110,7 @@ html, body { height:100%; overflow:hidden; }
 .m-perm pre { white-space:pre-wrap; font:12px 'JetBrains Mono',monospace; color:var(--text-2); }
 .m-perm .res { margin-top:8px; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); }
 .empty { margin:auto; padding:10vh 0 0; text-align:center; color:var(--text-3); }
+.empty .logo { width:64px; height:64px; margin:0 auto 22px; display:block; filter:drop-shadow(0 0 22px rgba(var(--ares-rgb),.35)); }
 .empty .big { font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:30px; color:var(--text-1); letter-spacing:-.01em; }
 .empty .sub { margin-top:10px; font-size:12px; letter-spacing:.06em; line-height:1.7; }
 
@@ -119,8 +120,8 @@ html, body { height:100%; overflow:hidden; }
 /* ---- dock: working line, prompt, composer ---- */
 .dock { flex:0 0 auto; padding:0 20px 14px; }
 .working { display:flex; align-items:center; gap:10px; padding:4px 2px 10px; font-family:-apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; font-size:14.5px; color:var(--text-2); }
-.spark { color:var(--ares); font-size:18px; line-height:1; display:inline-block; animation:spark 1.6s linear infinite; }
-@keyframes spark { to { transform:rotate(360deg); } }
+.spark { width:18px; height:18px; display:block; animation:spark 2.4s cubic-bezier(.45,0,.55,1) infinite; }
+@keyframes spark { 0% { transform:rotate(0) scale(1); } 50% { transform:rotate(180deg) scale(.82); } 100% { transform:rotate(360deg) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .spark { animation:none; } }
 .tprompt { margin-bottom:10px; border:1px solid var(--ares); background:rgba(var(--ares-rgb),.06); }
 .tprompt-head { padding:7px 12px; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--ares); border-bottom:1px solid var(--ember-dim); }
