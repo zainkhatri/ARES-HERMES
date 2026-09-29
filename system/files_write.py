@@ -8,7 +8,7 @@ protected-island, and symlink-race defenses apply uniformly.
 
 Safety model (see docs/superpowers/specs/2026-09-16-files-read-write-design.md):
   * every request path passes ``gate()`` = ``files_api.safe_resolve`` (confinement
-    + vault + dotfile) plus a protected-island block (PHOTOS, MORDOR, the repo).
+    + vault + dotfile) plus a protected-island block (PHOTOS, MINECRAFT, the repo).
   * creation uses ``O_CREAT|O_EXCL|O_NOFOLLOW`` on the leaf and operates relative
     to a parent ``dir_fd`` opened ``O_DIRECTORY|O_NOFOLLOW`` — a symlinked parent
     raises instead of redirecting the write outside the pool.
@@ -39,7 +39,7 @@ assert os.rename in os.supports_dir_fd, "os.rename needs dir_fd support"
 # bind-mount cannot shift them (do NOT derive from __file__).
 _ISLANDS = tuple(os.path.realpath(os.path.join(ROOT, *parts)) for parts in (
     ("PHOTOS",),
-    ("MORDOR",),
+    ("MINECRAFT",),                   # game servers (MORDOR, FOMER)
     ("PROJECTS", "ARES-DASHBOARD"),   # the running repo; a watcher restarts on .py writes
 ))
 

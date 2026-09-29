@@ -1,0 +1,35 @@
+/* mc-flip.css — double-tap the home Thermals card to flip it to the FOMER Minecraft server. */
+#panel-thermals { user-select:none; -webkit-user-select:none; cursor:default; }
+#panel-thermals.mc-out { animation:mcOut 170ms cubic-bezier(.55,0,1,.45) forwards; }
+#panel-thermals.mc-in  { animation:mcIn 260ms cubic-bezier(.16,1,.3,1); }
+@keyframes mcOut { from { transform:perspective(900px) rotateY(0); } to { transform:perspective(900px) rotateY(90deg); } }
+@keyframes mcIn  { from { transform:perspective(900px) rotateY(-90deg); } to { transform:perspective(900px) rotateY(0); } }
+@media (prefers-reduced-motion: reduce) { #panel-thermals.mc-out, #panel-thermals.mc-in { animation-duration:1ms; } }
+
+.mc-back { display:none; position:absolute; inset:0; z-index:2; flex-direction:column;
+           background:rgba(var(--panel-rgb),.97); }
+#panel-thermals.mc-flipped .mc-back { display:flex; }
+#panel-thermals.mc-flipped > .mod-head:not(.mc-back .mod-head),
+#panel-thermals.mc-flipped > .mod-body { visibility:hidden; }
+.mc-state { display:flex; align-items:center; gap:7px; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-3); }
+.mc-state i { width:6px; height:6px; background:var(--text-4); }
+.mc-state.on { color:var(--green); } .mc-state.on i { background:var(--green); box-shadow:0 0 8px var(--green); }
+.mc-state.busy { color:var(--ares); } .mc-state.busy i { background:var(--ares); animation:mcBlink 1s steps(2) infinite; }
+@keyframes mcBlink { 50% { opacity:.2; } }
+.mc-body { flex:1 1 auto; min-height:0; display:flex; align-items:center; gap:14px; padding:10px 14px; }
+.mc-info { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.mc-name { font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:22px; line-height:1; color:var(--text-1); letter-spacing:.01em; }
+.mc-name span { margin-left:6px; font:500 10px 'JetBrains Mono',monospace; letter-spacing:.14em; color:var(--text-3); vertical-align:middle; }
+.mc-players { font-size:11px; letter-spacing:.08em; color:var(--text-2); }
+.mc-addr { align-self:flex-start; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:0; cursor:pointer;
+           font:10.5px 'JetBrains Mono',monospace; letter-spacing:.04em; color:var(--text-3); background:none; border:0; }
+.mc-addr:hover, .mc-addr.copied { color:var(--ares); }
+.mc-go { flex:0 0 auto; min-width:96px; height:44px; padding:0 16px; cursor:pointer;
+         font:700 13px 'JetBrains Mono',monospace; letter-spacing:.16em; text-transform:uppercase;
+         color:#0a0303; background:var(--ares); border:1px solid var(--ares); box-shadow:0 0 20px -6px var(--ares);
+         transition:all 160ms cubic-bezier(.16,1,.3,1); }
+.mc-go:hover { background:var(--ares-bright); }
+.mc-go.stop { color:var(--text-2); background:transparent; border-color:var(--ember-dim); box-shadow:none; }
+.mc-go.stop:hover { color:var(--text-1); border-color:var(--ares); }
+.mc-go.confirm { color:var(--text-1); background:rgba(239,68,68,.18); border-color:var(--red); }
+.mc-go:disabled { opacity:.45; cursor:default; box-shadow:none; }

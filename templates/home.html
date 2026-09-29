@@ -824,6 +824,23 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
                     <canvas class="thermal" id="cv-therm" aria-hidden="true"></canvas>
                     <div class="th-scale"><span id="th-hi">90&deg;C</span><span id="th-lo">0&deg;C</span></div>
                 </div>
+                {% if _brand == 'ARES' %}
+                <!-- back of the card: double-tap Thermals to flip to the FOMER Minecraft server -->
+                <div class="mc-back" id="mc-back" aria-hidden="true">
+                    <div class="mod-head">
+                        <span class="mod-title">Minecraft</span>
+                        <span class="mc-state" id="mc-state"><i></i><span id="mc-state-t">Checking</span></span>
+                    </div>
+                    <div class="mc-body">
+                        <div class="mc-info">
+                            <div class="mc-name">FOMER <span>EROS</span></div>
+                            <div class="mc-players" id="mc-players">—</div>
+                            <button type="button" class="mc-addr" id="mc-addr" title="Copy the join address">laurel-faxes.tun.ply.gg</button>
+                        </div>
+                        <button type="button" class="mc-go" id="mc-go" disabled>Start</button>
+                    </div>
+                </div>
+                {% endif %}
             </section>
 
             {% if _brand == 'ARES' %}
@@ -2835,5 +2852,6 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
 })();
 </script>
 <script src="/static/box-nav.js"></script>
+{% if _brand == 'ARES' %}<link rel="stylesheet" href="/static/mc-flip.css?v={{ mcflip_v }}"><script src="/static/mc-flip.js?v={{ mcflip_v }}"></script>{% endif %}
 </body>
 </html>

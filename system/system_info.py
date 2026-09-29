@@ -596,7 +596,7 @@ def _get_cpu_temp():
         return None
 
 
-MORDOR_STATE_FILE = os.path.join(POOL_ROOT, "MORDOR", "server_schedule.log")
+MORDOR_STATE_FILE = os.path.join(POOL_ROOT, "MINECRAFT", "MORDOR", "server_schedule.log")
 
 
 def _swr(holder, compute, ttl_for, cold=None):
@@ -900,7 +900,7 @@ def _get_mordor_status() -> dict:
 
     try:
         # Check PID file first, then fall back to process scan
-        pid_file = os.path.join(POOL_ROOT, "MORDOR", "server.pid")
+        pid_file = os.path.join(POOL_ROOT, "MINECRAFT", "MORDOR", "server.pid")
         is_running = False
         if os.path.exists(pid_file):
             with open(pid_file) as f:

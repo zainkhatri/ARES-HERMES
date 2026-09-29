@@ -137,7 +137,8 @@ def _asset_versions():
             return int(os.path.getmtime(os.path.join(_STATIC_DIR, name)))
         except OSError:
             return 0
-    return {"hud_v": _mt("hud.css"), "zeusgraph_v": _mt("zeus-graph.js")}
+    return {"hud_v": _mt("hud.css"), "zeusgraph_v": _mt("zeus-graph.js"),
+            "mcflip_v": max(_mt("mc-flip.js"), _mt("mc-flip.css"))}
 
 # ─── GPU loan flag ───
 # Written by the host's gpu-swap.sh hookscript before VM 200/300 borrows the
@@ -3661,14 +3662,14 @@ def storage_breakdown():
             evo_pool_mount = d["mount"]
 
     # ARES heat-map for folders: yellow → orange → red → deep red.
-    # PHOTOS is the big star, gets the hottest tone. MORDOR is dark, matches its name.
+    # PHOTOS is the big star, gets the hottest tone. MINECRAFT (MORDOR + FOMER) is dark.
     folder_palette = {
         "PHOTOS":     "#fbbf24",  # amber 400
         "PROJECTS":   "#f97316",  # orange 500
         "PROMETHEON": "#ea580c",  # orange 600
         "PERSONAL":   "#ef4444",  # red 400 (ARES primary)
         "WORK":       "#b91c1c",  # red 700
-        "MORDOR":     "#7f1d1d",  # red 800 — dark, on-theme
+        "MINECRAFT":  "#7f1d1d",  # red 800 — MORDOR + FOMER game servers
     }
     evo_segments = []
     total_folders = 0
@@ -4270,6 +4271,56 @@ def mordor_toggle():
         except subprocess.TimeoutExpired:
             return jsonify({"ok": True, "status": action + "ing", "output": "timed out waiting"})
     return jsonify({"ok": False, "error": "invalid action"}), 400
+
+
+# ─── FOMER (Minecraft on EROS) — the back of the home Thermals card ───
+# The container cannot reach EROS, so the ARES host runs the control script and ssh's
+# to EROS itself: /mnt/nvme/PROMETHEUS/scripts/minecraft/fomer-ctl.sh status|start|stop.
+_FOMER_CTL = "/mnt/nvme/PROMETHEUS/scripts/minecraft/fomer-ctl.sh"
+_FOMER_ADDR = "laurel-faxes.tun.ply.gg"   # playit on ARES → EROS:25566
+_fomer_cache = {"ts": 0.0, "data": None}
+_fomer_lock = threading.Lock()
+
+
+def _fomer(action):
+    assert action in ("status", "start", "stop")
+    import subprocess as _sp
+    try:
+        out = _sp.check_output(
+            ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+             "root@192.168.20.51", "bash " + _FOMER_CTL + " " + action],
+            timeout=75 if action == "stop" else 30, stderr=_sp.DEVNULL).decode("utf-8", "replace")
+        data = json.loads(out.strip().splitlines()[-1])
+    except Exception as e:
+        return {"server": "fomer", "running": None, "error": type(e).__name__}
+    if not isinstance(data, dict) or "running" not in data:
+        return {"server": "fomer", "running": None, "error": "bad reply"}
+    return data
+
+
+@app.route("/api/mc/fomer", methods=["GET"])
+@require_auth
+def fomer_status():
+    # Coalesce polls: one ~4 s probe serves every caller for 8 s.
+    with _fomer_lock:
+        now = time.time()
+        if _fomer_cache["data"] is None or now - _fomer_cache["ts"] > 8:
+            _fomer_cache["data"], _fomer_cache["ts"] = _fomer("status"), now
+        data = dict(_fomer_cache["data"])
+    data["address"] = _FOMER_ADDR
+    return jsonify(data)
+
+
+@app.route("/api/mc/fomer", methods=["POST"])
+@require_write
+def fomer_control():
+    action = (request.get_json(silent=True) or {}).get("action")
+    if action not in ("start", "stop"):
+        return jsonify({"error": "action must be start or stop"}), 400
+    data = _fomer(action)
+    with _fomer_lock:
+        _fomer_cache["data"], _fomer_cache["ts"] = data, time.time()
+    return jsonify(dict(data, address=_FOMER_ADDR))
 
 
 # ─── Public Minecraft Control (for GitHub Pages remote) ───
