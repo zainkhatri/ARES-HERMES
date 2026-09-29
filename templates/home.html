@@ -814,6 +814,23 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
             </section>
 
             <section class="mod c-tr c-br" id="panel-thermals">
+                {% if _brand == 'ARES' %}
+                <!-- ARES: the sister boxes (ZEUS + EROS) live here; Thermals moved off the home page -->
+                <div class="mod-head">
+                    <span class="mod-title">Fleet</span>
+                    <span class="mod-meta" id="fl-meta">—</span>
+                </div>
+                <div class="mod-body fl-body">
+                    <div class="fl-row" id="fl-eros">
+                        <div class="fl-top"><span class="fl-name">EROS</span><span class="fl-st" id="fl-eros-st"><i></i><span>—</span></span><span class="fl-side" id="fl-eros-side"></span></div>
+                        <div class="fl-mets" id="fl-eros-mets"></div>
+                    </div>
+                    <div class="fl-row" id="fl-zeus">
+                        <div class="fl-top"><span class="fl-name">ZEUS</span><span class="fl-st" id="fl-zeus-st"><i></i><span>—</span></span><span class="fl-side" id="fl-zeus-side"></span></div>
+                        <div class="fl-mets" id="fl-zeus-mets"></div>
+                    </div>
+                </div>
+                {% else %}
                 <div class="mod-head">
                     <span class="mod-title">Thermals</span>
                     <span class="mod-meta">
@@ -825,8 +842,9 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
                     <canvas class="thermal" id="cv-therm" aria-hidden="true"></canvas>
                     <div class="th-scale"><span id="th-hi">90&deg;C</span><span id="th-lo">0&deg;C</span></div>
                 </div>
+                {% endif %}
                 {% if _brand == 'ARES' %}
-                <!-- back of the card: double-tap Thermals to flip to the FOMER Minecraft server -->
+                <!-- back of the card: double-tap the Fleet card to flip to the FOMER Minecraft server -->
                 <div class="mc-back" id="mc-back" aria-hidden="true">
                     <div class="mod-head">
                         <span class="mod-title">Minecraft</span>
@@ -1227,13 +1245,15 @@ tick(); setInterval(tick, 1000);
         clock: ["..#####..",".#.....#.","#...#...#","#...#...#","#...####.","#.......#","#.......#",".#.....#.","..#####.."],
         blocks:["###.###","###.###","###.###",".......","###.###","###.###","###.###"],
         card:  ["#########","#.#####.#","#.#####.#","#.#####.#","#########","..#...#..","..#...#.."],
-        blip:  ["..#..",".###.","#####",".###.","..#.."]
+        blip:  ["..#..",".###.","#####",".###.","..#.."],
+        fleet: ["###...###","#.#...#.#","###...###","..#...#..","..#####..","....#....","...###..."],
+        cube:  ["#######","#.#.#.#","#######","#.....#","#.#.#.#","#.....#","#######"]
     };
     var MAP = {
         'cpu load':'chip','system':'chip','array map':'stack','thermals':'thermo','telemetry':'bars',
         'network':'net','disk i/o':'floppy','outreach':'mail','to reply':'mail','needs attention':'mail',
         'attention':'mail','where it lives':'folder','scheduled jobs':'clock','operation modules':'blocks',
-        'services':'blocks','gpu relay':'card'
+        'services':'blocks','gpu relay':'card','fleet':'fleet','minecraft':'cube'
     };
     function svg(rows) {
         var w = rows[0].length, h = rows.length, r = '';
@@ -2853,6 +2873,6 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
 })();
 </script>
 <script src="/static/box-nav.js"></script>
-{% if _brand == 'ARES' %}<link rel="stylesheet" href="/static/mc-flip.css?v={{ mcflip_v }}"><script src="/static/mc-flip.js?v={{ mcflip_v }}"></script>{% endif %}
+{% if _brand == 'ARES' %}<link rel="stylesheet" href="/static/mc-flip.css?v={{ mcflip_v }}"><script src="/static/mc-flip.js?v={{ mcflip_v }}"></script><script src="/static/fleet-card.js?v={{ mcflip_v }}"></script>{% endif %}
 </body>
 </html>

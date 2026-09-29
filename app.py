@@ -138,7 +138,7 @@ def _asset_versions():
         except OSError:
             return 0
     return {"hud_v": _mt("hud.css"), "zeusgraph_v": _mt("zeus-graph.js"),
-            "mcflip_v": max(_mt("mc-flip.js"), _mt("mc-flip.css"))}
+            "mcflip_v": max(_mt("mc-flip.js"), _mt("mc-flip.css"), _mt("fleet-card.js"))}
 
 # ─── GPU loan flag ───
 # Written by the host's gpu-swap.sh hookscript before VM 200/300 borrows the

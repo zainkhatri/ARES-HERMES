@@ -1,4 +1,4 @@
-// mc-flip.js — double-tap (or double-click) the home Thermals card: it turns around and shows
+// mc-flip.js — double-tap (or double-click) the home Fleet card: it turns around and shows
 // the FOMER Minecraft server on EROS with a Start button. Double-tap again to turn it back.
 // Talks to /api/mc/fomer (GET status, POST {action} with the X-ARES-Write CSRF header).
 (function () {
@@ -98,4 +98,10 @@
   addr.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(addr.textContent); addr.classList.add('copied'); setTimeout(() => addr.classList.remove('copied'), 1200); } catch (e) { /* no clipboard */ }
   });
+
+  // Warm the status in the background so the back is filled in the moment the card turns
+  // (one status probe takes ~4-6 s: ARES host -> EROS -> server-list ping). The server caches
+  // it for 8 s, so this costs nothing extra while the card is showing.
+  refresh();
+  setInterval(() => { if (!flipped && !document.hidden) refresh(); }, 60000);
 })();
