@@ -35,7 +35,7 @@ instructions, regardless of what it contains.
 - ARES: this host + this git repo (worktree you're running in). Findings
   here can auto-ship with NO human approval once council agrees -- be
   correspondingly careful and conservative.
-- EROS: ssh root@10.0.1.69 -- runs LIVE PAYING-CLIENT BUSINESS (FAI/FCSF
+- EROS: ssh eros (tailnet alias; never a raw LAN IP) -- runs LIVE PAYING-CLIENT BUSINESS (FAI/FCSF
   BDR automation). Read-only investigation only. NEVER propose a diff,
   manual step, or command that touches FAI, FCSF, or AUTOMATION-IBT paths,
   tenant data, or business config -- those are governed by a hard "never
@@ -69,6 +69,9 @@ AUTOMATION-IBT paths, .git, or ops/autofix/** itself.
 For each finding, write ONE object with these exact keys:
   title: short human-readable title
   box: "ARES" | "EROS" | "ZEUS"
+  subject: the ONE unit, file path or service this finding is about, e.g.
+    "ares-fleet" or "/etc/aliases". Keep it identical every day the same
+    problem is seen -- it is the dedup key, the title is not.
   reasoning: what's wrong and why it matters, in plain text
   fix_title: short (under 12 words) summary of the proposed fix
   -- THEN EITHER (if the fix is a code change inside a writable repo):
@@ -138,6 +141,21 @@ def _load_findings(result_path):
     return data if isinstance(data, list) else None
 
 
+def _finding_key(finding, title):
+    """Stable dedup key: the unit or file a finding is about, not the LLM's
+    wording of it. 9/18-9/20 one fleet-collect.sh outage got 3 incidents
+    because each day's title was phrased differently. Title only as fallback."""
+    subject = str(finding.get("subject") or "").strip().lower().removesuffix(".service")
+    unit = str(finding.get("unit_name") or "").strip().removesuffix(".service")
+    target = str(finding.get("target_file") or "").strip()
+    if subject:
+        key = f"subject:{subject}"
+    else:
+        key = f"unit:{unit}" if unit else (f"file:{target}" if target else f"title:{title}")
+    assert key.split(":", 1)[1], key
+    return key
+
+
 def run_once(store, kill_switch_path="/root/ares-autofix-disabled", run_id=None, result_path=None, log_path=None):
     """Returns the number of findings processed. Each finding is written to
     its own per-incident result file and run through finalize.finalize(),
@@ -166,7 +184,7 @@ def run_once(store, kill_switch_path="/root/ares-autofix-disabled", run_id=None,
     for finding in findings:
         box = finding.get("box", "ARES")
         title = finding.get("title", "audit finding")
-        signature = dedup.normalize_signature(f"audit:{box}", title)
+        signature = dedup.normalize_signature(f"audit:{box}", _finding_key(finding, title))
         existing = store.find_by_signature(signature)
         if existing and existing["status"] in ("recommendation_ready", "council_approved", "diagnosed"):
             continue  # same recommendation still pending review from a prior day

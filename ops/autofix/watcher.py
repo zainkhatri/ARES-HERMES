@@ -268,10 +268,13 @@ def main(store, kill_switch_path="/root/ares-autofix-disabled", hb_dir=heartbeat
     missing = heartbeat.preflight()
     n = run_once(store, kill_switch_path)
     print(f"watcher: {n} new incident(s)")
+    down = heartbeat.unreachable_hosts()
     duration = round(time.time() - started, 1)
-    if missing:
-        print(f"watcher: ESCALATION DISABLED -- {missing}")
-        heartbeat.write("watcher", ok=False, reason=f"{n} new incident(s), but escalation cannot run: {missing}",
+    problems = ([f"escalation cannot run: {missing}"] if missing else []) + \
+               ([f"{', '.join(down)} unreachable over ssh -- audit is blind there"] if down else [])
+    if problems:
+        print(f"watcher: DEGRADED -- {'; '.join(problems)}")
+        heartbeat.write("watcher", ok=False, reason=f"{n} new incident(s), but " + "; ".join(problems),
                         duration=duration, hb_dir=hb_dir)
         return 1
     heartbeat.write("watcher", ok=True, reason=f"{n} new incident(s)", duration=duration, hb_dir=hb_dir)

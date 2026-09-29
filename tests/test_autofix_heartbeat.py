@@ -77,6 +77,7 @@ def test_watcher_main_reports_missing_claude_but_still_runs(tmp_path, monkeypatc
     ran = []
     monkeypatch.setattr(watcher, "run_once", lambda s, ks: ran.append(1) or 2)
     monkeypatch.setattr(watcher.heartbeat, "preflight", lambda: "claude CLI not found on PATH (/usr/bin)")
+    monkeypatch.setattr(watcher.heartbeat, "unreachable_hosts", lambda: [])
     rc = watcher.main(store, kill_switch_path=str(tmp_path / "nope"), hb_dir=str(tmp_path / "hb"))
     assert rc == 1
     assert ran == [1]
@@ -95,3 +96,34 @@ def test_watcher_main_kill_switch_writes_paused(tmp_path, monkeypatch):
     assert rc == 0
     hb = json.loads((tmp_path / "hb" / "watcher.json").read_text())
     assert hb["reason"].startswith("paused")
+
+
+def test_unreachable_hosts_lists_only_failed_probes(monkeypatch):
+    class R:
+        def __init__(self, rc): self.returncode = rc
+    calls = []
+    monkeypatch.setattr(heartbeat.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or R(255))
+    assert heartbeat.unreachable_hosts({"EROS": "eros"}) == ["EROS"]
+    assert calls[0][-2:] == ["eros", "true"]
+    assert "BatchMode=yes" in calls[0]
+    monkeypatch.setattr(heartbeat.subprocess, "run", lambda cmd, **kw: R(0))
+    assert heartbeat.unreachable_hosts({"EROS": "eros"}) == []
+
+
+def test_unreachable_hosts_treats_timeout_as_down(monkeypatch):
+    def boom(cmd, **kw):
+        raise heartbeat.subprocess.TimeoutExpired(cmd, 20)
+    monkeypatch.setattr(heartbeat.subprocess, "run", boom)
+    assert heartbeat.unreachable_hosts({"EROS": "eros"}) == ["EROS"]
+
+
+def test_watcher_main_fails_heartbeat_when_eros_unreachable(tmp_path, monkeypatch):
+    import watcher, incident_store
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    monkeypatch.setattr(watcher, "run_once", lambda s, ks: 0)
+    monkeypatch.setattr(watcher.heartbeat, "preflight", lambda: None)
+    monkeypatch.setattr(watcher.heartbeat, "unreachable_hosts", lambda: ["EROS"])
+    rc = watcher.main(store, kill_switch_path=str(tmp_path / "nope"), hb_dir=str(tmp_path / "hb"))
+    assert rc == 1
+    hb = json.loads((tmp_path / "hb" / "watcher.json").read_text())
+    assert hb["ok"] is False and "EROS" in hb["reason"]

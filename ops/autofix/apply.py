@@ -118,7 +118,7 @@ def systemctl_healthy(unit_name, settle_secs=5):
 
 # Same root-SSH trust the audit session itself uses to investigate EROS/ZEUS
 # (bidirectional key trust already in place, per homelab conventions).
-SSH_TARGETS = {"EROS": "root@10.0.1.69", "ZEUS": "zeus"}
+SSH_TARGETS = {"EROS": "eros", "ZEUS": "zeus"}  # ~/.ssh/config aliases ride tailscale; raw LAN IPs died in the 9/17 move
 
 
 def run_command(box, cmd, timeout=120):

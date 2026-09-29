@@ -10,6 +10,15 @@ def _claude_present(monkeypatch):
     monkeypatch.setattr(audit.heartbeat, "preflight", lambda: None)
 
 
+@pytest.fixture(autouse=True)
+def _no_real_claude_session(monkeypatch):
+    # a test that forgets to stub the session must fail, never launch a real
+    # 90-min `claude -p` fleet audit (happened once, 2026-09-28)
+    def _refuse(*a, **kw):
+        raise AssertionError("test tried to start a real claude audit session -- stub _run_audit_session")
+    monkeypatch.setattr(audit, "_run_audit_session", _refuse)
+
+
 def test_kill_switch_engaged_means_no_findings_processed(tmp_path, monkeypatch):
     store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
     ks_fd, ks_path = tempfile.mkstemp()
@@ -137,3 +146,63 @@ def test_dedup_skips_finding_still_pending_from_a_prior_run(tmp_path, monkeypatc
                              result_path=str(result_path), log_path=str(tmp_path / "b.log"))
     assert first == 1
     assert second == 0  # recommendation_ready still counts as "already have an answer for this"
+
+
+def _pending_finalize(store):
+    def fake(iid, **kw):
+        store.set_status(iid, "recommendation_ready")
+        return "recommendation_ready"
+    return fake
+
+
+def test_same_unit_with_reworded_title_dedups(tmp_path, monkeypatch):
+    monkeypatch.setattr(audit, "_run_audit_session", lambda rp, lp, **kw: 0)
+    # 9/18-9/20: one fleet-collect.sh outage filed 3x because the LLM worded the title differently each day
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    monkeypatch.setattr(audit.finalize, "finalize", _pending_finalize(store))
+    titles = ["ares-fleet.service crashes every 60s: fleet-collect.sh missing execute bit",
+              "ares-fleet.service crash-loops (203/EXEC) -- fleet-collect.sh lost its execute bit"]
+    counts = []
+    for n, title in enumerate(titles):
+        rp = tmp_path / f"r{n}.json"
+        rp.write_text(json.dumps([{"title": title, "box": "ARES", "unit_name": "ares-fleet", "manual_steps": "x"}]))
+        counts.append(audit.run_once(store, kill_switch_path=str(tmp_path / "nope"), run_id=f"d{n}",
+                                     result_path=str(rp), log_path=str(tmp_path / f"l{n}.log")))
+    assert counts == [1, 0]
+    assert len(store.load()["incidents"]) == 1
+
+
+def test_same_target_file_dedups_when_no_unit(tmp_path, monkeypatch):
+    monkeypatch.setattr(audit, "_run_audit_session", lambda rp, lp, **kw: 0)
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    monkeypatch.setattr(audit.finalize, "finalize", _pending_finalize(store))
+    for n, title in enumerate(["stale IP in elite_picks.py", "elite_picks.py still points at VM 300"]):
+        rp = tmp_path / f"r{n}.json"
+        rp.write_text(json.dumps([{"title": title, "box": "ARES", "target_file": "elite_picks.py", "manual_steps": "x"}]))
+        audit.run_once(store, kill_switch_path=str(tmp_path / "nope"), run_id=f"t{n}",
+                       result_path=str(rp), log_path=str(tmp_path / f"l{n}.log"))
+    assert len(store.load()["incidents"]) == 1
+
+
+def test_different_units_on_same_box_stay_separate(tmp_path, monkeypatch):
+    monkeypatch.setattr(audit, "_run_audit_session", lambda rp, lp, **kw: 0)
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    monkeypatch.setattr(audit.finalize, "finalize", _pending_finalize(store))
+    rp = tmp_path / "r.json"
+    rp.write_text(json.dumps([{"title": "same words", "box": "ARES", "unit_name": "a", "manual_steps": "x"},
+                              {"title": "same words", "box": "ARES", "unit_name": "b", "manual_steps": "x"}]))
+    n = audit.run_once(store, kill_switch_path=str(tmp_path / "nope"), run_id="s",
+                       result_path=str(rp), log_path=str(tmp_path / "l.log"))
+    assert n == 2
+
+
+def test_subject_key_wins_over_title_for_recommendations(tmp_path, monkeypatch):
+    monkeypatch.setattr(audit, "_run_audit_session", lambda rp, lp, **kw: 0)
+    store = incident_store.IncidentStore(str(tmp_path / "incidents.json"))
+    monkeypatch.setattr(audit.finalize, "finalize", _pending_finalize(store))
+    for n, (title, subj) in enumerate([("EROS mail stuck", "/etc/aliases"), ("postfix aliases.db missing", "/etc/Aliases")]):
+        rp = tmp_path / f"r{n}.json"
+        rp.write_text(json.dumps([{"title": title, "box": "EROS", "subject": subj, "manual_steps": "x"}]))
+        audit.run_once(store, kill_switch_path=str(tmp_path / "nope"), run_id=f"s{n}",
+                       result_path=str(rp), log_path=str(tmp_path / f"l{n}.log"))
+    assert len(store.load()["incidents"]) == 1

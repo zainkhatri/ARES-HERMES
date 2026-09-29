@@ -12,6 +12,7 @@ the owner decides that."""
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import time
 
@@ -29,6 +30,28 @@ def preflight():
         return f"claude CLI not found on PATH ({os.environ.get('PATH', '')})"
     assert os.path.isabs(path), path
     return None
+
+
+# Boxes the audit must be able to SSH into. ZEUS is left out on purpose: it
+# sleeps ~23.5h/day, so "unreachable" is its normal state.
+REACH_TARGETS = {"EROS": "eros"}
+
+
+def unreachable_hosts(targets=REACH_TARGETS, timeout=20):
+    """Box names whose ssh alias does not answer `true`. EROS sat behind a
+    dead pre-move LAN IP for weeks and every audit silently skipped it -- a blind
+    audit must not read as a clean one."""
+    down = []
+    for box, alias in sorted(targets.items()):
+        cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", alias, "true"]
+        try:
+            ok = subprocess.run(cmd, capture_output=True, timeout=timeout).returncode == 0
+        except (subprocess.TimeoutExpired, OSError):
+            ok = False
+        if not ok:
+            down.append(box)
+    assert len(down) <= len(targets), down
+    return down
 
 
 def _read(agent, hb_dir):

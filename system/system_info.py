@@ -839,9 +839,13 @@ def _compute_gpu_info() -> dict:
     except (OSError, ValueError):
         pass
 
-    # Loaned out — ask VM 300 over SSH.
-    host = os.getenv("GPU_HOST", "zain@192.168.20.212")
+    # Loaned out — optional SSH probe of a GPU host. The old default (VM 300,
+    # zain@192.168.20.212) no longer exists; with no GPU_HOST, skip straight
+    # to the Windows probe instead of eating a dead-SSH timeout every call.
+    host = os.getenv("GPU_HOST", "").strip()
     try:
+        if not host:
+            raise LookupError("GPU_HOST not set")
         proc = subprocess.run(
             [
                 "ssh", "-o", "ConnectTimeout=2", "-o", "StrictHostKeyChecking=no",

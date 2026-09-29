@@ -28,7 +28,7 @@ WORKERS = 4                    # bounded concurrency (gentle on Yahoo)
 _UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
        "(KHTML, like Gecko) Chrome/120 Safari/537.36")
 
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://192.168.20.212:11434")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://192.168.20.51:11434")  # host socat proxy -> EROS (VM 300 retired)
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 BAR = 65                 # mirrored in static/elite_alloc.js — keep in sync
 GAMMA = 2
