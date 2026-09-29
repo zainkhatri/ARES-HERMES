@@ -3131,6 +3131,68 @@ def api_kg():
     return jsonify(d)
 
 
+# One knowledge-graph scene for every client: the web dashboard card and the iPhone app both
+# draw exactly what this returns (same nodes, 3D positions, sizes, colours), so they stay in
+# sync. Rebuilt only when the graph changes, warm-started from the last scene so the shape
+# stays put; kept on disk so a restart does not reshuffle it.
+_KG_SCENE_LOCK = threading.Lock()
+_KG_SCENE = {}          # box key -> {"at": epoch, "scene": {...}}
+_KG_SCENE_TTL_S = 30
+
+
+def _kg_scene_path(key):
+    safe = "".join(ch if ch.isalnum() else "_" for ch in key)[:40] or "all"
+    return os.path.join(_APP_DIR, "ai_data", f"kg_scene_{safe}.json")
+
+
+def _kg_scene_for(box):
+    from system import kg_query, kg_scene
+    key = box or "all"
+    with _KG_SCENE_LOCK:
+        hit = _KG_SCENE.get(key)
+        if hit and time.time() - hit["at"] < _KG_SCENE_TTL_S:
+            return hit["scene"]
+        db = kg_query.db_path()
+        if not db:
+            return None
+        graph = kg_query.overview(db, kg_scene.MAX_NODES, box)
+        prev = hit["scene"] if hit else None
+        if prev is None:
+            try:
+                with open(_kg_scene_path(key)) as f:
+                    prev = json.load(f)
+            except (OSError, ValueError):
+                prev = None
+        if prev and prev.get("source") == kg_scene.fingerprint(graph):
+            scene = prev
+        else:
+            scene = kg_scene.build(graph, previous=prev)
+            try:
+                os.makedirs(os.path.dirname(_kg_scene_path(key)), exist_ok=True)
+                tmp = _kg_scene_path(key) + ".tmp"
+                with open(tmp, "w") as f:
+                    json.dump(scene, f)
+                os.replace(tmp, _kg_scene_path(key))
+            except OSError:
+                pass
+        scene["total_nodes"] = graph.get("total_nodes")
+        _KG_SCENE[key] = {"at": time.time(), "scene": scene}
+        return scene
+
+
+@app.route("/api/kg/scene")
+@require_auth
+def api_kg_scene():
+    """The shared knowledge-graph scene (see _kg_scene_for). ?box=ARES,EROS like /api/kg."""
+    box = (request.args.get("box") or "").strip() or None
+    if box and not all(b.strip().isalnum() for b in box.split(",")):
+        return jsonify({"ok": False, "err": "bad box"}), 400
+    scene = _kg_scene_for(box)
+    if scene is None:
+        return jsonify({"ok": False, "err": "graph not found"}), 404
+    return jsonify({"ok": True, **scene})
+
+
 @app.route("/api/kg/search")
 @require_auth
 def api_kg_search():

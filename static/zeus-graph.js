@@ -227,7 +227,24 @@ window.KGGraph = function (el, opts) {
     return cnt;
   }
 
+  // A server scene is drawn as-is: positions, radii, groups and colours come from ARES.
+  function ingestScene(d) {
+    N = d.nodes.map(function(nd, i){ var p = d.points[i] || [0,0,0];
+      return { id:nd.id, kind:nd.kind, name:nd.name, u:nd.understanding, depth:nd.depth, path:nd.path,
+               px:p[0], py:p[1], pz:p[2], r:d.radius[i] || 1.3 }; });
+    byId = {}; N.forEach(function(n){ byId[n.id] = n; });
+    L = d.edges.filter(function(e){ return N[e[0]] && N[e[1]]; }).map(function(e){ return { a:N[e[0]], b:N[e[1]] }; });
+    nbr = new Map(); N.forEach(function(n){ nbr.set(n.id, new Set()); });
+    L.forEach(function(e){ nbr.get(e.a.id).add(e.b.id); nbr.get(e.b.id).add(e.a.id); });
+    GRP = {}; d.nodes.forEach(function(nd){ GRP[nd.id] = nd.group; });
+    GRPCOL = d.colors || {};
+    sceneKey = d.source || '';
+    var cc = document.getElementById('zg-count'); if (cc) cc.textContent = N.length+'/'+d.total_nodes+' nodes';
+    updateLegend(); fitView(); fitted = true;
+  }
+
   function ingest(d) {
+    if (d.scene) return ingestScene(d);
     var prev = {}; N.forEach(function(n){ prev[n.id] = n; });
     N = d.nodes.map(function(nd){ var p = prev[nd.id] || {};
       return { id:nd.id, kind:nd.kind, name:nd.name, u:nd.understanding,
@@ -290,14 +307,21 @@ window.KGGraph = function (el, opts) {
   function saveCache(d) { try { localStorage.setItem(CKEY, JSON.stringify(d)); } catch (e) {} }
 
   function reload() {
+    // The shared scene (/api/kg/scene): the same nodes, 3D positions, sizes and colours the
+    // iPhone app draws. Falls back to the raw graph (laid out here) if it is unavailable.
+    var sceneUrl = '/api/kg/scene' + (BOX ? '?box=' + encodeURIComponent(BOX) : '');
     var url = '/api/kg?limit=' + LIMIT + (BOX ? '&box=' + encodeURIComponent(BOX) : '');
-    fetch(url).then(function(r){ return r.json(); }).then(function(d){
+    fetch(sceneUrl).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok || !d.nodes || !d.nodes.length || !d.points) throw 0;
+      if (d.source && d.source === sceneKey) return;          // unchanged: keep drawing as is
+      d.scene = true; saveCache(d); ingest(d);
+    }).catch(function(){ fetch(url).then(function(r){ return r.json(); }).then(function(d){
       if (!d.ok || !d.nodes || !d.nodes.length) throw 0; saveCache(d); ingest(d);
     }).catch(function(){
       fetch('/static/_kg_sample.json').then(function(r){ return r.json(); }).then(ingest).catch(function(){
         var cc = document.getElementById('zg-count'); if (cc) cc.textContent = 'graph offline';
       });
-    });
+    }); });
   }
 
   function mergeChildren(d) {
@@ -312,19 +336,28 @@ window.KGGraph = function (el, opts) {
     nbr = new Map(); N.forEach(function(n){ nbr.set(n.id, new Set()); });
     d.edges.forEach(function(e){ if (byId[e.src]&&byId[e.dst]) L.push({ a:byId[e.src], b:byId[e.dst] }); });
     L.forEach(function(e){ var s=nbr.get(e.a.id),t=nbr.get(e.b.id); if(s)s.add(e.b.id); if(t)t.add(e.a.id); });
-    sceneKey = '';                     // new nodes: lay the whole (deterministic) scene out again
-    assignGroups(); updateLegend(); relayout();
+    // New children start beside their parent; one short warm pass settles them without moving
+    // the scene the server laid out. Group colours of the new nodes use the same rules.
+    var idx = {}; N.forEach(function(n, i){ idx[n.id] = i; });
+    var pairs = L.map(function(e){ return [idx[e.a.id], idx[e.b.id]]; });
+    var start = N.map(function(n){ return n.px != null ? [n.px, n.py, n.pz] : (anchor && anchor.px != null ? [anchor.px*0.97+(Math.random()-.5)*.06, anchor.py*0.97+(Math.random()-.5)*.06, anchor.pz*0.97+(Math.random()-.5)*.06] : null); });
+    var pos = layout3d(N.length, pairs, 40, 11, start);
+    N.forEach(function(n, i){ n.px = pos[i][0]; n.py = pos[i][1]; n.pz = pos[i][2]; if (n.r == null) n.r = 1.3; });
+    var keepCol = GRPCOL; assignGroups(); Object.keys(keepCol).forEach(function(g){ GRPCOL[g] = keepCol[g]; });
+    updateLegend();
   }
 
   // Seeded Fruchterman–Reingold in 3D (port of KGSpin.layout): gravity to the centre,
   // pairwise repulsion, edge attraction, capped moves with cooling. Deterministic per seed.
-  function layout3d(n, pairs, iters, seed) {
+  function layout3d(n, pairs, iters, seed, start) {
     var st = (seed >>> 0) || 0x9E3779B9;
     function rand() { st ^= st << 13; st >>>= 0; st ^= st >>> 17; st ^= st << 5; st >>>= 0; return (st % 20000) / 10000 - 1; }
     var x = new Float64Array(n), y = new Float64Array(n), z = new Float64Array(n);
     var fx = new Float64Array(n), fy = new Float64Array(n), fz = new Float64Array(n);
     for (var i = 0; i < n; i++) { x[i] = rand(); y[i] = rand(); z[i] = rand(); }
-    var k = 2 / Math.sqrt(Math.max(1, n)), k2 = k * k, temp = 0.25, cool = temp / (iters + 1);
+    var warm = !!(start && start.length === n);
+    if (warm) for (i = 0; i < n; i++) if (start[i]) { x[i] = start[i][0]; y[i] = start[i][1]; z[i] = start[i][2]; }
+    var k = 2 / Math.sqrt(Math.max(1, n)), k2 = k * k, temp = warm ? 0.03 : 0.25, cool = temp / (iters + 1);
     for (var it = 0; it < iters; it++) {
       for (i = 0; i < n; i++) { fx[i] = -x[i] * 0.6; fy[i] = -y[i] * 0.6; fz[i] = -z[i] * 0.6; }
       for (i = 0; i < n; i++) {
