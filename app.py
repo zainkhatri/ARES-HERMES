@@ -657,7 +657,12 @@ def home():
         kg_js_v = int(os.path.getmtime(os.path.join(_STATIC_DIR, "zeus-graph.js")))
     except OSError:
         kg_js_v = 0
-    return render_template("home.html", boot=get_system_info(), kg_js_v=kg_js_v)
+    # The Fleet card and its Minecraft back render from these on first paint (no empty card
+    # while /api/fleet and the ~5 s FOMER probe run).
+    mc = _fomer_cache["data"]
+    return render_template("home.html", boot=get_system_info(), kg_js_v=kg_js_v,
+                           fleet_boot=_fleet_snapshot(),
+                           mc_boot=dict(mc, address=_FOMER_ADDR) if mc else None)
 
 
 # EROS/ZEUS box dashboards retired 2026-09-11 — one ARES dashboard now; EROS data
@@ -3172,16 +3177,21 @@ def api_fleet():
     to the peer IPs, so the host probes and drops a file here (same pattern as
     /api/alerts and /api/outreach). age_sec lets the UI grey out on a dead
     collector instead of showing ancient data as live."""
+    return jsonify(_fleet_snapshot())
+
+
+def _fleet_snapshot():
+    """ai_data/fleet.json plus age/stale flags; {"ok": False} when it can't be read."""
     path = os.path.join(_APP_DIR, "ai_data", "fleet.json")
     try:
         with open(path) as f:
             d = json.load(f)
     except Exception:
-        return jsonify({"ok": False, "age_sec": None})
+        return {"ok": False, "age_sec": None}
     d["age_sec"] = int(time.time() - d.get("ts", 0))
     d["stale"] = d["age_sec"] > 300
     d["ok"] = True
-    return jsonify(d)
+    return d
 
 
 @app.route("/api/kg")
@@ -4313,6 +4323,25 @@ _FOMER_CTL = "/mnt/nvme/PROMETHEUS/scripts/minecraft/fomer-ctl.sh"
 _FOMER_ADDR = "laurel-faxes.tun.ply.gg"   # playit on ARES → EROS:25566
 _fomer_cache = {"ts": 0.0, "data": None}
 _fomer_lock = threading.Lock()
+# Last status on disk so the first page load after a restart still shows it.
+_FOMER_SAVED = os.path.join(_APP_DIR, "ai_data", "fomer_status.json")
+try:
+    with open(_FOMER_SAVED) as _f:
+        _fomer_cache["data"] = json.load(_f)
+except Exception:
+    pass
+
+
+def _fomer_remember(data):
+    if data.get("running") is None:
+        return
+    try:
+        tmp = _FOMER_SAVED + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, _FOMER_SAVED)
+    except OSError:
+        pass
 
 
 def _fomer(action):
@@ -4339,6 +4368,7 @@ def fomer_status():
         now = time.time()
         if _fomer_cache["data"] is None or now - _fomer_cache["ts"] > 8:
             _fomer_cache["data"], _fomer_cache["ts"] = _fomer("status"), now
+            _fomer_remember(_fomer_cache["data"])
         data = dict(_fomer_cache["data"])
     data["address"] = _FOMER_ADDR
     return jsonify(data)
@@ -4353,6 +4383,7 @@ def fomer_control():
     data = _fomer(action)
     with _fomer_lock:
         _fomer_cache["data"], _fomer_cache["ts"] = data, time.time()
+        _fomer_remember(data)
     return jsonify(dict(data, address=_FOMER_ADDR))
 
 

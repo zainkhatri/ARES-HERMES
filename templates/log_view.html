@@ -13,7 +13,7 @@
             --bg-0: #070403; --bg-1: #0d0605;
             --ares: #f5402d; --ares-rgb: 245, 64, 45; --ares-bright: #ff7a45;
             --text-1: #f6ece9; --text-2: #c99a90; --text-3: #8d6259;
-            --green: #3fb950; --red: #f85149; --gold: #d4af37;
+            --green: #38bdf8; --red: #f85149; --gold: #d4af37;
         }
         body { margin: 0; padding: 0; background: var(--bg-0); color: var(--text-1);
             font-family: 'JetBrains Mono', monospace; -webkit-font-smoothing: antialiased; }
@@ -47,7 +47,7 @@
         .btn-reject:disabled { opacity: 0.5; cursor: default; }
         .btn-resolve { background: transparent; border: 1px solid var(--green); color: var(--green); font-family: inherit; font-weight: 700;
             text-transform: uppercase; letter-spacing: 0.1em; padding: 14px 24px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
-        .btn-resolve:hover { background: rgba(63, 185, 80, 0.1); }
+        .btn-resolve:hover { background: rgba(56,189,248, 0.1); }
         .btn-resolve:disabled { opacity: 0.5; cursor: default; }
         .btn-redigest { background: transparent; border: 1px solid var(--ares-bright, #ff7a45); color: var(--ares-bright, #ff7a45); font-family: inherit; font-weight: 700;
             text-transform: uppercase; letter-spacing: 0.1em; padding: 14px 24px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
@@ -85,7 +85,7 @@
         pre.diffbox { margin: 0; padding: 0; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.7;
             white-space: pre-wrap; word-break: break-word; max-height: 55vh; overflow: auto; color: var(--text-2); }
         pre.diffbox span { display: block; padding: 2px 18px; }
-        pre.diffbox .add { background: rgba(63, 185, 80, 0.14); color: #5fd97a; }
+        pre.diffbox .add { background: rgba(56,189,248, 0.14); color: #7dd3fc; }
         pre.diffbox .del { background: rgba(248, 81, 73, 0.14); color: #ff8a82; }
         pre.diffbox .hunk { color: var(--ares-bright); background: rgba(var(--ares-rgb), 0.08); font-weight: 600; }
 
@@ -139,8 +139,8 @@
             <!-- Hero -->
             <div class="mb-16">
                 <div class="flex items-center gap-4 mb-6">
-                    <div class="w-3.5 h-3.5 rounded-full" style="background: {{ '#3fb950' if status_pill_cls == 'ok' else ('#f85149' if status_pill_cls == 'bad' else '#ff7a45') }}; box-shadow: 0 0 15px currentColor;"></div>
-                    <span class="font-bold tracking-[0.3em] text-[13px] uppercase" style="color: {{ '#3fb950' if status_pill_cls == 'ok' else ('#f85149' if status_pill_cls == 'bad' else '#ff7a45') }}">{{ status_pill }}</span>
+                    <div class="w-3.5 h-3.5 rounded-full" style="background: {{ '#38bdf8' if status_pill_cls == 'ok' else ('#f85149' if status_pill_cls == 'bad' else '#ff7a45') }}; box-shadow: 0 0 15px currentColor;"></div>
+                    <span class="font-bold tracking-[0.3em] text-[13px] uppercase" style="color: {{ '#38bdf8' if status_pill_cls == 'ok' else ('#f85149' if status_pill_cls == 'bad' else '#ff7a45') }}">{{ status_pill }}</span>
                     <span class="text-[#5a3d37] text-[12px] tracking-widest uppercase ml-auto">{{ box }} · {{ when }}</span>
                 </div>
                 <h1 class="hero-title">{{ title }}</h1>
@@ -187,9 +187,9 @@
 
             <!-- Verdict -->
             {% if total %}
-            <div class="verdict-banner mb-16" style="border-color: {{ 'rgba(63,185,80,0.3)' if cleared else 'rgba(248,81,73,0.3)' }}">
-                <div class="verdict-num" style="color: {{ '#3fb950' if cleared else '#f85149' }}">{{ approvals }} / {{ total }}</div>
-                <div class="verdict-sub" style="color: {{ 'rgba(63,185,80,0.7)' if cleared else 'rgba(248,81,73,0.7)' }}">{{ 'Cleared to Merge' if cleared else 'The Council Holds' }}</div>
+            <div class="verdict-banner mb-16" style="border-color: {{ 'rgba(56,189,248,0.3)' if cleared else 'rgba(248,81,73,0.3)' }}">
+                <div class="verdict-num" style="color: {{ '#38bdf8' if cleared else '#f85149' }}">{{ approvals }} / {{ total }}</div>
+                <div class="verdict-sub" style="color: {{ 'rgba(56,189,248,0.7)' if cleared else 'rgba(248,81,73,0.7)' }}">{{ 'Cleared to Merge' if cleared else 'The Council Holds' }}</div>
             </div>
             {% endif %}
 

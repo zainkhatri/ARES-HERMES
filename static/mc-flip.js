@@ -43,6 +43,7 @@
       const r = await fetch('/api/mc/fomer', { credentials: 'same-origin', cache: 'no-store' });
       info = r.ok ? await r.json() : { running: null };
     } catch (e) { info = { running: null }; }
+    if (info && info.running !== null) { try { localStorage.setItem('ares.mc.fomer', JSON.stringify(info)); } catch (e) { /* private mode */ } }
     render();
     schedule(info && info.running && info.players && info.players.online < 0 ? 4000 : 10000);
   }
@@ -98,6 +99,10 @@
   addr.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(addr.textContent); addr.classList.add('copied'); setTimeout(() => addr.classList.remove('copied'), 1200); } catch (e) { /* no clipboard */ }
   });
+
+  // First paint: the status the server last saw, else the last one this browser saw.
+  try { info = window.__MC_BOOT || JSON.parse(localStorage.getItem('ares.mc.fomer') || 'null'); } catch (e) { info = null; }
+  if (info) render();
 
   // Warm the status in the background so the back is filled in the moment the card turns
   // (one status probe takes ~4-6 s: ARES host -> EROS -> server-list ping). The server caches

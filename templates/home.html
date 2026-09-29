@@ -19,7 +19,7 @@
             --ares:#f5402d; --ares-rgb:245,64,45; --panel-rgb:20,8,7; --ares-bright:#ff7a45; --ember:#c2301f; --ember-dim:rgba(var(--ares-rgb),.28);
             --grid:rgba(var(--ares-rgb),.055);
             --text-1:#f6ece9; --text-2:#c99a90; --text-3:#8d6259; --text-4:#5a3d37;
-            --green:#10b981; --amber:#f59e0b; --red:#ef4444;
+            --green:#38bdf8; --amber:#f59e0b; --red:#ef4444;
             --dur-fast:120ms; --dur:180ms; --dur-slow:280ms;
             --ease-out:cubic-bezier(.16,1,.3,1);
             --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
@@ -368,9 +368,9 @@
         .v-tile-half { flex:1; padding:11px 13px 12px; cursor:pointer; transition:background var(--dur); min-width:0; overflow:hidden;
                        display:flex; flex-direction:column; justify-content:center; }
         .v-tile-half .v-tile-num { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .v-tile-half.status { background:rgba(16,185,129,.05); }
+        .v-tile-half.status { background:rgba(56,189,248,.05); }
         .v-tile-half.remote { background:rgba(var(--ares-rgb),.06); }
-        .v-tile-half.status:hover { background:rgba(16,185,129,.14); }
+        .v-tile-half.status:hover { background:rgba(56,189,248,.14); }
         .v-tile-half.remote:hover { background:rgba(var(--ares-rgb),.14); }
         .v-tile-half:hover { background:rgba(var(--ares-rgb),.12); }
         .v-tile-half + .v-tile-half { border-left:1px solid var(--ember-dim); }
@@ -483,7 +483,7 @@
         .crow { display:grid; grid-template-columns:8px 1fr auto; align-items:center; gap:10px; padding:7px 2px; }
         .crow + .crow { border-top:1px solid rgba(255,255,255,.045); }
         .cdot { width:8px; height:8px; border-radius:50%; background:var(--text-3); }
-        .cdot.ok  { background:#22c55e; box-shadow:0 0 8px -1px #22c55e; }
+        .cdot.ok  { background:#38bdf8; box-shadow:0 0 8px -1px #38bdf8; }
         .cdot.bad { background:var(--red); box-shadow:0 0 9px -1px var(--red); }
         .cdot.run { background:var(--amber); box-shadow:0 0 9px -1px var(--amber); }  /* perf: static (was cpulse infinite — N pulsing glow layers kept the window forever-dirty) */
         .cname { font-size:11px; font-weight:600; color:var(--text-1); letter-spacing:.03em;
@@ -963,7 +963,7 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     .peer-ops .op-num { width:23px; height:23px; }
     .peer-ops .op-name { font-size:13px; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .op-dot { flex:0 0 auto; width:9px; height:9px; border-radius:50%; align-self:center; background:var(--text-3); }
-    .op-dot.ok{background:#22c55e;box-shadow:0 0 8px -1px #22c55e}.op-dot.run{background:#f59e0b;box-shadow:0 0 8px -1px #f59e0b}.op-dot.bad{background:#ef4444;box-shadow:0 0 8px -1px #ef4444}
+    .op-dot.ok{background:#38bdf8;box-shadow:0 0 8px -1px #38bdf8}.op-dot.run{background:#f59e0b;box-shadow:0 0 8px -1px #f59e0b}.op-dot.bad{background:#ef4444;box-shadow:0 0 8px -1px #ef4444}
 
     /* ── LAYOUT: ARES HUD is compact up top (content height); EROS + ZEUS fill
        the whole leftover space as a big bottom band, with their real content. ── */
@@ -1009,7 +1009,7 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     .pk-ssd-hd { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
     .pk-ssd-name { font-size:13px; font-weight:700; color:var(--text-1); letter-spacing:.02em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .pk-ssd-h { font-size:11px; letter-spacing:.08em; color:var(--text-3); flex:none; }
-    .pk-ssd-h.ok { color:#22c55e; } .pk-ssd-h.bad { color:#ef4444; } .pk-ssd-h.run { color:#f59e0b; }
+    .pk-ssd-h.ok { color:#38bdf8; } .pk-ssd-h.bad { color:#ef4444; } .pk-ssd-h.run { color:#f59e0b; }
     .pk-ssd .pk-bar { margin-top:7px; }
     .pk-ssd-meta { font-size:11px; color:var(--text-3); margin-top:5px; font-variant-numeric:tabular-nums; }
     /* wordmark + "where it lives" share one row instead of stacking */
@@ -1088,7 +1088,7 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     .pk-ssd-info { flex:1; min-width:0; }
     .pk-ssd-name { font-size:14px; font-weight:700; color:var(--text-1); display:flex; align-items:center; gap:8px; }
     .pk-ssd-h { font-size:9px; letter-spacing:.1em; font-weight:600; }
-    .pk-ssd-h.ok { color:#22c55e; } .pk-ssd-h.bad { color:#ef4444; } .pk-ssd-h.run { color:#f59e0b; }
+    .pk-ssd-h.ok { color:#38bdf8; } .pk-ssd-h.bad { color:#ef4444; } .pk-ssd-h.run { color:#f59e0b; }
     .pk-ssd-sub { font-size:10.5px; color:var(--text-3); margin-top:2px; }
     .pk-ssd-usebar { height:4px; background:rgba(var(--ares-rgb),.14); margin-top:6px; overflow:hidden; }
     .pk-ssd-usebar > i { display:block; height:100%; background:var(--ares); }
@@ -1097,7 +1097,7 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     .pk-bkp-hd { font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--text-3); }
     .pk-bkp-row { display:flex; align-items:center; gap:11px; font-size:15px; color:var(--text-1); }
     .pk-bkp-row .dot { width:9px; height:9px; border-radius:50%; flex:none; }
-    .pk-bkp-row .dot.ok{background:#22c55e;box-shadow:0 0 8px -1px #22c55e}.pk-bkp-row .dot.bad{background:#ef4444;box-shadow:0 0 8px -1px #ef4444}.pk-bkp-row .dot.run{background:#f59e0b;box-shadow:0 0 8px -1px #f59e0b}
+    .pk-bkp-row .dot.ok{background:#38bdf8;box-shadow:0 0 8px -1px #38bdf8}.pk-bkp-row .dot.bad{background:#ef4444;box-shadow:0 0 8px -1px #ef4444}.pk-bkp-row .dot.run{background:#f59e0b;box-shadow:0 0 8px -1px #f59e0b}
     .pk-bkp-row b { margin-left:auto; font-variant-numeric:tabular-nums; color:var(--text-2); }
     .pk-bkp-foot { font-size:11px; color:var(--text-3); margin-top:2px; }
     /* header facts tabs (EROS/ZEUS), mirrors the ARES CPU-panel facts */
@@ -1155,7 +1155,7 @@ var BRAND = (document.documentElement.getAttribute('data-brand') || 'ARES').toUp
     .pk-vstat-k { font-size:8.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); }
     .pk-vstat-v { font-size:15px; color:var(--text-1); margin-top:3px; font-weight:600; font-variant-numeric:tabular-nums; display:flex; align-items:center; gap:8px; }
     .pk-vstat-v .dot { width:8px; height:8px; border-radius:50%; flex:none; }
-    .pk-vstat-v .dot.ok{background:#22c55e;box-shadow:0 0 7px -1px #22c55e}.pk-vstat-v .dot.bad{background:#ef4444;box-shadow:0 0 7px -1px #ef4444}.pk-vstat-v .dot.run{background:#f59e0b;box-shadow:0 0 7px -1px #f59e0b}
+    .pk-vstat-v .dot.ok{background:#38bdf8;box-shadow:0 0 7px -1px #38bdf8}.pk-vstat-v .dot.bad{background:#ef4444;box-shadow:0 0 7px -1px #ef4444}.pk-vstat-v .dot.run{background:#f59e0b;box-shadow:0 0 7px -1px #f59e0b}
     .peer-band #panel-zeus .pk-ssds { justify-content:center !important; gap:12px; }
     /* ZEUS knowledge-graph 3D view */
     .peer-band #panel-zeus .pk-graph { flex:1 1 auto; min-height:0; position:relative; overflow:hidden; }
@@ -2130,10 +2130,10 @@ function winTile() {
         // Windows is up. Always show the split so DESKTOP is available immediately;
         // the status half reflects booting vs. stream-ready.
         var ready = winReady;
-        var accent = ready ? '#10b981' : '#f59e0b';
+        var accent = ready ? '#38bdf8' : '#f59e0b';
         var statusHalf = ready
-            ? '<div class="v-tile-num" style="font-size:17px;color:#10b981">Ready</div>' +
-              '<div class="v-tile-meta"><span class="lo">vm 200</span><span style="color:#10b981">●</span></div>'
+            ? '<div class="v-tile-num" style="font-size:17px;color:#38bdf8">Ready</div>' +
+              '<div class="v-tile-meta"><span class="lo">vm 200</span><span style="color:#38bdf8">●</span></div>'
             : '<div class="v-tile-num" style="font-size:16px;color:#f59e0b">Booting…</div>' +
               '<div class="v-tile-bar boot"><div class="v-tile-fill"></div></div>' +
               '<div class="v-tile-meta"><span class="lo">waiting for Sunshine…</span><span class="win-live" style="color:#f59e0b">●</span></div>';
@@ -2873,6 +2873,6 @@ pollOutreach();   // ZEUS outreach stats (no-op unless docker cap)
 })();
 </script>
 <script src="/static/box-nav.js"></script>
-{% if _brand == 'ARES' %}<link rel="stylesheet" href="/static/mc-flip.css?v={{ mcflip_v }}"><script src="/static/mc-flip.js?v={{ mcflip_v }}"></script><script src="/static/fleet-card.js?v={{ mcflip_v }}"></script>{% endif %}
+{% if _brand == 'ARES' %}<link rel="stylesheet" href="/static/mc-flip.css?v={{ mcflip_v }}"><script>window.__FLEET = window.__FLEET || {{ (fleet_boot|default(none))|tojson }}; window.__MC_BOOT = {{ (mc_boot|default(none))|tojson }};</script><script src="/static/mc-flip.js?v={{ mcflip_v }}"></script><script src="/static/fleet-card.js?v={{ mcflip_v }}"></script>{% endif %}
 </body>
 </html>
