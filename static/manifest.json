@@ -1,6 +1,6 @@
 {
-  "name": "ARES & HERMES",
-  "short_name": "ARES & HERMES",
+  "name": "ARES",
+  "short_name": "ARES",
   "description": "Super-NAS · Photos · Terminal · Storage",
   "start_url": "/",
   "display": "standalone",
