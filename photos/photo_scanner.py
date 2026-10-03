@@ -417,7 +417,7 @@ def scan():
     all_files = []
     for root, dirs, files in os.walk(PHOTOS_ROOT):
         # Skip named dirs and any dot-directory (includes .vault)
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith((".", "RECYCLE_BIN"))]  # RECYCLE_BIN.bak too
         for fname in files:
             if fname.startswith("._"):
                 continue
@@ -501,7 +501,7 @@ def scan_incremental():
     all_files = []
     for root, dirs, files in os.walk(PHOTOS_ROOT):
         # Skip named dirs and any dot-directory (includes .vault)
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith((".", "RECYCLE_BIN"))]  # RECYCLE_BIN.bak too
         for fname in files:
             if fname.startswith("._"):
                 continue
@@ -601,7 +601,7 @@ def build_content_hashes():
     all_files = []
     for root, dirs, files in os.walk(PHOTOS_ROOT):
         # Skip named dirs and any dot-directory (includes .vault)
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith((".", "RECYCLE_BIN"))]  # RECYCLE_BIN.bak too
         for fname in files:
             if fname.startswith("._"):
                 continue

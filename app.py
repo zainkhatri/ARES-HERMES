@@ -9094,7 +9094,7 @@ def _auto_scan_loop():
             for root, dirs, files in os.walk(PHOTOS_ROOT):
                 # Skip named dirs AND any dot-directory (includes .vault)
                 dirs[:] = [d for d in dirs
-                           if d not in skip_dirs and not d.startswith(".")]
+                           if d not in skip_dirs and not d.startswith((".", "RECYCLE_BIN"))]
                 for fname in files:
                     if fname.startswith("._"):
                         continue
