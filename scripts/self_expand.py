@@ -13,9 +13,12 @@ import os
 import sys
 import numpy as np
 
-ARES_CLUSTERS = "/mnt/data/ares-app/ai_data/face_clusters.json"
-ARES_EMBS = "/mnt/data/ares-app/ai_data/face_embeddings.npy"
-ARES_FACE_INDEX = "/mnt/data/ares-app/ai_data/face_index.json"
+# Relative to this script (the dashboard's own ai_data/): the hardcoded /mnt/data/ares-app/
+# paths broke when the dashboard moved, and the 15-min timer failed silently from July on.
+AI_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai_data")
+ARES_CLUSTERS = os.path.join(AI_DIR, "face_clusters.json")
+ARES_EMBS = os.path.join(AI_DIR, "face_embeddings.npy")
+ARES_FACE_INDEX = os.path.join(AI_DIR, "face_index.json")
 
 TOP_K = 10
 SIM_THRESHOLD = 0.60
@@ -132,6 +135,9 @@ def main():
 
     if not apply_changes:
         print(f"\nDRY RUN — no changes written. Re-run with --apply to commit.")
+        return
+    if total_new == 0:
+        print("\nNothing to add — face_clusters.json left untouched.")
         return
 
     applied = 0
