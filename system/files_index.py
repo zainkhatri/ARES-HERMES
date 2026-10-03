@@ -264,6 +264,7 @@ def content_search(query, limit=6, db=INDEX_DB):
 EMB_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 EMB_FILE = os.path.join(_APP_ROOT, "ai_data", "doc_embeddings.npy")
 CHUNKS_FILE = os.path.join(_APP_ROOT, "ai_data", "doc_chunks.json")
+EMB_MODEL_FILE = os.path.join(_APP_ROOT, "ai_data", "doc_embeddings.model")
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 80
 EMB_BATCH = 64
@@ -295,9 +296,45 @@ def _embed(texts):
         return _json.loads(r.read()).get("embeddings", [])
 
 
+def _load_prior_vectors():
+    """Prior run's vectors keyed by (path, chunk). Empty if absent, corrupt, or
+    made by a different EMB_MODEL (vectors from two models must never mix)."""
+    import json as _json
+    import numpy as _np
+    try:
+        with open(EMB_MODEL_FILE) as fh:
+            if fh.read().strip() != EMB_MODEL:
+                return {}
+        with open(CHUNKS_FILE) as fh:
+            old = _json.load(fh)
+        mat = _np.load(EMB_FILE)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(old, list) or mat.ndim != 2 or mat.shape[0] != len(old):
+        return {}
+    return {(c.get("path"), c.get("chunk")): mat[i]
+            for i, c in enumerate(old) if isinstance(c, dict)}
+
+
+def _embed_missing(chunks, prior):
+    """Embed only chunks absent from prior. -> {chunk index: vector}."""
+    assert isinstance(chunks, list), "chunks must be list"
+    assert isinstance(prior, dict), "prior must be dict"
+    todo = [i for i, c in enumerate(chunks) if (c["path"], c["chunk"]) not in prior]
+    fresh = {}
+    for s in range(0, len(todo), EMB_BATCH):
+        idx = todo[s:s + EMB_BATCH]
+        out = _embed([chunks[i]["chunk"] for i in idx])
+        assert len(out) == len(idx), "embed count mismatch"
+        fresh.update(zip(idx, out))
+        time.sleep(_THROTTLE)
+    return fresh
+
+
 def embed_docs(db=INDEX_DB):
-    """Embed all content_fts doc chunks → EMB_FILE + CHUNKS_FILE. Returns chunk
-    count. Best-effort: any failure leaves prior files intact and returns 0."""
+    """Embed content_fts doc chunks → EMB_FILE + CHUNKS_FILE. Returns chunk count.
+    Incremental: unchanged (path, chunk) pairs reuse the prior run's vectors, so
+    only new/edited text hits Ollama. Any failure leaves prior files intact, returns 0."""
     assert isinstance(db, str) and db, "db required"
     if not os.path.exists(db):
         return 0
@@ -322,11 +359,11 @@ def embed_docs(db=INDEX_DB):
             break
     if not chunks:
         return 0
+    prior = _load_prior_vectors()
     try:
-        vecs = []
-        for i in range(0, len(chunks), EMB_BATCH):
-            vecs.extend(_embed([c["chunk"] for c in chunks[i:i + EMB_BATCH]]))
-            time.sleep(_THROTTLE)
+        fresh = _embed_missing(chunks, prior)
+        vecs = [fresh[i] if i in fresh else prior[(c["path"], c["chunk"])]
+                for i, c in enumerate(chunks)]
         mat = _np.asarray(vecs, dtype="float32")
         assert mat.shape[0] == len(chunks), "embed count mismatch"
         norms = _np.linalg.norm(mat, axis=1, keepdims=True)
@@ -338,6 +375,9 @@ def embed_docs(db=INDEX_DB):
         with open(CHUNKS_FILE + ".tmp", "w") as fh:
             _json.dump(chunks, fh)
         os.replace(CHUNKS_FILE + ".tmp", CHUNKS_FILE)
+        with open(EMB_MODEL_FILE + ".tmp", "w") as fh:
+            fh.write(EMB_MODEL)
+        os.replace(EMB_MODEL_FILE + ".tmp", EMB_MODEL_FILE)
     except Exception:
         return 0
     return len(chunks)
