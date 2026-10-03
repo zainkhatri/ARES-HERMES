@@ -3517,6 +3517,11 @@ var _scrubFreeze = false;   /* true while the scrubber is held — pins offsets 
 var KEEP_WINDOW = 5;
 
 var lbIndex = -1;
+/* Lightbox nav bounds (inclusive). _lbHi < 0 = end of allItems. My Eyes Only
+   narrows them to its own block of synths so swipes never leave the vault. */
+var _lbLo = 0, _lbHi = -1;
+function _lbMax() { return _lbHi >= 0 ? Math.min(_lbHi, allItems.length - 1) : allItems.length - 1; }
+function _lbHas(i) { return i >= _lbLo && i <= _lbMax(); }
 var lbOpen = false;
 var activeYear = null;
 
@@ -5902,8 +5907,8 @@ function showLbItem() {
         }
     }
     /* update meta, counter — bg removed (pure black) */
-    lbPos.textContent = lbIndex + 1;
-    lbTotalEl.textContent = allItems.length;
+    lbPos.textContent = lbIndex - _lbLo + 1;
+    lbTotalEl.textContent = _lbMax() - _lbLo + 1;
     var monthKey = monthOfItem[lbIndex];
     var month = allMonths.find(function(m) { return m.month_key === monthKey; });
     lbMonth.textContent = month ? month.month : '';
@@ -5913,7 +5918,7 @@ function showLbItem() {
     _renderAdjacentSlots(lbIndex);
     /* Prefetch ±3 neighbours' previews */
     [-1, 1, -2, 2, -3, 3].forEach(function(o) {
-        var n = allItems[lbIndex + o];
+        var n = _lbHas(lbIndex + o) ? allItems[lbIndex + o] : null;
         if (n && n.type !== 'video' && n.path) {
             var pre = previewURL(n);
             var p = new Image();
@@ -5931,8 +5936,8 @@ function showLbItem() {
 
 function nextLb() {
     var i = lbIndex + 1;
-    while (i < allItems.length && allItems[i] === null) i++;
-    if (i >= allItems.length) return;
+    while (_lbHas(i) && allItems[i] === null) i++;
+    if (!_lbHas(i)) return;
     var prevIndex = lbIndex;
     lbIndex = i;
     if (!_prefersReducedMotion && allItems[i] && allItems[i].type !== 'video') {
@@ -5945,8 +5950,8 @@ function nextLb() {
 }
 function prevLb() {
     var i = lbIndex - 1;
-    while (i >= 0 && allItems[i] === null) i--;
-    if (i < 0) return;
+    while (_lbHas(i) && allItems[i] === null) i--;
+    if (!_lbHas(i)) return;
     lbIndex = i;
     if (!_prefersReducedMotion && allItems[i] && allItems[i].type !== 'video') {
         _slideToDir(-1, function() { showLbItem(); rememberLbState(allItems[i]); });
@@ -5969,7 +5974,7 @@ async function lbDelete() {
             allItems[lbIndex] = null;
             /* remove thumb in gallery */
             document.querySelectorAll('.thumb[data-idx="' + lbIndex + '"]').forEach(function(el) { el.remove(); });
-            if (lbIndex < allItems.length - 1) nextLb();
+            if (lbIndex < _lbMax()) nextLb();
             else closeLightbox();
         } else {
             var err = await r.json().catch(function() { return {}; });
@@ -6158,16 +6163,16 @@ function _renderSlot(slot, idx) {
 function _renderAdjacentSlots(idx) {
     /* prev slot */
     var pi = idx - 1;
-    while (pi >= 0 && allItems[pi] === null) pi--;
-    if (pi >= 0 && allItems[pi] && allItems[pi].type !== 'video') {
+    while (_lbHas(pi) && allItems[pi] === null) pi--;
+    if (_lbHas(pi) && allItems[pi] && allItems[pi].type !== 'video') {
         _renderSlot(lbSlotPrev, pi);
     } else {
         lbSlotPrev.innerHTML = '';
     }
     /* next slot */
     var ni = idx + 1;
-    while (ni < allItems.length && allItems[ni] === null) ni++;
-    if (ni < allItems.length && allItems[ni] && allItems[ni].type !== 'video') {
+    while (_lbHas(ni) && allItems[ni] === null) ni++;
+    if (_lbHas(ni) && allItems[ni] && allItems[ni].type !== 'video') {
         _renderSlot(lbSlotNext, ni);
     } else {
         lbSlotNext.innerHTML = '';
@@ -6484,8 +6489,8 @@ lb.addEventListener('touchend', function(e) {
         /* resolve the target neighbor up front */
         var dir = dx > 0 ? -1 : 1;
         var ti = lbIndex + dir;
-        while (ti >= 0 && ti < allItems.length && allItems[ti] === null) ti += dir;
-        var target = (ti >= 0 && ti < allItems.length) ? allItems[ti] : null;
+        while (_lbHas(ti) && allItems[ti] === null) ti += dir;
+        var target = _lbHas(ti) ? allItems[ti] : null;
         lbTrack.style.transition = 'transform 240ms cubic-bezier(.32,.72,0,1)';
         if (commit && target && target.type !== 'video') {
             /* finish the slide from wherever the finger left it — one
@@ -9028,12 +9033,20 @@ async function _vaultRemove(thumbKey, el) {
    leaked one entry onto allItems forever. */
 var _vaultSynths = [];
 function _cleanupVaultSynths() {
-    for (var i = 0; i < _vaultSynths.length; i++) {
-        var at = allItems.lastIndexOf(_vaultSynths[i]);   // synths live at the tail
-        if (at >= 0) allItems.splice(at, 1);
+    var n = _vaultSynths.length, tail = allItems.length - n;
+    if (n && tail >= 0 && allItems[tail] === _vaultSynths[0]) {
+        allItems.length = tail;                            // contiguous tail block
+    } else {
+        for (var i = n - 1; i >= 0; i--) {
+            var at = allItems.lastIndexOf(_vaultSynths[i]);
+            if (at >= 0) allItems.splice(at, 1);
+        }
     }
     _vaultSynths = [];
+    _lbLo = 0; _lbHi = -1;
 }
+/* This block is an IIFE: closeLightbox (global) only sees the cleanup via window. */
+window._cleanupVaultSynths = _cleanupVaultSynths;
 function _openVaultLightbox(item, allVaultItems) {
     /* Reuse the main lightbox by temporarily injecting the vault item */
     if (!item || !item.path) return;
@@ -9044,14 +9057,26 @@ function _openVaultLightbox(item, allVaultItems) {
         _vault:   true,
         _vaultKey: item.key || '',
     });
-    if (typeof openLightbox === 'function') {
-        /* clear any stragglers from a prior open, then push+open */
-        _cleanupVaultSynths();
-        var idx = allItems.length;
-        allItems.push(synth);
-        _vaultSynths.push(synth);
-        openLightbox(idx);
+    if (typeof openLightbox !== 'function') return;
+    /* Push the WHOLE vault (in grid order) and bound nav to that block, so a
+       swipe goes to the next vault item instead of the gallery's tail. */
+    _cleanupVaultSynths();
+    var list = Array.isArray(allVaultItems) && allVaultItems.length ? allVaultItems : [item];
+    var start = allItems.length, idx = -1;
+    for (var i = 0; i < list.length; i++) {
+        var v = list[i];
+        if (!v || !v.path) continue;
+        var s = (v === item) ? synth : Object.assign({}, v, {
+            thumb_hq: v.thumb_hq || v.thumb, _vault: true, _vaultKey: v.key || '',
+        });
+        if (v === item) idx = allItems.length;
+        allItems.push(s);
+        _vaultSynths.push(s);
     }
+    if (idx < 0) { idx = allItems.length; allItems.push(synth); _vaultSynths.push(synth); }
+    _lbLo = start;
+    _lbHi = allItems.length - 1;
+    openLightbox(idx);
 }
 
 /* ─── Vault add (called from ctx menu / lightbox button) ───────── */
